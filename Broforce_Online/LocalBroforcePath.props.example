@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- Set these paths locally; do not commit real machine-specific paths. -->
+    <!-- Replace these placeholders with paths on the local machine. -->
+    <BroforceManagedPath>C:\Path\To\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
+    <UnityModManagerPath>C:\Path\To\UnityModManager\Core</UnityModManagerPath>
+  </PropertyGroup>
+</Project>

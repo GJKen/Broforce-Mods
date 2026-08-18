@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>BroforceOnlineDiagnostics</RootNamespace>
+    <AssemblyName>BroforceOnlineDiagnostics</AssemblyName>
+    <Nullable>disable</Nullable>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityModManager">
+      <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(UnityModManagerPath)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(BroforceManagedPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="src\Plugin.cs" />
+    <Compile Include="src\DiagnosticsBehaviour.cs" />
+    <Compile Include="src\DiagnosticLog.cs" />
+    <Compile Include="src\ReflectionProbe.cs" />
+    <Compile Include="src\HarmonyDiagnostics.cs" />
+    <Compile Include="src\DiagnosticSettings.cs" />
+  </ItemGroup>
+</Project>

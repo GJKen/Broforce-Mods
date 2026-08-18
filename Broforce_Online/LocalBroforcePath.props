@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <BroforceManagedPath>E:\SteamLibrary\steamapps\common\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
+    <UnityModManagerPath>E:\SteamLibrary\steamapps\common\Broforce\r2mod\Broforce\profiles\Broforce\UMM\Core</UnityModManagerPath>
+  </PropertyGroup>
+</Project>

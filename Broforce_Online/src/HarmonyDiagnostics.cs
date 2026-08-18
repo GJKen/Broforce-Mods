@@ -1,0 +1,1241 @@
+using HarmonyLib;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Text;
+using System.Threading;
+using UnityEngine.SceneManagement;
+
+namespace BroforceOnlineDiagnostics
+{
+    internal static class HarmonyDiagnostics
+    {
+        private const string HarmonyId = "GJKen.BroforceOnlineDiagnostics.MethodTrace";
+        private const int DuplicateWindowSeconds = 5;
+        private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
+
+        private static readonly TraceTarget[] Targets =
+        {
+            new TraceTarget("MainMenu", "TryToGoToLobby"),
+            new TraceTarget("MakeOnlineMenu", "DoHostGame"),
+            new TraceTarget("Lobby", "TryJoin"),
+            new TraceTarget("Lobby", "JoinTheGame"),
+            new TraceTarget("SteamLayer", "CreateMatch"),
+            new TraceTarget("SteamLayer", "JoinLobby"),
+            new TraceTarget("SteamLayer", "LeaveMatch"),
+            new TraceTarget("SteamLayer", "LobbyCreated_Callback"),
+            new TraceTarget("SteamLayer", "LobbyJoined_Callback"),
+            new TraceTarget("ConnectionLayer", "OnJoinedLobby"),
+            new TraceTarget("ConnectionLayer", "PlayerHasJoinedMatch"),
+            new TraceTarget("ConnectionLayer", "RegisterNewPlayer"),
+            new TraceTarget("ConnectionLayer", "RegisterPlayerID"),
+            new TraceTarget("ConnectionLayer", "RegisterDelayedLocalPIDSync"),
+            new TraceTarget("ConnectionLayer", "BroadcastPlayerID"),
+            new TraceTarget("ConnectionLayer", "UpdateOnlinePlayerList"),
+            new TraceTarget("ConnectionLayer", "RemovePlayer"),
+            new TraceTarget("SteamController", "LoadLevel"),
+            new TraceTarget("SteamController", "Cloud_CloudGetPublishedFileDetailsResult"),
+            new TraceTarget("SteamController", "Cloud_CloudDownloadUGCResult"),
+            new TraceTarget("SteamController", "OnLevelLoadComplete"),
+            new TraceTarget("RoomInfo", "RefreshInfo"),
+            new TraceTarget("RoomInfo", "PushUpdatedInfo"),
+            new TraceTarget("RoomInfo", "PullUpdatedInfo"),
+            new TraceTarget("GameModeController", "SwitchLevel"),
+            new TraceTarget("GameModeController", "LoadNextSceneFade"),
+            new TraceTarget("GameModeController", "LoadNextScene"),
+            new TraceTarget("GameModeController", "LoadSceneCore"),
+            new TraceTarget("LevelSelectionController", "GotoNextCampaignScene"),
+            new TraceTarget("LevelSelectionController", "GotoNextLevel"),
+            new TraceTarget("LevelSelectionController", "GetMapDataForCampaign"),
+            new TraceTarget("LevelSelectionController", "GetMapDataFromFile"),
+            new TraceTarget("WorldMapController", "EnterMission"),
+            new TraceTarget("GameState", "LoadLevel"),
+            new TraceTarget("HeroController", "RequestJoinGame"),
+            new TraceTarget("HeroController", "DeserializeForJoin"),
+            new TraceTarget("HeroController", "SerializeForJoin"),
+            new TraceTarget("HeroController", "AddPlayer"),
+            new TraceTarget("HeroController", "AddLocalPlayer"),
+            new TraceTarget("HeroController", "RegisterHeroToPlayer"),
+            new TraceTarget("HeroController", "SpawnJoinedPlayers"),
+            new TraceTarget("HeroController", "SetPlayerCharacter"),
+            new TraceTarget("HeroController", "SetPlayerName"),
+            new TraceTarget("HeroController", "UpdatePlayerData"),
+            new TraceTarget("HeroController", "UpdatePlayerUserData"),
+            new TraceTarget("HeroController", "HaveAllPlayersJoined"),
+            new TraceTarget("HeroController", "HaveAllPlayersHaveSpawned"),
+            new TraceTarget("HeroController", "FlagPlayerToDrop"),
+            new TraceTarget("HeroController", "DeregisterPlayer"),
+            new TraceTarget("HeroController", "DropoutRPC"),
+            new TraceTarget("HeroController", "RequestAllPlayerData"),
+            new TraceTarget("HeroController", "RequestHeroTypeFromMaster"),
+            new TraceTarget("HeroController", "RequestHeroTypeFromMasterRPC"),
+            new TraceTarget("HeroController", "RecieveHeroTypeFromMaster"),
+            new TraceTarget("Player", "Awake"),
+            new TraceTarget("Player", "Start"),
+            new TraceTarget("Player", "RespawnBro"),
+            new TraceTarget("Player", "InstantiateHero"),
+            new TraceTarget("Player", "SpawnHero"),
+            new TraceTarget("Player", "SetHeroType"),
+            new TraceTarget("Player", "AssignCharacter"),
+            new TraceTarget("NewCustomCampaignMenu", "LaunchWorkShopLevel"),
+            new TraceTarget("NewCustomCampaignMenu", "LevelLoadCompleteEvent"),
+            new TraceTarget("NewCustomCampaignMenu", "LaunchOfflineCampaign"),
+            new TraceTarget("WorkshopCustomCampaignBrowser", "LaunchLevel"),
+            new TraceTarget("OnlineCustomCampaignBrowser", "LaunchLevel"),
+            new TraceTarget("CustomCampaignMenu", "StartCampaign"),
+            new TraceTarget("CustomCampaignMenu", "ContinueOnlineCampaign")
+        };
+
+        private static readonly object Sync = new object();
+        private static readonly Dictionary<string, TraceCacheEntry> TraceCache =
+            new Dictionary<string, TraceCacheEntry>();
+
+        private static Harmony _harmony;
+        private static int _sequence;
+        private static bool _injectedForSession;
+        private static bool _workshopCompletionHandledForSession;
+        private static bool _skipDuplicateWorkshopSceneLoad;
+        private static DateTime _skipDuplicateWorkshopSceneLoadUntilUtc;
+
+        public static void Start()
+        {
+            if (_harmony != null)
+            {
+                return;
+            }
+
+            _harmony = new Harmony(HarmonyId);
+            _injectedForSession = false;
+            _workshopCompletionHandledForSession = false;
+            ClearDuplicateWorkshopLoadSuppression();
+            SubscribeWorkshopCompletion();
+            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "TracePrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var prefix = new HarmonyMethod(prefixMethod);
+            var patchedCount = 0;
+
+            foreach (var target in Targets)
+            {
+                Type type;
+                try
+                {
+                    type = AccessTools.TypeByName(target.TypeName);
+                }
+                catch (Exception exception)
+                {
+                    DiagnosticLog.Warning("Harmony type lookup failed for " + target + ": " + exception.Message);
+                    continue;
+                }
+
+                if (type == null)
+                {
+                    DiagnosticLog.Warning("Harmony target type not found: " + target.TypeName);
+                    continue;
+                }
+
+                var matched = false;
+                var methods = type.GetMethods(
+                    BindingFlags.Public |
+                    BindingFlags.NonPublic |
+                    BindingFlags.Instance |
+                    BindingFlags.Static |
+                    BindingFlags.DeclaredOnly);
+
+                foreach (var method in methods)
+                {
+                    if (method.Name != target.MethodName || method.ContainsGenericParameters || method.IsAbstract)
+                    {
+                        continue;
+                    }
+
+                    matched = true;
+                    try
+                    {
+                        _harmony.Patch(method, prefix, null, null, null);
+                        patchedCount++;
+                    }
+                    catch (Exception exception)
+                    {
+                        DiagnosticLog.Warning("Harmony patch failed for " + DescribeMethod(method) + ": " + exception);
+                    }
+                }
+
+                if (!matched)
+                {
+                    DiagnosticLog.Warning("Harmony target method not found: " + target);
+                }
+            }
+
+            PatchSwitchLevelTranspiler();
+            PatchWorldMapEnterMissionTranspiler();
+            PatchGameStateLoadLevelPrefix();
+            PatchLateHeroResponseGuard();
+
+            DiagnosticLog.Info("Harmony method tracing enabled; patched methods=" + patchedCount + ".");
+        }
+
+        public static void Stop()
+        {
+            if (_harmony == null)
+            {
+                return;
+            }
+
+            try
+            {
+                UnsubscribeWorkshopCompletion();
+                _harmony.UnpatchAll(HarmonyId);
+                DiagnosticLog.Info("Harmony method tracing disabled.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Harmony unpatch failed: " + exception);
+            }
+            finally
+            {
+                _harmony = null;
+                _injectedForSession = false;
+                _workshopCompletionHandledForSession = false;
+                ClearDuplicateWorkshopLoadSuppression();
+                lock (Sync)
+                {
+                    TraceCache.Clear();
+                }
+            }
+        }
+
+        private static void TracePrefix(MethodBase __originalMethod, object __instance, object[] __args)
+        {
+            try
+            {
+                if (__originalMethod.DeclaringType != null &&
+                    __originalMethod.DeclaringType.Name == "SteamLayer" &&
+                    (__originalMethod.Name == "CreateMatch" || __originalMethod.Name == "JoinLobby"))
+                {
+                    ResetWorkshopStateForNewSession(__originalMethod.Name);
+                }
+
+                var sequence = Interlocked.Increment(ref _sequence);
+                var message = BuildTraceMessage(__originalMethod, __instance, __args);
+                var key = DescribeMethod(__originalMethod);
+                if (ShouldWrite(key, message))
+                {
+                    DiagnosticLog.Info("TRACE #" + sequence + " " + message);
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Harmony trace formatter failed: " + exception.Message);
+            }
+        }
+
+        private static void PatchSwitchLevelTranspiler()
+        {
+            var type = AccessTools.TypeByName("GameModeController");
+            if (type == null)
+            {
+                DiagnosticLog.Warning("Workshop injection target type not found: GameModeController");
+                return;
+            }
+
+            var method = type.GetMethod(
+                "SwitchLevel",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("Workshop injection target method not found: GameModeController.SwitchLevel");
+                return;
+            }
+
+            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "SwitchLevelTranspiler",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(method, null, null, new HarmonyMethod(transpilerMethod), null);
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop injection transpiler failed: " + exception);
+            }
+        }
+
+        private static bool _workshopCompletionSubscribed;
+
+        private static void SubscribeWorkshopCompletion()
+        {
+            if (_workshopCompletionSubscribed)
+            {
+                return;
+            }
+
+            try
+            {
+                SteamController.LevelLoadCompleteEvent += WorkshopLevelLoadComplete;
+                _workshopCompletionSubscribed = true;
+                DiagnosticLog.Info("Workshop level-load completion callback subscribed.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop level-load completion callback subscription failed: " + exception);
+            }
+        }
+
+        private static void UnsubscribeWorkshopCompletion()
+        {
+            if (!_workshopCompletionSubscribed)
+            {
+                return;
+            }
+
+            try
+            {
+                SteamController.LevelLoadCompleteEvent -= WorkshopLevelLoadComplete;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop level-load completion callback removal failed: " + exception);
+            }
+            finally
+            {
+                _workshopCompletionSubscribed = false;
+            }
+        }
+
+        private static void WorkshopLevelLoadComplete(Campaign campaign)
+        {
+            try
+            {
+                var settings = Plugin.Settings;
+                if (settings == null || !settings.EnableOnlineWorkshopInjection ||
+                    !_injectedForSession || _workshopCompletionHandledForSession)
+                {
+                    return;
+                }
+
+                if (campaign == null)
+                {
+                    DiagnosticLog.Warning("Workshop level-load completion returned a null campaign.");
+                    return;
+                }
+
+                _workshopCompletionHandledForSession = true;
+                SetCurrentCampaign(campaign);
+                SetStaticFieldOrProperty(
+                    AccessTools.TypeByName("LevelSelectionController"),
+                    "loadPublishedCampaign",
+                    true);
+                SetStaticFieldOrProperty(
+                    AccessTools.TypeByName("LevelSelectionController"),
+                    "isOnlineCampaign",
+                    true);
+
+                var gameStateType = AccessTools.TypeByName("GameState");
+                var instanceProperty = gameStateType == null
+                    ? null
+                    : gameStateType.GetProperty(
+                        "Instance",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                var state = instanceProperty == null ? null : instanceProperty.GetValue(null, null);
+                if (state != null)
+                {
+                    SetFieldOrProperty(state, "loadCustomCampaign", true);
+                    SetFieldOrProperty(state, "levelNumber", 0);
+                }
+
+                DiagnosticLog.Info("Workshop level-load completed; resuming GameState.LoadLevel.");
+                var loadLevel = gameStateType == null
+                    ? null
+                    : gameStateType.GetMethod(
+                        "LoadLevel",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance,
+                        null,
+                        new[] { typeof(string) },
+                        null);
+                if (loadLevel == null)
+                {
+                    DiagnosticLog.Warning("Workshop level-load completion could not find GameState.LoadLevel(string).");
+                    return;
+                }
+
+                _skipDuplicateWorkshopSceneLoad = true;
+                _skipDuplicateWorkshopSceneLoadUntilUtc =
+                    DateTime.UtcNow.AddSeconds(DuplicateWorkshopLoadSuppressionSeconds);
+                loadLevel.Invoke(null, new object[] { string.Empty });
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop level-load completion handling failed: " + exception);
+            }
+        }
+
+        private static void SetCurrentCampaign(Campaign campaign)
+        {
+            var type = AccessTools.TypeByName("LevelSelectionController");
+            if (type == null)
+            {
+                throw new MissingMemberException("LevelSelectionController");
+            }
+
+            var property = type.GetProperty(
+                "currentCampaign",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(null, campaign, null);
+                return;
+            }
+
+            var field = type.GetField(
+                "CurrentCampaign",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (field != null)
+            {
+                field.SetValue(null, campaign);
+                return;
+            }
+
+            throw new MissingMemberException(type.FullName, "currentCampaign");
+        }
+
+        private static void SetStaticFieldOrProperty(Type type, string name, object value)
+        {
+            if (type == null)
+            {
+                throw new MissingMemberException(name);
+            }
+
+            var field = type.GetField(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (field != null)
+            {
+                field.SetValue(null, value);
+                return;
+            }
+
+            var property = type.GetProperty(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(null, value, null);
+                return;
+            }
+
+            throw new MissingMemberException(type.FullName, name);
+        }
+
+        private static void PatchWorldMapEnterMissionTranspiler()
+        {
+            var type = AccessTools.TypeByName("WorldMapController");
+            if (type == null)
+            {
+                DiagnosticLog.Warning("Workshop injection target type not found: WorldMapController");
+                return;
+            }
+
+            var method = type.GetMethod(
+                "EnterMission",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("Workshop injection target method not found: WorldMapController.EnterMission");
+                return;
+            }
+
+            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "EnterMissionTranspiler",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(method, null, null, new HarmonyMethod(transpilerMethod), null);
+                DiagnosticLog.Info("Workshop injection patch enabled for WorldMapController.EnterMission.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop injection transpiler failed for WorldMapController.EnterMission: " + exception);
+            }
+        }
+
+        private static void PatchGameStateLoadLevelPrefix()
+        {
+            var type = AccessTools.TypeByName("GameState");
+            if (type == null)
+            {
+                DiagnosticLog.Warning("Workshop injection target type not found: GameState");
+                return;
+            }
+
+            var method = type.GetMethod(
+                "LoadLevel",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("Workshop injection target method not found: GameState.LoadLevel");
+                return;
+            }
+
+            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "GameStateLoadLevelPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(method, new HarmonyMethod(prefixMethod), null, null, null);
+                DiagnosticLog.Info("Workshop injection prefix enabled for GameState.LoadLevel.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop injection prefix failed for GameState.LoadLevel: " + exception);
+            }
+        }
+
+        private static bool GameStateLoadLevelPrefix(string nextScene)
+        {
+            try
+            {
+                if (_skipDuplicateWorkshopSceneLoad &&
+                    DateTime.UtcNow <= _skipDuplicateWorkshopSceneLoadUntilUtc &&
+                    !string.IsNullOrEmpty(nextScene) &&
+                    string.Equals(nextScene, GetConfiguredWorkshopSceneName(), StringComparison.Ordinal))
+                {
+                    ClearDuplicateWorkshopLoadSuppression();
+                    DiagnosticLog.Info(
+                        "Skipped duplicate GameState.LoadLevel for workshop scene after completion callback.");
+                    return false;
+                }
+
+                if (_skipDuplicateWorkshopSceneLoad &&
+                    DateTime.UtcNow > _skipDuplicateWorkshopSceneLoadUntilUtc)
+                {
+                    ClearDuplicateWorkshopLoadSuppression();
+                }
+
+                var activeSceneName = SceneManager.GetActiveScene().name;
+                if (string.IsNullOrEmpty(activeSceneName) ||
+                    activeSceneName.IndexOf("MissionScreen", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return true;
+                }
+
+                ApplyWorkshopState(false, "before GameState.LoadLevel from mission screen");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop load-level injection failed: " + exception);
+            }
+
+            return true;
+        }
+
+        private static void PatchLateHeroResponseGuard()
+        {
+            var type = AccessTools.TypeByName("HeroController");
+            var method = type == null
+                ? null
+                : type.GetMethod(
+                    "RecieveHeroTypeFromMaster",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("Late hero-response guard target not found.");
+                return;
+            }
+
+            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "RecieveHeroTypeFromMasterPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(method, new HarmonyMethod(prefixMethod), null, null, null);
+                DiagnosticLog.Info("Late hero-response guard enabled.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Late hero-response guard patch failed: " + exception);
+            }
+        }
+
+        private static bool RecieveHeroTypeFromMasterPrefix(int playerNum)
+        {
+            if (!Plugin.ShouldSkipLateHeroResponse(playerNum))
+            {
+                return true;
+            }
+
+            DiagnosticLog.Warning(
+                "Skipped a late hero-type response after local fallback for player " + playerNum + ".");
+            return false;
+        }
+
+        private static string GetConfiguredWorkshopSceneName()
+        {
+            var settings = Plugin.Settings;
+            return settings == null ? string.Empty : (settings.WorkshopSceneName ?? string.Empty).Trim();
+        }
+
+        private static void ClearDuplicateWorkshopLoadSuppression()
+        {
+            _skipDuplicateWorkshopSceneLoad = false;
+            _skipDuplicateWorkshopSceneLoadUntilUtc = DateTime.MinValue;
+        }
+
+        private static IEnumerable<CodeInstruction> SwitchLevelTranspiler(IEnumerable<CodeInstruction> instructions)
+        {
+            return InsertWorkshopInjection(instructions, "GameModeController.SwitchLevel");
+        }
+
+        private static IEnumerable<CodeInstruction> EnterMissionTranspiler(IEnumerable<CodeInstruction> instructions)
+        {
+            return InsertWorkshopInjection(instructions, "WorldMapController.EnterMission");
+        }
+
+        private static IEnumerable<CodeInstruction> InsertWorkshopInjection(
+            IEnumerable<CodeInstruction> instructions,
+            string targetName)
+        {
+            var result = new List<CodeInstruction>();
+            var injector = typeof(HarmonyDiagnostics).GetMethod(
+                "ApplyWorkshopState",
+                BindingFlags.NonPublic | BindingFlags.Static,
+                null,
+                Type.EmptyTypes,
+                null);
+            var inserted = false;
+
+            foreach (var instruction in instructions)
+            {
+                if (!inserted && IsGameStateAdminRpc(instruction))
+                {
+                    result.Add(new CodeInstruction(OpCodes.Call, injector));
+                    inserted = true;
+                }
+
+                result.Add(instruction);
+            }
+
+            if (!inserted)
+            {
+                DiagnosticLog.Warning("Workshop injection point not found in " + targetName + ".");
+            }
+
+            return result;
+        }
+
+        private static bool IsGameStateAdminRpc(CodeInstruction instruction)
+        {
+            var method = instruction.operand as MethodInfo;
+            if (method != null && method.Name == "AdminRPC")
+            {
+                var genericArguments = method.IsGenericMethod ? method.GetGenericArguments() : new Type[0];
+                if (genericArguments.Length == 1 && genericArguments[0].Name == "GameState")
+                {
+                    return true;
+                }
+            }
+
+            return instruction.operand != null &&
+                   instruction.operand.ToString().IndexOf("AdminRPC<GameState>", StringComparison.Ordinal) >= 0;
+        }
+
+        private static void ApplyWorkshopState()
+        {
+            ApplyWorkshopState(true, "before AdminRPC<GameState>");
+        }
+
+        private static void ApplyWorkshopState(bool requireHost, string injectionContext)
+        {
+            try
+            {
+                var settings = Plugin.Settings;
+                if (settings == null || !settings.EnableOnlineWorkshopInjection || _injectedForSession)
+                {
+                    return;
+                }
+
+                var workshopId = (settings.WorkshopId ?? string.Empty).Trim();
+                ulong numericId;
+                if (!UInt64.TryParse(workshopId, out numericId) || numericId == 0)
+                {
+                    DiagnosticLog.Warning("Workshop injection skipped: WorkshopId is not a positive numeric ID.");
+                    return;
+                }
+
+                if (!IsOnline())
+                {
+                    return;
+                }
+
+                if (requireHost && !IsOnlineHost())
+                {
+                    return;
+                }
+
+                var gameStateType = AccessTools.TypeByName("GameState");
+                var instanceProperty = gameStateType == null
+                    ? null
+                    : gameStateType.GetProperty(
+                        "Instance",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                var state = instanceProperty == null ? null : instanceProperty.GetValue(null, null);
+
+                if (state == null)
+                {
+                    DiagnosticLog.Warning("Workshop injection skipped: GameState.Instance is null.");
+                    return;
+                }
+
+                SetFieldOrProperty(state, "customLevelID", workshopId);
+                SetFieldOrProperty(state, "loadCustomCampaign", true);
+                SetFieldOrProperty(state, "levelNumber", 0);
+
+                var sceneName = (settings.WorkshopSceneName ?? string.Empty).Trim();
+                if (!string.IsNullOrEmpty(sceneName))
+                {
+                    SetFieldOrProperty(state, "sceneToLoad", sceneName);
+                }
+
+                var campaignName = (settings.WorkshopCampaignName ?? string.Empty).Trim();
+                if (!string.IsNullOrEmpty(campaignName))
+                {
+                    SetFieldOrProperty(state, "campaignName", campaignName);
+                }
+
+                if (!requireHost)
+                {
+                    ClearCurrentCampaignForWorkshopLoad();
+                }
+
+                _injectedForSession = true;
+                DiagnosticLog.Info(
+                    "Online workshop state injected " + injectionContext + ": id=" + workshopId +
+                    ", scene=" + sceneName + ", campaign=" + campaignName + ".");
+                _workshopCompletionHandledForSession = false;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop state injection failed: " + exception);
+            }
+        }
+
+        private static void ClearCurrentCampaignForWorkshopLoad()
+        {
+            var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
+            if (levelSelectionType == null)
+            {
+                DiagnosticLog.Warning("Workshop load-level injection could not find LevelSelectionController.");
+                return;
+            }
+
+            var field = levelSelectionType.GetField(
+                "CurrentCampaign",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (field != null)
+            {
+                field.SetValue(null, null);
+                DiagnosticLog.Info("Workshop load-level injection cleared the official current campaign.");
+                return;
+            }
+
+            var property = levelSelectionType.GetProperty(
+                "currentCampaign",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(null, null, null);
+                DiagnosticLog.Info("Workshop load-level injection cleared the official current campaign.");
+                return;
+            }
+
+            DiagnosticLog.Warning("Workshop load-level injection could not clear the official current campaign.");
+        }
+
+        private static void ResetWorkshopStateForNewSession(string trigger)
+        {
+            _injectedForSession = false;
+            _workshopCompletionHandledForSession = false;
+            ClearDuplicateWorkshopLoadSuppression();
+
+            try
+            {
+                ClearCurrentCampaignForWorkshopLoad();
+
+                var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
+                SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
+                SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
+                SetStaticFieldOrProperty(levelSelectionType, "shownHelicopterIntro", false);
+
+                var gameStateType = AccessTools.TypeByName("GameState");
+                var instanceProperty = gameStateType == null
+                    ? null
+                    : gameStateType.GetProperty(
+                        "Instance",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                var state = instanceProperty == null ? null : instanceProperty.GetValue(null, null);
+                if (state != null)
+                {
+                    SetFieldOrProperty(state, "customLevelID", string.Empty);
+                    SetFieldOrProperty(state, "loadCustomCampaign", false);
+                    SetFieldOrProperty(state, "campaignName", string.Empty);
+                    SetFieldOrProperty(state, "levelNumber", 0);
+                }
+
+                DiagnosticLog.Info("Workshop state reset before SteamLayer." + trigger + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop state reset before SteamLayer." + trigger + " failed: " + exception);
+            }
+        }
+
+        private static bool IsOnlineHost()
+        {
+            var connectType = AccessTools.TypeByName("Connect");
+            if (connectType == null || !IsOnline())
+            {
+                return false;
+            }
+
+            var hostGetter = AccessTools.PropertyGetter(connectType, "IsHost");
+            return hostGetter != null && Convert.ToBoolean(hostGetter.Invoke(null, null));
+        }
+
+        private static bool IsOnline()
+        {
+            var connectType = AccessTools.TypeByName("Connect");
+            if (connectType == null)
+            {
+                return false;
+            }
+
+            var offlineGetter = AccessTools.PropertyGetter(connectType, "IsOffline");
+            return offlineGetter == null || !Convert.ToBoolean(offlineGetter.Invoke(null, null));
+        }
+
+        private static void SetFieldOrProperty(object instance, string name, object value)
+        {
+            var type = instance.GetType();
+            var field = type.GetField(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (field != null)
+            {
+                field.SetValue(instance, value);
+                return;
+            }
+
+            var property = type.GetProperty(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(instance, value, null);
+                return;
+            }
+
+            throw new MissingMemberException(type.FullName, name);
+        }
+
+        private static string BuildTraceMessage(
+            MethodBase method,
+            object instance,
+            object[] arguments)
+        {
+            var builder = new StringBuilder();
+            builder.Append(DescribeMethod(method));
+            builder.Append("(");
+
+            var parameters = method.GetParameters();
+            for (var index = 0; index < parameters.Length; index++)
+            {
+                if (index > 0)
+                {
+                    builder.Append(", ");
+                }
+
+                var parameter = parameters[index];
+                builder.Append(parameter.Name);
+                builder.Append("=");
+                var value = arguments != null && index < arguments.Length ? arguments[index] : null;
+                builder.Append(FormatArgument(parameter.Name, value));
+            }
+
+            builder.Append(")");
+            var state = BuildSafeObjectSummary(instance);
+            if (!string.IsNullOrEmpty(state))
+            {
+                builder.Append("; state=");
+                builder.Append(state);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string FormatArgument(string parameterName, object value)
+        {
+            if (IsSensitiveName(parameterName))
+            {
+                return "<redacted>";
+            }
+
+            if (value == null)
+            {
+                return "null";
+            }
+
+            var summary = BuildSafeObjectSummary(value);
+            if (!string.IsNullOrEmpty(summary))
+            {
+                return summary;
+            }
+
+            var type = value.GetType();
+            if (type.IsEnum || value is bool || value is byte || value is short ||
+                value is int || value is long || value is float || value is double || value is decimal)
+            {
+                return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            var text = value as string;
+            if (text != null)
+            {
+                return "\"" + Sanitize(text, 160) + "\"";
+            }
+
+            return "<" + type.FullName + ">";
+        }
+
+        private static string BuildSafeObjectSummary(object value)
+        {
+            if (value == null)
+            {
+                return string.Empty;
+            }
+
+            var typeName = value.GetType().FullName;
+            switch (typeName)
+            {
+                case "RoomInfo":
+                    return FormatFields(value, new[]
+                    {
+                        "gameMode", "campaignName", "CurrentSceneName", "capacity", "_playerCount",
+                        "returnToWorldMap", "levelNumber", "totalLevels", "worldMapProgress",
+                        "liberatedAreas", "invalidInfo", "hardMode", "hardcoreMode"
+                    });
+                case "GameState":
+                    return FormatFields(value, new[]
+                    {
+                        "_sceneToLoad", "_campaignName", "levelNumber", "customLevelID",
+                        "loadCustomCampaign", "loadMode", "gameMode", "levelEditorActive",
+                        "returnToWorldMap", "arcadeHardMode", "persistPastLevelLoad"
+                    });
+                case "LevelSelectionController":
+                    return FormatFields(value, new[]
+                    {
+                        "_levelFileNameToLoad", "JoinScene", "CampaignScene", "OnlineCampaign",
+                        "OfflineCampaign", "DefaultCampaign", "loadPublishedCampaign", "isOnlineCampaign",
+                        "currentWorkshopLevel"
+                    });
+                case "GameModeController":
+                    return FormatFields(value, new[]
+                    {
+                        "switchingLevel", "nextScene", "levelHasStarted", "levelFinished",
+                        "waitingForAllPlayersToReady", "switchSilently"
+                    });
+                case "HeroController":
+                    return FormatHeroControllerState(value);
+                case "Player":
+                    return FormatPlayerState(value);
+                case "PID":
+                    return FormatPid(value);
+                case "WorkshopLevelDetails":
+                    return FormatFields(value, new[]
+                    {
+                        "name", "fileid", "fileName", "tags", "isWWBLevel", "wasCompletedSuccessfully"
+                    });
+                case "Campaign":
+                    return FormatFields(value, new[] { "name", "levels", "brodownLevel" });
+                case "CampaignHeader":
+                    return FormatFields(value, new[]
+                    {
+                        "name", "length", "md5", "isPublished", "gameMode"
+                    });
+                case "MakeOnlineMenu":
+                    return FormatFields(value, new[] { "state", "playerLimit", "canChangePassword", "canChangeName" });
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private static string FormatHeroControllerState(object value)
+        {
+            return FormatFields(value, new[]
+            {
+                "playersPlaying", "players", "PIDS", "playerControllerIDs",
+                "heroesHaveBeenReleasedFromTransport", "brosHaveBeenReleased",
+                "WaitForAllPlayersToSpawnBeforeStarting", "AllPlayersHaveJoined"
+            });
+        }
+
+        private static string FormatPlayerState(object value)
+        {
+            var builder = new StringBuilder();
+            builder.Append(FormatFields(value, new[]
+            {
+                "playerNum", "lives", "firstDeployment", "_awaitingHeroTypeFromServer", "heroType"
+            }));
+            builder.Length--;
+            builder.Append(", IsMine=");
+            builder.Append(FormatReadableProperty(value, "IsMine"));
+            builder.Append(", controllerNum=");
+            builder.Append(FormatReadableProperty(value, "controllerNum"));
+            builder.Append(", character=");
+            builder.Append(FormatReadableProperty(value, "character"));
+            builder.Append("}");
+            return builder.ToString();
+        }
+
+        private static string FormatPid(object value)
+        {
+            return "PID{IsMine=" + FormatReadableProperty(value, "IsMine") + "}";
+        }
+
+        private static string FormatReadableProperty(object value, string propertyName)
+        {
+            try
+            {
+                var property = value.GetType().GetProperty(
+                    propertyName,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (property == null || !property.CanRead || property.GetIndexParameters().Length != 0)
+                {
+                    return "<missing>";
+                }
+
+                return FormatFieldValue(property.GetValue(value, null));
+            }
+            catch (Exception exception)
+            {
+                return "<error:" + exception.GetType().Name + ">";
+            }
+        }
+
+        private static string FormatFields(object value, string[] fieldNames)
+        {
+            var builder = new StringBuilder();
+            builder.Append(value.GetType().Name);
+            builder.Append("{");
+            var wroteValue = false;
+
+            foreach (var fieldName in fieldNames)
+            {
+                var field = value.GetType().GetField(
+                    fieldName,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (field == null)
+                {
+                    continue;
+                }
+
+                object fieldValue;
+                try
+                {
+                    fieldValue = field.GetValue(value);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (wroteValue)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append(fieldName);
+                builder.Append("=");
+                builder.Append(FormatFieldValue(fieldValue));
+                wroteValue = true;
+            }
+
+            builder.Append("}");
+            return builder.ToString();
+        }
+
+        private static string FormatFieldValue(object value)
+        {
+            if (value == null)
+            {
+                return "null";
+            }
+
+            var nestedSummary = BuildSafeObjectSummary(value);
+            if (!string.IsNullOrEmpty(nestedSummary))
+            {
+                return nestedSummary;
+            }
+
+            var array = value as Array;
+            if (array != null)
+            {
+                return FormatArrayValue(array);
+            }
+
+            var type = value.GetType();
+            if (type.IsEnum || type.IsPrimitive || value is decimal)
+            {
+                return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            var text = value as string;
+            if (text != null)
+            {
+                return "\"" + Sanitize(text, 160) + "\"";
+            }
+
+            return "<" + type.Name + ">";
+        }
+
+        private static string FormatArrayValue(Array array)
+        {
+            var builder = new StringBuilder();
+            var elementType = array.GetType().GetElementType();
+            builder.Append(elementType == null ? "Array" : elementType.Name);
+            builder.Append("[");
+            builder.Append(array.Length);
+            builder.Append("]{");
+
+            var maxItems = System.Math.Min(array.Length, 8);
+            for (var index = 0; index < maxItems; index++)
+            {
+                if (index > 0)
+                {
+                    builder.Append(",");
+                }
+
+                builder.Append(FormatFieldValue(array.GetValue(index)));
+            }
+
+            if (array.Length > maxItems)
+            {
+                builder.Append(",...");
+            }
+
+            builder.Append("}");
+            return builder.ToString();
+        }
+
+        private static bool IsSensitiveName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+
+            var lowered = name.ToLowerInvariant();
+            return lowered.Contains("password") || lowered.Contains("token") ||
+                   lowered.Contains("secret") || lowered.Contains("credential");
+        }
+
+        private static string Sanitize(string value, int maxLength)
+        {
+            var builder = new StringBuilder(value.Length);
+            for (var index = 0; index < value.Length; index++)
+            {
+                var current = value[index];
+                if (current == '\r')
+                {
+                    builder.Append("\\r");
+                }
+                else if (current == '\n')
+                {
+                    builder.Append("\\n");
+                }
+                else if (char.IsHighSurrogate(current))
+                {
+                    if (index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
+                    {
+                        builder.Append(current);
+                        builder.Append(value[++index]);
+                    }
+                    else
+                    {
+                        builder.Append("\\u");
+                        builder.Append(((int)current).ToString("X4"));
+                    }
+                }
+                else if (char.IsLowSurrogate(current))
+                {
+                    builder.Append("\\u");
+                    builder.Append(((int)current).ToString("X4"));
+                }
+                else
+                {
+                    builder.Append(current);
+                }
+            }
+
+            var result = builder.ToString();
+            if (result.Length > maxLength)
+            {
+                result = result.Substring(0, maxLength) + "...";
+            }
+
+            return result;
+        }
+
+        private static bool ShouldWrite(string key, string message)
+        {
+            lock (Sync)
+            {
+                var cacheKey = key + "\n" + message;
+                TraceCacheEntry previous;
+                if (TraceCache.TryGetValue(cacheKey, out previous) &&
+                    DateTime.UtcNow - previous.Timestamp < TimeSpan.FromSeconds(DuplicateWindowSeconds))
+                {
+                    return false;
+                }
+
+                TraceCache[cacheKey] = new TraceCacheEntry(message, DateTime.UtcNow);
+                return true;
+            }
+        }
+
+        private static string DescribeMethod(MethodBase method)
+        {
+            var typeName = method.DeclaringType == null ? "<unknown>" : method.DeclaringType.FullName;
+            return typeName + "." + method.Name;
+        }
+
+        private sealed class TraceTarget
+        {
+            public TraceTarget(string typeName, string methodName)
+            {
+                TypeName = typeName;
+                MethodName = methodName;
+            }
+
+            public string TypeName { get; private set; }
+            public string MethodName { get; private set; }
+
+            public override string ToString()
+            {
+                return TypeName + "." + MethodName;
+            }
+        }
+
+        private sealed class TraceCacheEntry
+        {
+            public TraceCacheEntry(string message, DateTime timestamp)
+            {
+                Message = message;
+                Timestamp = timestamp;
+            }
+
+            public string Message { get; private set; }
+            public DateTime Timestamp { get; private set; }
+        }
+    }
+}
