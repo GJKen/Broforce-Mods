@@ -20,6 +20,7 @@ namespace BroforceOnlineDiagnostics
         private const int LateJoinTimeoutSeconds = 120;
         private const int WorkshopLobbyReadyPollMilliseconds = 500;
         private const int WorkshopLobbyDataRefreshMilliseconds = 1000;
+        private const string PressToJoinLocalizationKey = "LOC_HUD_PRESSTOJOIN";
         private const string WorkshopLobbyReadyKey = "GJKen_BroforceOnline_WorkshopReady";
         private const string WorkshopLobbyPhaseKey = "GJKen_BroforceOnline_WorkshopPhase";
         private const string WorkshopLobbyPhaseIdle = "idle";
@@ -295,6 +296,7 @@ namespace BroforceOnlineDiagnostics
             PatchWorldMapEnterMissionTranspiler();
             PatchGameStateLoadLevelPrefix();
             PatchLateHeroResponseGuard();
+            PatchWorkshopJoinPromptSuppression();
             NotifySceneLoaded(SceneManager.GetActiveScene());
 
             DiagnosticLog.Info("Harmony method tracing enabled; patched methods=" + patchedCount + ".");
@@ -2503,6 +2505,115 @@ namespace BroforceOnlineDiagnostics
             DiagnosticLog.Warning(
                 "Skipped a late hero-type response after local fallback for player " + playerNum + ".");
             return false;
+        }
+
+        private static void PatchWorkshopJoinPromptSuppression()
+        {
+            var type = AccessTools.TypeByName("LevelTitle");
+            var method = type == null
+                ? null
+                : type.GetMethod(
+                    "ShowText",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                    null,
+                    new[] { typeof(string), typeof(float), typeof(bool) },
+                    null);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("Workshop join-prompt suppression target not found.");
+                return;
+            }
+
+            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "LevelTitleShowTextPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(method, new HarmonyMethod(prefixMethod), null, null, null);
+                DiagnosticLog.Info("Workshop join-prompt suppression enabled.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop join-prompt suppression patch failed: " + exception);
+            }
+        }
+
+        private static bool LevelTitleShowTextPrefix(string s)
+        {
+            if (!ShouldSuppressWorkshopJoinPrompt(s))
+            {
+                return true;
+            }
+
+            HideActiveWorkshopJoinPrompt();
+            DiagnosticLog.Info("Suppressed the in-game Press To Join banner for the Workshop client.");
+            return false;
+        }
+
+        private static void HideActiveWorkshopJoinPrompt()
+        {
+            try
+            {
+                var levelTitleType = AccessTools.TypeByName("LevelTitle");
+                var levelTitle = levelTitleType == null
+                    ? null
+                    : UnityEngine.Object.FindObjectOfType(levelTitleType) as Component;
+                if (levelTitle != null && levelTitle.gameObject.activeSelf)
+                {
+                    levelTitle.gameObject.SetActive(false);
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Active Workshop join-prompt hide failed: " + exception.Message);
+            }
+        }
+
+        private static bool ShouldSuppressWorkshopJoinPrompt(string text)
+        {
+            var settings = Plugin.Settings;
+            if (settings == null || !settings.EnableOnlineWorkshopInjection ||
+                !IsWorkshopOnlineSession() || string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            try
+            {
+                var languageManagerType = AccessTools.TypeByName("Localisation.LanguageManager");
+                var getLocalisedString = languageManagerType == null
+                    ? null
+                    : languageManagerType.GetMethod(
+                        "GetLocalisedString",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                        null,
+                        new[] { typeof(string) },
+                        null);
+                if (languageManagerType == null || getLocalisedString == null)
+                {
+                    return false;
+                }
+
+                // Instance is declared on LanguageManager's generic base class.
+                // Find the live Unity object instead of depending on inherited
+                // static-property reflection, which differs between game builds.
+                var languageManager = UnityEngine.Object.FindObjectOfType(languageManagerType);
+                if (languageManager == null)
+                {
+                    return false;
+                }
+
+                var joinPrompt = getLocalisedString.Invoke(
+                    languageManager,
+                    new object[] { PressToJoinLocalizationKey }) as string;
+                return !string.IsNullOrEmpty(joinPrompt) &&
+                    string.Equals(text, joinPrompt, StringComparison.Ordinal);
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop join-prompt comparison failed: " + exception.Message);
+                return false;
+            }
         }
 
         private static string GetConfiguredWorkshopSceneName()

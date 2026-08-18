@@ -90,7 +90,6 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            GUILayout.Label("Broforce Online Diagnostics 0.3.0");
             Settings.EnableOnlineWorkshopInjection = GUILayout.Toggle(
                 Settings.EnableOnlineWorkshopInjection,
                 "Inject configured workshop map into online level switching");
