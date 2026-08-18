@@ -2,7 +2,7 @@
   "Id": "BroforceOnlineDiagnostics",
   "DisplayName": "Broforce Online Diagnostics",
   "Author": "GJKen",
-  "Version": "0.3.0",
+  "Version": "0.4.0",
   "AssemblyName": "BroforceOnlineDiagnostics.dll",
   "EntryMethod": "BroforceOnlineDiagnostics.Plugin.Load"
 }

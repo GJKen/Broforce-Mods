@@ -6,7 +6,7 @@
 
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。它复用官方 Steam 多人大厅，让已经安装相同 Mod、并订阅相同 Workshop 地图的玩家尝试共同进入第三方地图。
 
-当前版本为实验性的 `0.3.0`，尚未达到稳定发布状态。
+当前版本为实验性的 `0.4.0`，尚未达到稳定发布状态。
 
 所有玩家必须：
 
@@ -16,11 +16,11 @@
 
 ## 当前状态
 
-- 已验证主机和朋友可以通过官方大厅流程进入同一张 Workshop 地图。
+- 已验证房主和加入方可以通过官方大厅流程进入同一张 Workshop 地图。
 - `test009` 双端测试已验证：过场加载期间加入可以进入地图，P2 角色可以正常创建，双方角色控制保持独立。
 - UMM 设置支持 Workshop ID、可选战役名、场景名、诊断会话 ID 和端角色。
 - 线上地图注入默认关闭；关闭时只记录诊断信息，不改变游戏行为。
-- 仍存在朋友端英雄状态不同步、原生崩溃和地图兼容性风险。
+- 仍存在加入方英雄状态不同步、原生崩溃和地图兼容性风险。
 
 ## 双端测试
 
@@ -68,7 +68,7 @@ Diagnostic session ID: test001
 2. 双方填写相同的会话 ID；日志标签可按两台设备自行填写或留空。
 3. 任意一端创建大厅并停留在 `newJoin`，另一端加入并确认出现在大厅。
 4. 创建方选择任务，测试进入地图、玩家生成和后续切关卡。
-5. 测试结束后按会话 ID 收集双方日志，同时收集 UMM `Core\Log.txt` 和游戏 `error.log`。
+5. 测试结束后按会话 ID 收集本机测试端和内网测试端的诊断日志，同时收集两端的 UMM `Core\Log.txt` 和游戏 `error.log`。除非明确要求跳过，否则不得只收集或分析其中一端。
 
 ### 晚加入支持
 
@@ -96,11 +96,13 @@ Diagnostic session ID: test001
 
 每个线上房间只在首次选择任务时注入一次。创建或加入新大厅时会清理上一次 Workshop 状态并重置官方流程残留状态，避免重复回调或错误复用上一大厅的场景。
 
-加入方晚加入时，如果房间信息或 Lobby 阶段显示创建方正在进入配置中的 Workshop 场景，`ConnectionLayer.OnJoinedLobby` 会刷新 Lobby 数据，申请一个本地玩家槽位并执行一次 Workshop 加载；地图下载完成后复用同一个完成回调继续原生流程。host 端的 `RequestJoinGame` 补丁只对晚加入 Workshop 会话放宽两个原生保护条件，普通大厅仍使用原生判断。
+加入方晚加入时，如果房间信息或 Lobby 阶段显示创建方正在进入配置中的 Workshop 场景，`ConnectionLayer.OnJoinedLobby` 会刷新 Lobby 数据，并在没有本地玩家槽位时申请一个本地玩家槽位、执行一次 Workshop 加载；地图下载完成后复用同一个完成回调继续原生流程。host 端的 `RequestJoinGame` 补丁只对晚加入 Workshop 会话绕过两个会使原生方法提前返回的保护条件，普通大厅仍使用原生判断。进入原生请求前会记录 `GetNextUnusedPlayerNumber()` 和四个玩家槽位；如果发现已标记为 playing 但对应 `Player` 对象为空，会清理该明确失效槽位。请求成功后，拥有角色的一端会在物理状态稳定后向其它客户端重发该角色当前的权威 `SetSpawnPositon` 坐标，并保留出生类型；不得通过 `WorkOutSpawnPosition` 重新计算出生位置，因为它会把已经不是首次部署的角色改判为中途空投。启用有效 Workshop 注入配置的线上会话中，每台机器同一时间只允许一个本地 `AddLocalPlayer` 请求；已有本地槽位时晚加入流程复用该槽位，且 `SpawnJoinedPlayers` 会在广播前清理额外的本地空槽位。明确本地掉线后才释放请求锁以允许正常重入。
+
+晚加入测试成功判据：host 日志出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方日志出现 `Late workshop join requested a local player slot` 和 `Starting late workshop join load`；进入地图后，加入方按攻击键能够创建 P2 角色。普通进入时，双方都应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不会重新计算远程角色出生点。
 
 ### 英雄回复策略
 
-部分朋友客户端可能收不到官方 `RequestHeroTypeFromMaster` 回复。当前策略是：
+部分加入方客户端可能收不到官方 `RequestHeroTypeFromMaster` 回复。当前策略是：
 
 - 保留游戏原本的请求和回复流程。
 - Workshop 场景中的本地玩家等待 18 秒仍无回复时，使用游戏自己的 `GetHeroType` 和 `Player.SpawnHero` 做一次本地备用生成。
@@ -130,6 +132,8 @@ Diagnostic session ID: test001
 <Application.persistentDataPath>/BroforceOnlineDiagnostics/
 ```
 
+双端测试必须分别收集本机测试端和内网测试端的该目录。内网测试端的 Mod 部署共享目录只存放 DLL 和 `Info.json`，不会集中保存运行日志；内网测试端启动游戏后，日志写入该机器自己的 `Application.persistentDataPath/BroforceOnlineDiagnostics/`。因此，内网测试端需要从它本机的日志目录单独取回 `.log` 和 `.trace.log` 文件。
+
 插件加载时会创建启动日志；检测到 `SteamLayer.CreateMatch` 或 `SteamLayer.JoinLobby` 时会创建新的联机会话。每个会话包含普通事件日志和独立的 Harmony 详细追踪日志，例如：
 
 ```text
@@ -149,13 +153,15 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - 日志写入前会清洗未配对 UTF-16 代理项，避免异常字符串再次破坏 Unity 日志路径。
 - 本项目不自动设置日志大小上限，也不自动删除旧日志；测试结束后按会话文件清理不需要的历史日志。
 
-分析双端时序时，必须同时对照双方相同会话 ID 的 `.log`、`.trace.log`、UMM `Core\Log.txt` 和 `error.log`，不能仅凭单端日志判断问题位置。
+分析双端时序时，必须同时对照本机测试端和内网测试端相同会话 ID 的 `.log`、`.trace.log`、UMM `Core\Log.txt` 和 `error.log`，不能仅凭单端日志判断问题位置。只有在用户明确要求时，才可以跳过其中一端或某类辅助日志。
 
 ## 当前已知问题
 
-- 朋友端英雄类型回复可能丢失，当前本地备用生成只能缓解，不能替代网络同步。
+- 加入方英雄类型回复可能丢失，当前本地备用生成只能缓解，不能替代网络同步。
 - Broforce 可能发生原生崩溃；日志中的异常和崩溃时间关系不能单独证明因果，必须结合 `error.log`、双方日志和 UMM 日志分析。
 - 晚加入依赖双方使用相同版本 Mod；过场期间可以并行加载，但地图脚本、网络状态或原生错误仍可能导致加入失败。
+- `test009` 中创建方先进入地图、加入方后进入时，P2 角色出现前有短暂等待；尚未根据双端日志判断是网络传输延迟还是本地角色生成流程等待。
+- `test009` 使用的 Workshop 地图曾在 `GeneratePole.Awake` 抛出 `NullReferenceException`。该错误来自地图对象初始化，当前未阻止本轮晚加入和 P2 创建，但更换地图或地图对象时仍需单独排查。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
 

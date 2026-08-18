@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace BroforceOnlineDiagnostics
@@ -14,6 +15,7 @@ namespace BroforceOnlineDiagnostics
         private const string HarmonyId = "GJKen.BroforceOnlineDiagnostics.MethodTrace";
         private const int DuplicateWindowSeconds = 5;
         private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
+        private const int WorkshopLocalJoinRequestRetrySeconds = 10;
         private const int LateJoinControllerId = 1;
         private const int LateJoinTimeoutSeconds = 120;
         private const int WorkshopLobbyReadyPollMilliseconds = 500;
@@ -63,6 +65,8 @@ namespace BroforceOnlineDiagnostics
             new TraceTarget("WorldMapController", "EnterMission"),
             new TraceTarget("GameState", "LoadLevel"),
             new TraceTarget("HeroController", "RequestJoinGame"),
+            new TraceTarget("HeroController", "IsControIdRegisteredToPID"),
+            new TraceTarget("HeroController", "MonitorPlayerDropin"),
             new TraceTarget("HeroController", "DeserializeForJoin"),
             new TraceTarget("HeroController", "SerializeForJoin"),
             new TraceTarget("HeroController", "AddPlayer"),
@@ -77,7 +81,9 @@ namespace BroforceOnlineDiagnostics
             new TraceTarget("HeroController", "HaveAllPlayersHaveSpawned"),
             new TraceTarget("HeroController", "FlagPlayerToDrop"),
             new TraceTarget("HeroController", "DeregisterPlayer"),
+            new TraceTarget("HeroController", "Dropout"),
             new TraceTarget("HeroController", "DropoutRPC"),
+            new TraceTarget("HeroController", "SetIsPlaying"),
             new TraceTarget("HeroController", "RequestAllPlayerData"),
             new TraceTarget("HeroController", "RequestHeroTypeFromMaster"),
             new TraceTarget("HeroController", "RequestHeroTypeFromMasterRPC"),
@@ -89,6 +95,8 @@ namespace BroforceOnlineDiagnostics
             new TraceTarget("Player", "SpawnHero"),
             new TraceTarget("Player", "SetHeroType"),
             new TraceTarget("Player", "AssignCharacter"),
+            new TraceTarget("Player", "SetSpawnPositon"),
+            new TraceTarget("Player", "WorkOutSpawnPosition"),
             new TraceTarget("NewCustomCampaignMenu", "LaunchWorkShopLevel"),
             new TraceTarget("NewCustomCampaignMenu", "LevelLoadCompleteEvent"),
             new TraceTarget("NewCustomCampaignMenu", "LaunchOfflineCampaign"),
@@ -101,6 +109,18 @@ namespace BroforceOnlineDiagnostics
         private static readonly object Sync = new object();
         private static readonly Dictionary<string, TraceCacheEntry> TraceCache =
             new Dictionary<string, TraceCacheEntry>();
+        private static readonly Dictionary<int, DeferredSpawnPosition> PendingSpawnPositions =
+            new Dictionary<int, DeferredSpawnPosition>();
+        private static readonly Dictionary<int, DeferredSpawnPosition> LocalWorkshopSpawnPositions =
+            new Dictionary<int, DeferredSpawnPosition>();
+        private static readonly Dictionary<int, TestVanDammeAnim> SnappedRemoteWorkshopCharacters =
+            new Dictionary<int, TestVanDammeAnim>();
+        private static readonly HashSet<int> PendingLocalWorkshopRejoins =
+            new HashSet<int>();
+        private static readonly HashSet<int> PreparedLocalWorkshopRejoins =
+            new HashSet<int>();
+        private static readonly Dictionary<int, DateTime> WorkshopLocalJoinRequests =
+            new Dictionary<int, DateTime>();
 
         private static Harmony _harmony;
         private static int _sequence;
@@ -116,12 +136,16 @@ namespace BroforceOnlineDiagnostics
         private static DateTime _lateJoinReadyPollAtUtc;
         private static DateTime _lateJoinTransitionPollAtUtc;
         private static DateTime _lateJoinLobbyRefreshAtUtc;
+        private static DateTime _workshopSpawnRebroadcastAtUtc;
+        private static bool _workshopSpawnRebroadcastPending;
+        private static bool _workshopSpawnRebroadcastUseCurrentPositions;
         private static string _lateJoinScene;
         private static string _lateJoinCampaign;
         private static int _lateJoinLevelNumber;
         private static string _lateJoinLastWaitState;
         private static bool _lateJoinLobbyRefreshWarningLogged;
         private static bool _sessionIsHost;
+        private static bool _networkSessionActive;
         private static DateTime _joinLobbyCleanupIgnoreUntilUtc;
 
         public static void Start()
@@ -136,9 +160,15 @@ namespace BroforceOnlineDiagnostics
             _workshopCompletionHandledForSession = false;
             _joinLobbyInProgress = false;
             _sessionIsHost = false;
+            _networkSessionActive = false;
             _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+            _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
+            _workshopSpawnRebroadcastPending = false;
+            _workshopSpawnRebroadcastUseCurrentPositions = false;
             ClearDuplicateWorkshopLoadSuppression();
+            ClearWorkshopLocalJoinRequests();
             ClearLateJoinState();
+            ClearLifecycleState();
             SubscribeWorkshopCompletion();
             var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
                 "TracePrefix",
@@ -164,6 +194,22 @@ namespace BroforceOnlineDiagnostics
                 "RequestJoinGameTranspiler",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var requestJoinGameTranspiler = new HarmonyMethod(requestJoinGameTranspilerMethod);
+            var requestJoinGamePostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "RequestJoinGamePostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var requestJoinGamePostfix = new HarmonyMethod(requestJoinGamePostfixMethod);
+            var playerStartPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "PlayerStartPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var playerStartPostfix = new HarmonyMethod(playerStartPostfixMethod);
+            var assignCharacterPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "AssignCharacterPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var assignCharacterPostfix = new HarmonyMethod(assignCharacterPostfixMethod);
+            var setPlayerCharacterPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "SetPlayerCharacterPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var setPlayerCharacterPostfix = new HarmonyMethod(setPlayerCharacterPostfixMethod);
             var patchedCount = 0;
 
             foreach (var target in Targets)
@@ -215,7 +261,17 @@ namespace BroforceOnlineDiagnostics
                                         ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
                                             "LeaveMatchPostfix",
                                             BindingFlags.NonPublic | BindingFlags.Static))
-                                        : null))));
+                                        : (target.TypeName == "Player" && target.MethodName == "Start"
+                                            ? playerStartPostfix
+                                            : (target.TypeName == "Player" && target.MethodName == "AssignCharacter"
+                                                ? assignCharacterPostfix
+                                                 : (target.TypeName == "HeroController" &&
+                                                    target.MethodName == "SetPlayerCharacter"
+                                                     ? setPlayerCharacterPostfix
+                                                     : (target.TypeName == "HeroController" &&
+                                                        target.MethodName == "RequestJoinGame"
+                                                         ? requestJoinGamePostfix
+                                                         : null))))))));
                         var transpiler = target.TypeName == "HeroController" &&
                                          target.MethodName == "RequestJoinGame"
                             ? requestJoinGameTranspiler
@@ -268,9 +324,15 @@ namespace BroforceOnlineDiagnostics
                 _workshopCompletionHandledForSession = false;
                 _joinLobbyInProgress = false;
                 _sessionIsHost = false;
+                _networkSessionActive = false;
                 _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+                _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
+                _workshopSpawnRebroadcastPending = false;
+                _workshopSpawnRebroadcastUseCurrentPositions = false;
                 ClearDuplicateWorkshopLoadSuppression();
+                ClearWorkshopLocalJoinRequests();
                 ClearLateJoinState();
+                ClearLifecycleState();
                 lock (Sync)
                 {
                     TraceCache.Clear();
@@ -278,15 +340,33 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
-        private static void TracePrefix(MethodBase __originalMethod, object __instance, object[] __args)
+        private static bool TracePrefix(MethodBase __originalMethod, object __instance, object[] __args)
         {
             try
             {
+                if (__originalMethod != null &&
+                    __originalMethod.DeclaringType != null &&
+                    __originalMethod.DeclaringType.Name == "HeroController" &&
+                    __originalMethod.Name == "AddLocalPlayer" &&
+                    ShouldSuppressDuplicateWorkshopLocalJoin(__args))
+                {
+                    return false;
+                }
+
+                if (__originalMethod != null &&
+                    __originalMethod.DeclaringType != null &&
+                    __originalMethod.DeclaringType.Name == "HeroController" &&
+                    __originalMethod.Name == "SpawnJoinedPlayers")
+                {
+                    PrepareWorkshopSpawnJoinedPlayers();
+                }
+
                 if (__originalMethod.DeclaringType != null &&
                     __originalMethod.DeclaringType.Name == "SteamLayer" &&
                     (__originalMethod.Name == "CreateMatch" || __originalMethod.Name == "JoinLobby"))
                 {
                     _sessionIsHost = __originalMethod.Name == "CreateMatch";
+                    _networkSessionActive = true;
                     if (__originalMethod.Name == "JoinLobby")
                     {
                         _joinLobbyInProgress = true;
@@ -304,6 +384,14 @@ namespace BroforceOnlineDiagnostics
                     ResetWorkshopStateForNewSession(__originalMethod.Name);
                 }
 
+                if (__originalMethod.DeclaringType != null &&
+                    __originalMethod.DeclaringType.Name == "HeroController" &&
+                    __originalMethod.Name == "RequestJoinGame")
+                {
+                    PrepareLateWorkshopJoinSlot();
+                }
+
+                ObserveLifecycleBeforeTrace(__originalMethod, __instance, __args);
                 var sequence = Interlocked.Increment(ref _sequence);
                 var message = BuildTraceMessage(__originalMethod, __instance, __args);
                 var key = DescribeMethod(__originalMethod);
@@ -322,11 +410,557 @@ namespace BroforceOnlineDiagnostics
             {
                 DiagnosticLog.Warning("Harmony trace formatter failed: " + exception.Message);
             }
+
+            return true;
+        }
+
+        private static bool ShouldSuppressDuplicateWorkshopLocalJoin(object[] arguments)
+        {
+            if (!IsWorkshopJoinProtectionActive() || arguments == null || arguments.Length < 2 ||
+                !(arguments[0] is int) || !(arguments[1] is int))
+            {
+                return false;
+            }
+
+            var playerNum = (int)arguments[0];
+            var controllerNum = (int)arguments[1];
+
+            RemoveExpiredWorkshopLocalJoinRequests();
+
+            if (HasActiveWorkshopLocalPlayer())
+            {
+                DiagnosticLog.Warning(
+                    "Suppressed duplicate Workshop local-player request because a local slot is already active: " +
+                    "player=" + playerNum + "; controller=" + controllerNum + ".");
+                return true;
+            }
+
+            DateTime previousRequestAtUtc;
+            if (WorkshopLocalJoinRequests.TryGetValue(controllerNum, out previousRequestAtUtc) &&
+                DateTime.UtcNow - previousRequestAtUtc <
+                TimeSpan.FromSeconds(WorkshopLocalJoinRequestRetrySeconds))
+            {
+                DiagnosticLog.Warning(
+                    "Suppressed duplicate Workshop local-player request while the first request is pending: " +
+                    "player=" + playerNum + "; controller=" + controllerNum + ".");
+                return true;
+            }
+
+            if (WorkshopLocalJoinRequests.Count > 0)
+            {
+                DiagnosticLog.Warning(
+                    "Suppressed duplicate Workshop local-player request while another local slot request is pending: " +
+                    "player=" + playerNum + "; controller=" + controllerNum + ".");
+                return true;
+            }
+
+            WorkshopLocalJoinRequests[controllerNum] = DateTime.UtcNow;
+            return false;
+        }
+
+        private static void RemoveExpiredWorkshopLocalJoinRequests()
+        {
+            if (WorkshopLocalJoinRequests.Count == 0)
+            {
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            var expiredControllers = new List<int>();
+            foreach (var request in WorkshopLocalJoinRequests)
+            {
+                if (now - request.Value >= TimeSpan.FromSeconds(WorkshopLocalJoinRequestRetrySeconds))
+                {
+                    expiredControllers.Add(request.Key);
+                }
+            }
+
+            foreach (var controllerNum in expiredControllers)
+            {
+                WorkshopLocalJoinRequests.Remove(controllerNum);
+            }
+        }
+
+        private static bool IsWorkshopJoinProtectionActive()
+        {
+            if (!IsOnline() || !_networkSessionActive)
+            {
+                return false;
+            }
+
+            var settings = Plugin.Settings;
+            if (settings == null || !settings.EnableOnlineWorkshopInjection)
+            {
+                return false;
+            }
+
+            ulong workshopId;
+            return UInt64.TryParse((settings.WorkshopId ?? string.Empty).Trim(), out workshopId) &&
+                   workshopId != 0;
+        }
+
+        private static bool HasActiveWorkshopLocalPlayer()
+        {
+            if (HeroController.PIDS == null)
+            {
+                return false;
+            }
+
+            var playersPlaying = GetPlayersPlayingArray();
+            var count = System.Math.Min(4, HeroController.PIDS.Length);
+            for (var index = 0; index < count; index++)
+            {
+                var pid = HeroController.PIDS[index];
+                if (pid == null || !pid.IsMine)
+                {
+                    continue;
+                }
+
+                if (playersPlaying == null || index >= playersPlaying.Length || playersPlaying[index])
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void PrepareWorkshopSpawnJoinedPlayers()
+        {
+            if (!IsWorkshopJoinProtectionActive() || HeroController.PIDS == null ||
+                HeroController.players == null || HeroController.playerControllerIDs == null)
+            {
+                return;
+            }
+
+            var playersPlaying = GetPlayersPlayingArray();
+            if (playersPlaying == null)
+            {
+                return;
+            }
+
+            var count = System.Math.Min(4, System.Math.Min(
+                HeroController.PIDS.Length,
+                System.Math.Min(HeroController.players.Length, HeroController.playerControllerIDs.Length)));
+            var keptLocalPlayer = -1;
+            for (var index = 0; index < count; index++)
+            {
+                var pid = HeroController.PIDS[index];
+                if (pid == null || !pid.IsMine || index >= playersPlaying.Length || !playersPlaying[index])
+                {
+                    continue;
+                }
+
+                if (keptLocalPlayer < 0)
+                {
+                    keptLocalPlayer = index;
+                    continue;
+                }
+
+                if (HeroController.players[index] != null)
+                {
+                    DiagnosticLog.Warning(
+                        "Workshop found an extra local player slot with an existing Player object; " +
+                        "leaving it untouched: player=" + index + ".");
+                    continue;
+                }
+
+                playersPlaying[index] = false;
+                HeroController.PIDS[index] = null;
+                HeroController.playerControllerIDs[index] = -1;
+                DiagnosticLog.Warning(
+                    "Removed duplicate local Workshop player slot before SpawnJoinedPlayers: " +
+                    "player=" + index + "; keptPlayer=" + keptLocalPlayer + ".");
+            }
+        }
+
+        private static void ForgetWorkshopLocalJoinRequest(object[] arguments)
+        {
+            if (arguments == null || arguments.Length == 0 || !(arguments[0] is int))
+            {
+                return;
+            }
+
+            var playerNum = (int)arguments[0];
+            if (playerNum >= 0 && playerNum < 4 && HeroController.PIDS != null &&
+                playerNum < HeroController.PIDS.Length && HeroController.PIDS[playerNum] != null &&
+                HeroController.PIDS[playerNum].IsMine)
+            {
+                ClearWorkshopLocalJoinRequests();
+            }
+        }
+
+        private static void ClearWorkshopLocalJoinRequests()
+        {
+            WorkshopLocalJoinRequests.Clear();
         }
 
         private static void JoinLobbyPostfix()
         {
             _joinLobbyInProgress = false;
+        }
+
+        private static void ObserveLifecycleBeforeTrace(
+            MethodBase method,
+            object instance,
+            object[] arguments)
+        {
+            if (method == null || method.DeclaringType == null)
+            {
+                return;
+            }
+
+            if (method.DeclaringType.Name == "HeroController" && method.Name == "DropoutRPC")
+            {
+                ForgetWorkshopLocalJoinRequest(arguments);
+                RememberLocalWorkshopDropout(arguments);
+                return;
+            }
+
+            if (method.DeclaringType.Name == "Player" && method.Name == "Start")
+            {
+                PrepareLocalWorkshopRejoin(instance as Player);
+                return;
+            }
+
+            if (method.DeclaringType.Name == "Player" && method.Name == "SetSpawnPositon")
+            {
+                CaptureDeferredSpawnPosition(instance as Player, arguments);
+            }
+        }
+
+        private static bool IsWorkshopOnlineSession()
+        {
+            if (!IsOnline())
+            {
+                return false;
+            }
+
+            if (_injectedForSession)
+            {
+                return true;
+            }
+
+            var configuredScene = GetConfiguredWorkshopSceneName();
+            if (!string.IsNullOrEmpty(configuredScene) &&
+                string.Equals(
+                    SceneManager.GetActiveScene().name,
+                    configuredScene,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var phase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
+            return string.Equals(phase, WorkshopLobbyPhaseLoading, StringComparison.Ordinal) ||
+                string.Equals(phase, WorkshopLobbyPhaseReady, StringComparison.Ordinal);
+        }
+
+        private static bool IsWorkshopOnlineClientSession()
+        {
+            return IsWorkshopOnlineSession() && !IsOnlineHost();
+        }
+
+        private static bool IsWorkshopOnlineHostSession()
+        {
+            return IsWorkshopOnlineSession() && IsOnlineHost();
+        }
+
+        private static void RememberLocalWorkshopDropout(object[] arguments)
+        {
+            if (!IsWorkshopOnlineSession() || arguments == null || arguments.Length == 0)
+            {
+                return;
+            }
+
+            var playerNum = arguments[0] is int ? (int)arguments[0] : -1;
+            if (playerNum < 0 || playerNum >= 4 || HeroController.PIDS == null)
+            {
+                return;
+            }
+
+            var pid = HeroController.PIDS[playerNum];
+            if (pid == null || !pid.IsMine)
+            {
+                return;
+            }
+
+            PendingLocalWorkshopRejoins.Add(playerNum);
+            DiagnosticLog.Warning(
+                "Local Workshop player dropout observed: player=" + playerNum +
+                "; waiting for the same local slot to rejoin so its round state can be restored.");
+        }
+
+        private static void PrepareLocalWorkshopRejoin(Player player)
+        {
+            if (!IsWorkshopOnlineSession() || player == null || !player.IsMine ||
+                !PendingLocalWorkshopRejoins.Contains(player.playerNum))
+            {
+                return;
+            }
+
+            PendingLocalWorkshopRejoins.Remove(player.playerNum);
+            PreparedLocalWorkshopRejoins.Add(player.playerNum);
+            var lives = GetIntFieldOrProperty(player, "lives");
+            if (lives <= 0)
+            {
+                SetFieldOrProperty(player, "lives", 1);
+                DiagnosticLog.Warning(
+                    "Restored local Workshop player life before Player.Start: player=" +
+                    player.playerNum + "; previousLives=" + lives + ".");
+            }
+
+            var controller = HeroController.Instance;
+            if (controller != null && controller.IDroppedOutThisRound)
+            {
+                controller.IDroppedOutThisRound = false;
+                DiagnosticLog.Warning(
+                    "Restored local Workshop player round state before Player.Start: player=" +
+                    player.playerNum + ".");
+            }
+        }
+
+        private static void PlayerStartPostfix(Player __instance)
+        {
+            if (!IsWorkshopOnlineSession() || __instance == null || !__instance.IsMine ||
+                !PreparedLocalWorkshopRejoins.Remove(__instance.playerNum))
+            {
+                return;
+            }
+
+            var lives = GetIntFieldOrProperty(__instance, "lives");
+            if (lives <= 0)
+            {
+                SetFieldOrProperty(__instance, "lives", 1);
+                DiagnosticLog.Warning(
+                    "Restored local Workshop player life after rejoin: player=" +
+                    __instance.playerNum + "; previousLives=" + lives + ".");
+            }
+
+            if (__instance.character == null && !__instance.awaitingHeroTypeFromServer &&
+                HasRegisteredLocalPid(__instance.playerNum))
+            {
+                try
+                {
+                    DiagnosticLog.Info(
+                        "Requesting a fresh hero after local Workshop player rejoin: player=" +
+                        __instance.playerNum + ".");
+                    __instance.RespawnBro(false);
+                }
+                catch (Exception exception)
+                {
+                    DiagnosticLog.Warning(
+                        "Local Workshop player rejoin respawn failed: " + exception);
+                }
+            }
+            else if (__instance.character == null && !__instance.awaitingHeroTypeFromServer)
+            {
+                DiagnosticLog.Warning(
+                    "Skipped local Workshop rejoin respawn because the player PID is not registered: player=" +
+                    __instance.playerNum + ".");
+            }
+        }
+
+        private static void CaptureDeferredSpawnPosition(Player player, object[] arguments)
+        {
+            if (!IsWorkshopOnlineSession() || player == null || arguments == null || arguments.Length < 4 ||
+                !(arguments[3] is Vector3))
+            {
+                return;
+            }
+
+            var bro = arguments[0] as TestVanDammeAnim;
+            var position = (Vector3)arguments[3];
+            var spawnType = arguments[1] is Player.SpawnType
+                ? (Player.SpawnType)arguments[1]
+                : Player.SpawnType.CustomSpawnPoint;
+            var spawnViaAirDrop = arguments[2] is bool && (bool)arguments[2];
+
+            SnapFirstRemoteWorkshopCharacter(player, bro, position);
+
+            if (bro != null && player.IsMine)
+            {
+                LocalWorkshopSpawnPositions[player.playerNum] = new DeferredSpawnPosition(
+                    spawnType,
+                    spawnViaAirDrop,
+                    position);
+                QueueWorkshopSpawnRebroadcast(
+                    "local player received its original spawn position; waiting for settled physics",
+                    750,
+                    true);
+                DiagnosticLog.Info(
+                    "Recorded local Workshop spawn position for exact rebroadcast: player=" +
+                    player.playerNum + "; position=" + FormatVector3(position) + ".");
+            }
+
+            if (bro != null && player.character != null)
+            {
+                return;
+            }
+
+            PendingSpawnPositions[player.playerNum] = new DeferredSpawnPosition(
+                spawnType,
+                spawnViaAirDrop,
+                position);
+            DiagnosticLog.Warning(
+                "Deferred Workshop spawn position: player=" + player.playerNum +
+                "; position=" + FormatVector3(position) +
+                "; broArgument=" + (bro == null ? "null" : "present") + ".");
+        }
+
+        private static void AssignCharacterPostfix(Player __instance)
+        {
+            if (__instance != null)
+            {
+                ApplyDeferredSpawnPosition(__instance.playerNum, __instance.character);
+            }
+        }
+
+        private static void SetPlayerCharacterPostfix(int index, TestVanDammeAnim character)
+        {
+            ApplyDeferredSpawnPosition(index, character);
+            if (character != null)
+            {
+                QueueWorkshopSpawnRebroadcast(
+                    "a Workshop character was assigned; rebroadcasting its current authoritative position",
+                    750,
+                    true);
+            }
+        }
+
+        private static bool ApplyDeferredSpawnPosition(int playerNum, TestVanDammeAnim character)
+        {
+            if (character == null)
+            {
+                return false;
+            }
+
+            DeferredSpawnPosition pending;
+            if (!PendingSpawnPositions.TryGetValue(playerNum, out pending))
+            {
+                return false;
+            }
+
+            try
+            {
+                var player = HeroController.players == null || playerNum < 0 ||
+                             playerNum >= HeroController.players.Length
+                    ? null
+                    : HeroController.players[playerNum];
+                if (player == null)
+                {
+                    return false;
+                }
+
+                PendingSpawnPositions.Remove(playerNum);
+                player.SetSpawnPositon(
+                    character,
+                    pending.SpawnType,
+                    pending.SpawnViaAirDrop,
+                    pending.Position);
+                SnapFirstRemoteWorkshopCharacter(player, character, pending.Position);
+                DiagnosticLog.Warning(
+                    "Applied deferred Workshop spawn position through native Player.SetSpawnPositon: player=" +
+                    playerNum + "; position=" + FormatVector3(pending.Position) + ".");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Applying deferred Workshop spawn position failed: " + exception);
+                return false;
+            }
+        }
+
+        private static void ClearLifecycleState()
+        {
+            PendingSpawnPositions.Clear();
+            LocalWorkshopSpawnPositions.Clear();
+            SnappedRemoteWorkshopCharacters.Clear();
+            PendingLocalWorkshopRejoins.Clear();
+            PreparedLocalWorkshopRejoins.Clear();
+        }
+
+        private static void SnapFirstRemoteWorkshopCharacter(
+            Player player,
+            TestVanDammeAnim character,
+            Vector3 position)
+        {
+            if (player == null || character == null || player.IsMine)
+            {
+                return;
+            }
+
+            TestVanDammeAnim alreadySnapped;
+            if (SnappedRemoteWorkshopCharacters.TryGetValue(player.playerNum, out alreadySnapped) &&
+                alreadySnapped == character)
+            {
+                return;
+            }
+
+            try
+            {
+                var currentPosition = character.transform.position;
+                character.transform.position = new Vector3(
+                    position.x,
+                    position.y,
+                    currentPosition.z);
+                SnappedRemoteWorkshopCharacters[player.playerNum] = character;
+                DiagnosticLog.Info(
+                    "Snapped the first remote Workshop character to the authoritative spawn position: " +
+                    "player=" + player.playerNum + "; position=" +
+                    FormatVector3(character.transform.position) + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Remote Workshop spawn-position snap failed: " + exception);
+            }
+        }
+
+        private static bool HasRegisteredLocalPid(int playerNum)
+        {
+            if (playerNum < 0 || playerNum >= 4 || HeroController.PIDS == null)
+            {
+                return false;
+            }
+
+            var pid = HeroController.PIDS[playerNum];
+            if (pid == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var layer = GetCurrentConnectionLayer();
+                if (layer == null)
+                {
+                    return false;
+                }
+
+                var pairsProperty = layer.GetType().GetProperty(
+                    "PlayerIDPairs",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (pairsProperty == null)
+                {
+                    return false;
+                }
+
+                var pairs = pairsProperty.GetValue(layer, null);
+                if (pairs == null)
+                {
+                    return false;
+                }
+
+                var containsKey = pairs.GetType().GetMethod("ContainsKey");
+                return containsKey != null && Convert.ToBoolean(
+                    containsKey.Invoke(pairs, new object[] { pid }));
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static void LobbyCreatedPostfix()
@@ -376,6 +1010,7 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
+            _networkSessionActive = false;
             DiagnosticLog.EndSession("SteamLayer.LeaveMatch");
         }
 
@@ -397,6 +1032,8 @@ namespace BroforceOnlineDiagnostics
 
         internal static void Update()
         {
+            TryRebroadcastWorkshopSpawns();
+
             if (_lateJoinStarted)
             {
                 return;
@@ -470,6 +1107,15 @@ namespace BroforceOnlineDiagnostics
             if (string.Equals(GetLocalPidState(), "not-set", StringComparison.Ordinal))
             {
                 return false;
+            }
+
+            if (HasActiveWorkshopLocalPlayer())
+            {
+                _lateJoinPlayerJoinRequested = true;
+                DiagnosticLog.Info(
+                    "Late workshop join reused an existing local player slot; " +
+                    "skipping AddLocalPlayer to avoid a duplicate local character.");
+                return true;
             }
 
             var heroControllerType = AccessTools.TypeByName("HeroController");
@@ -1022,7 +1668,7 @@ namespace BroforceOnlineDiagnostics
                 "ShouldAllowRequestJoinGame",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var controllerGuardBypass = typeof(HarmonyDiagnostics).GetMethod(
-                "ShouldRejectRequestJoinGameController",
+                "ShouldAllowRequestJoinGameController",
                 BindingFlags.NonPublic | BindingFlags.Static);
             if (levelFinishedGetter == null || bypassGetter == null ||
                 controllerRegistrationGuard == null || controllerGuardBypass == null)
@@ -1071,20 +1717,23 @@ namespace BroforceOnlineDiagnostics
 
         private static MethodInfo FindRequestJoinGameControllerGuard()
         {
-            var connectionType = AccessTools.TypeByName("ConnectionLayer");
-            if (connectionType == null)
+            var heroControllerType = AccessTools.TypeByName("HeroController");
+            if (heroControllerType == null)
             {
                 return null;
             }
 
-            var methods = connectionType.GetMethods(
+            var methods = heroControllerType.GetMethods(
                 BindingFlags.Public |
                 BindingFlags.NonPublic |
                 BindingFlags.Static |
                 BindingFlags.Instance);
             foreach (var method in methods)
             {
-                if (method.Name == "IsControIdRegisteredToPID" && method.GetParameters().Length == 2)
+                if ((method.Name == "IsControIdRegisteredToPID" ||
+                     method.Name == "IsControllerIdRegisteredToPID" ||
+                     method.Name == "IsControllerIDRegisteredToPID") &&
+                    method.GetParameters().Length == 2)
                 {
                     return method;
                 }
@@ -1093,12 +1742,12 @@ namespace BroforceOnlineDiagnostics
             return null;
         }
 
-        private static bool ShouldRejectRequestJoinGameController(int controllerNum, object requesteeID)
+        private static bool ShouldAllowRequestJoinGameController(int controllerNum, object requesteeID)
         {
             if (IsLateWorkshopHostSession())
             {
                 DiagnosticLog.Trace(
-                    "Late workshop host bypassed RequestJoinGame controller-registration guard: " +
+                    "Late workshop host bypassed the RequestJoinGame controller-registration return: " +
                     "controller=" + controllerNum + ".");
                 return false;
             }
@@ -1150,12 +1799,14 @@ namespace BroforceOnlineDiagnostics
             }
 
             var levelFinished = Convert.ToBoolean(levelFinishedGetter.Invoke(null, null));
-            if (levelFinished)
+            if (IsLateWorkshopHostSession())
             {
-                return true;
+                DiagnosticLog.Trace(
+                    "Late workshop host allowed RequestJoinGame while the level-finished guard is active.");
+                return false;
             }
 
-            return IsLateWorkshopHostSession();
+            return levelFinished;
         }
 
         private static bool IsLateWorkshopHostSession()
@@ -1168,6 +1819,279 @@ namespace BroforceOnlineDiagnostics
             var phase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
             return string.Equals(phase, WorkshopLobbyPhaseLoading, StringComparison.Ordinal) ||
                 string.Equals(phase, WorkshopLobbyPhaseReady, StringComparison.Ordinal);
+        }
+
+        private static void PrepareLateWorkshopJoinSlot()
+        {
+            if (!IsLateWorkshopHostSession())
+            {
+                return;
+            }
+
+            var nextPlayerNumber = GetImmediateNextUnusedPlayerNumber();
+            DiagnosticLog.Info(
+                "Late workshop RequestJoinGame slot state before native handling: next=" +
+                nextPlayerNumber + "; " + FormatWorkshopPlayerSlots() + ".");
+            if (nextPlayerNumber != -1)
+            {
+                return;
+            }
+
+            var staleSlot = FindEmptyLateWorkshopPlayerSlot();
+            if (staleSlot < 0)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop RequestJoinGame has no free slot and no empty stale Player object: " +
+                    FormatWorkshopPlayerSlots() + ".");
+                return;
+            }
+
+            var playersPlaying = GetPlayersPlayingArray();
+            if (playersPlaying == null || staleSlot >= playersPlaying.Length)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop player slot became unavailable before stale-slot cleanup.");
+                return;
+            }
+
+            playersPlaying[staleSlot] = false;
+            DiagnosticLog.Warning(
+                "Cleared stale late workshop player slot before RequestJoinGame: player=" +
+                staleSlot + "; " + FormatWorkshopPlayerSlots() + ".");
+        }
+
+        private static void RequestJoinGamePostfix(int controllerNum, PID requesteeID, string playerName)
+        {
+            if (!IsLateWorkshopHostSession())
+            {
+                return;
+            }
+
+            var assignedPlayerNumber = FindPlayerNumberForPid(requesteeID);
+            DiagnosticLog.Info(
+                "Late workshop RequestJoinGame state after native handling: controller=" +
+                controllerNum + "; assignedPlayer=" + assignedPlayerNumber + "; " +
+                FormatWorkshopPlayerSlots() + ".");
+            if (assignedPlayerNumber < 0)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop RequestJoinGame returned without registering the requestee PID.");
+                return;
+            }
+
+            QueueWorkshopSpawnRebroadcast(
+                "a late Workshop player registered: player=" + assignedPlayerNumber,
+                750,
+                true);
+        }
+
+        private static void TryRebroadcastWorkshopSpawns()
+        {
+            if (!_workshopSpawnRebroadcastPending ||
+                DateTime.UtcNow < _workshopSpawnRebroadcastAtUtc)
+            {
+                return;
+            }
+
+            _workshopSpawnRebroadcastPending = false;
+            var useCurrentPositions = _workshopSpawnRebroadcastUseCurrentPositions;
+            _workshopSpawnRebroadcastUseCurrentPositions = false;
+            if (!IsWorkshopOnlineSession() || HeroController.players == null)
+            {
+                return;
+            }
+
+            var rebroadcastCount = 0;
+            var rebroadcastPositions = new StringBuilder();
+            for (var index = 0; index < HeroController.players.Length; index++)
+            {
+                var player = HeroController.players[index];
+                DeferredSpawnPosition position;
+                if (player == null || player.character == null || !player.IsMine ||
+                    !LocalWorkshopSpawnPositions.TryGetValue(index, out position))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var spawnType = position.SpawnType;
+                    var spawnPosition = position.Position;
+                    if (useCurrentPositions)
+                    {
+                        spawnPosition = player.character.transform.position;
+                    }
+
+                    if (rebroadcastPositions.Length > 0)
+                    {
+                        rebroadcastPositions.Append(",");
+                    }
+
+                    rebroadcastPositions.Append(index);
+                    rebroadcastPositions.Append("=");
+                    rebroadcastPositions.Append(FormatVector3(spawnPosition));
+
+                    Networking.Networking.RPC<
+                        TestVanDammeAnim,
+                        Player.SpawnType,
+                        bool,
+                        Vector3>(
+                        PID.TargetOthers,
+                        new RpcSignature<
+                            TestVanDammeAnim,
+                            Player.SpawnType,
+                            bool,
+                            Vector3>(player.SetSpawnPositon),
+                        player.character,
+                        spawnType,
+                        position.SpawnViaAirDrop,
+                        spawnPosition,
+                        false);
+                    rebroadcastCount++;
+                }
+                catch (Exception exception)
+                {
+                    DiagnosticLog.Warning(
+                    "Workshop spawn-position rebroadcast failed for local player=" +
+                        index + ": " + exception);
+                }
+            }
+
+            DiagnosticLog.Info(
+                "Workshop spawn-position rebroadcast completed with authoritative current positions: localPlayers=" +
+                rebroadcastCount + "; positions=" + rebroadcastPositions + ".");
+        }
+
+        private static void QueueWorkshopSpawnRebroadcast(string reason, int delayMilliseconds)
+        {
+            QueueWorkshopSpawnRebroadcast(reason, delayMilliseconds, false);
+        }
+
+        private static void QueueWorkshopSpawnRebroadcast(
+            string reason,
+            int delayMilliseconds,
+            bool useCurrentPosition)
+        {
+            if (!IsWorkshopOnlineSession())
+            {
+                return;
+            }
+
+            _workshopSpawnRebroadcastPending = true;
+            _workshopSpawnRebroadcastAtUtc = DateTime.UtcNow.AddMilliseconds(delayMilliseconds);
+            _workshopSpawnRebroadcastUseCurrentPositions =
+                _workshopSpawnRebroadcastUseCurrentPositions || useCurrentPosition;
+            DiagnosticLog.Trace(
+                "Scheduled exact Workshop spawn-position rebroadcast: " + reason + ".");
+        }
+
+        private static int GetImmediateNextUnusedPlayerNumber()
+        {
+            try
+            {
+                var method = typeof(HeroController).GetMethod(
+                    "GetNextUnusedPlayerNumber",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                return method == null ? -2 : Convert.ToInt32(method.Invoke(null, null));
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Reading the immediate Workshop player slot state failed: " + exception);
+                return -2;
+            }
+        }
+
+        private static int FindEmptyLateWorkshopPlayerSlot()
+        {
+            var playersPlaying = GetPlayersPlayingArray();
+            if (playersPlaying == null || HeroController.players == null)
+            {
+                return -1;
+            }
+
+            var count = System.Math.Min(4, System.Math.Min(
+                playersPlaying.Length,
+                HeroController.players.Length));
+            for (var index = 1; index < count; index++)
+            {
+                if (playersPlaying[index] && HeroController.players[index] == null)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private static int FindPlayerNumberForPid(PID pid)
+        {
+            if (pid == null || HeroController.PIDS == null)
+            {
+                return -1;
+            }
+
+            var count = System.Math.Min(4, HeroController.PIDS.Length);
+            for (var index = 0; index < count; index++)
+            {
+                var candidate = HeroController.PIDS[index];
+                if (candidate != null && candidate.AsByte == pid.AsByte)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private static string FormatWorkshopPlayerSlots()
+        {
+            var playersPlaying = GetPlayersPlayingArray();
+            if (playersPlaying == null || HeroController.players == null ||
+                HeroController.playerControllerIDs == null)
+            {
+                return "slots=unavailable";
+            }
+
+            var count = System.Math.Min(4, System.Math.Min(
+                playersPlaying.Length,
+                System.Math.Min(HeroController.players.Length, HeroController.playerControllerIDs.Length)));
+            var builder = new StringBuilder("slots=");
+            for (var index = 0; index < count; index++)
+            {
+                if (index > 0)
+                {
+                    builder.Append(",");
+                }
+
+                builder.Append(index);
+                builder.Append("{playing=");
+                builder.Append(playersPlaying[index]);
+                builder.Append(";player=");
+                builder.Append(HeroController.players[index] == null ? "null" : "present");
+                builder.Append(";controller=");
+                builder.Append(HeroController.playerControllerIDs[index]);
+                builder.Append("}");
+            }
+
+            return builder.ToString();
+        }
+
+        private static bool[] GetPlayersPlayingArray()
+        {
+            try
+            {
+                var field = typeof(HeroController).GetField(
+                    "playersPlaying",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                return field == null ? null : field.GetValue(null) as bool[];
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Reading HeroController.playersPlaying failed: " + exception);
+                return null;
+            }
         }
 
         private static object GetGameStateInstance(Type gameStateType)
@@ -1772,8 +2696,13 @@ namespace BroforceOnlineDiagnostics
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
             _joinLobbyInProgress = false;
+            _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
+            _workshopSpawnRebroadcastPending = false;
+            _workshopSpawnRebroadcastUseCurrentPositions = false;
             ClearDuplicateWorkshopLoadSuppression();
+            ClearWorkshopLocalJoinRequests();
             ClearLateJoinState();
+            ClearLifecycleState();
 
             try
             {
@@ -1855,6 +2784,33 @@ namespace BroforceOnlineDiagnostics
             throw new MissingMemberException(type.FullName, name);
         }
 
+        private static int GetIntFieldOrProperty(object instance, string name)
+        {
+            if (instance == null)
+            {
+                return 0;
+            }
+
+            var type = instance.GetType();
+            var field = type.GetField(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (field != null)
+            {
+                return Convert.ToInt32(field.GetValue(instance));
+            }
+
+            var property = type.GetProperty(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (property != null && property.CanRead)
+            {
+                return Convert.ToInt32(property.GetValue(instance, null));
+            }
+
+            return 0;
+        }
+
         private static string BuildTraceMessage(
             MethodBase method,
             object instance,
@@ -1902,10 +2858,29 @@ namespace BroforceOnlineDiagnostics
                 return "null";
             }
 
+            if (value is Vector3)
+            {
+                return FormatVector3((Vector3)value);
+            }
+
             var summary = BuildSafeObjectSummary(value);
             if (!string.IsNullOrEmpty(summary))
             {
                 return summary;
+            }
+
+            var component = value as Component;
+            if (component != null)
+            {
+                try
+                {
+                    return "<" + value.GetType().Name +
+                           " position=" + FormatVector3(component.transform.position) + ">";
+                }
+                catch
+                {
+                    return "<" + value.GetType().Name + ">";
+                }
             }
 
             var type = value.GetType();
@@ -1922,6 +2897,16 @@ namespace BroforceOnlineDiagnostics
             }
 
             return "<" + type.FullName + ">";
+        }
+
+        private static string FormatVector3(Vector3 value)
+        {
+            return string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "({0:0.###},{1:0.###},{2:0.###})",
+                value.x,
+                value.y,
+                value.z);
         }
 
         private static string BuildSafeObjectSummary(object value)
@@ -2009,7 +2994,23 @@ namespace BroforceOnlineDiagnostics
             builder.Append(", controllerNum=");
             builder.Append(FormatReadableProperty(value, "controllerNum"));
             builder.Append(", character=");
-            builder.Append(FormatReadableProperty(value, "character"));
+            var player = value as Player;
+            if (player != null && player.character != null)
+            {
+                try
+                {
+                    builder.Append("<" + player.character.GetType().Name +
+                                   " position=" + FormatVector3(player.character.transform.position) + ">");
+                }
+                catch
+                {
+                    builder.Append(FormatReadableProperty(value, "character"));
+                }
+            }
+            else
+            {
+                builder.Append(FormatReadableProperty(value, "character"));
+            }
             builder.Append("}");
             return builder.ToString();
         }
@@ -2292,6 +3293,23 @@ namespace BroforceOnlineDiagnostics
         {
             var typeName = method.DeclaringType == null ? "<unknown>" : method.DeclaringType.FullName;
             return typeName + "." + method.Name;
+        }
+
+        private sealed class DeferredSpawnPosition
+        {
+            public DeferredSpawnPosition(
+                Player.SpawnType spawnType,
+                bool spawnViaAirDrop,
+                Vector3 position)
+            {
+                SpawnType = spawnType;
+                SpawnViaAirDrop = spawnViaAirDrop;
+                Position = position;
+            }
+
+            public Player.SpawnType SpawnType { get; private set; }
+            public bool SpawnViaAirDrop { get; private set; }
+            public Vector3 Position { get; private set; }
         }
 
         private sealed class TraceTarget
