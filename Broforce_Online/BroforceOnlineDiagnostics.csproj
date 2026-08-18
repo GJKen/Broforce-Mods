@@ -5,8 +5,11 @@
     <RootNamespace>BroforceOnlineDiagnostics</RootNamespace>
     <AssemblyName>BroforceOnlineDiagnostics</AssemblyName>
     <Nullable>disable</Nullable>
-    <OutputPath>bin\$(Configuration)\</OutputPath>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\BroforceOnlineDiagnostics</LocalBroforceModPath>
+    <NetworkBroforceModPath>\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\BroforceOnlineDiagnostics</NetworkBroforceModPath>
+    <PackageModPath>$(MSBuildProjectDirectory)\BroforceOnlineDiagnostics</PackageModPath>
+    <OutputPath>$(PackageModPath)\</OutputPath>
   </PropertyGroup>
 
   <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
@@ -46,4 +49,12 @@
     <Compile Include="src\HarmonyDiagnostics.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
   </ItemGroup>
+
+  <Target Name="DeployBroforceOnlineDiagnostics" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
+    <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath);$(NetworkBroforceModPath)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(NetworkBroforceModPath)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json') And !Exists('$(LocalBroforceModPath)\Info.json')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(NetworkBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json') And !Exists('$(NetworkBroforceModPath)\Info.json')" />
+  </Target>
 </Project>

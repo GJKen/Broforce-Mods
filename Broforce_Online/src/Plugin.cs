@@ -6,6 +6,7 @@ namespace BroforceOnlineDiagnostics
 {
     public static class Plugin
     {
+        private const int CurrentDiagnosticSettingsVersion = 2;
         private static UnityModManager.ModEntry _modEntry;
         private static DiagnosticsBehaviour _behaviour;
 
@@ -32,13 +33,15 @@ namespace BroforceOnlineDiagnostics
                 catch (Exception settingsException)
                 {
                     Settings = new DiagnosticSettings();
-                    modEntry.Logger.LogException("Diagnostic settings load failed; defaults are active", settingsException);
+                    modEntry.Logger.LogException("Diagnostic settings load failed; empty settings are active", settingsException);
                 }
 
                 if (Settings == null)
                 {
                     Settings = new DiagnosticSettings();
                 }
+
+                MigrateDiagnosticSettings(Settings);
 
                 DiagnosticLog.Initialize(modEntry);
                 DiagnosticLog.Info("Plugin loaded. Observation-only mode is active.");
@@ -64,13 +67,16 @@ namespace BroforceOnlineDiagnostics
                 StopDiagnostics();
             }
 
+            SaveSettings(modEntry);
+
             return true;
         }
 
         private static bool OnUnload(UnityModManager.ModEntry modEntry)
         {
+            DiagnosticLog.Info("Plugin unloading.");
+            SaveSettings(modEntry);
             StopDiagnostics();
-            DiagnosticLog.Info("Plugin unloaded.");
             DiagnosticLog.Close();
             _modEntry = null;
             Settings = null;
@@ -88,7 +94,7 @@ namespace BroforceOnlineDiagnostics
             Settings.EnableOnlineWorkshopInjection = GUILayout.Toggle(
                 Settings.EnableOnlineWorkshopInjection,
                 "Inject configured workshop map into online level switching");
-            GUILayout.Label("Workshop ID (test default: 456121589)");
+            GUILayout.Label("Workshop ID");
             Settings.WorkshopId = GUILayout.TextField(
                 Settings.WorkshopId ?? string.Empty,
                 GUILayout.Width(260f));
@@ -96,32 +102,87 @@ namespace BroforceOnlineDiagnostics
             Settings.WorkshopCampaignName = GUILayout.TextField(
                 Settings.WorkshopCampaignName ?? string.Empty,
                 GUILayout.Width(260f));
-            GUILayout.Label("Custom level scene (default: Test Evan2)");
+            GUILayout.Label("Custom level scene");
             Settings.WorkshopSceneName = GUILayout.TextField(
                 Settings.WorkshopSceneName ?? string.Empty,
                 GUILayout.Width(260f));
-            GUILayout.Label("Changes are saved when the UMM settings panel is saved.");
+            GUILayout.Label("Diagnostic session ID (use the same value on both clients; optional)");
+            Settings.DiagnosticSessionId = GUILayout.TextField(
+                Settings.DiagnosticSessionId ?? string.Empty,
+                GUILayout.Width(260f));
+            GUILayout.Label("Diagnostic role (host or client)");
+            Settings.DiagnosticRole = GUILayout.TextField(
+                Settings.DiagnosticRole ?? string.Empty,
+                GUILayout.Width(260f));
+            GUILayout.Label("Changes are saved when UMM settings are saved, the Mod is toggled, or the game exits normally.");
         }
 
         private static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
-            if (Settings != null)
+            SaveSettings(modEntry);
+        }
+
+        private static void SaveSettings(UnityModManager.ModEntry modEntry)
+        {
+            if (Settings == null)
+            {
+                return;
+            }
+
+            try
             {
                 UnityModManager.ModSettings.Save(Settings, modEntry);
             }
+            catch (Exception exception)
+            {
+                modEntry.Logger.LogException("Diagnostic settings save failed", exception);
+            }
+        }
+
+        private static void MigrateDiagnosticSettings(DiagnosticSettings settings)
+        {
+            if (settings == null || settings.DiagnosticSettingsVersion >= CurrentDiagnosticSettingsVersion)
+            {
+                return;
+            }
+
+            if (string.Equals((settings.WorkshopId ?? string.Empty).Trim(), "456121589", StringComparison.Ordinal))
+            {
+                settings.WorkshopId = string.Empty;
+            }
+
+            if (string.Equals(
+                    (settings.WorkshopCampaignName ?? string.Empty).Trim(),
+                    "the sweet taste of freedom 3",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                settings.WorkshopCampaignName = string.Empty;
+            }
+
+            if (string.Equals((settings.DiagnosticRole ?? string.Empty).Trim(), "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.DiagnosticRole = string.Empty;
+            }
+
+            if (string.IsNullOrEmpty((settings.WorkshopSceneName ?? string.Empty).Trim()))
+            {
+                settings.WorkshopSceneName = DiagnosticSettings.DefaultWorkshopSceneName;
+            }
+
+            settings.DiagnosticSettingsVersion = CurrentDiagnosticSettingsVersion;
         }
 
         private static void StopDiagnostics()
         {
             HarmonyDiagnostics.Stop();
 
-            if (_behaviour == null)
+            if (_behaviour != null)
             {
-                return;
+                _behaviour.Stop();
+                _behaviour = null;
             }
 
-            _behaviour.Stop();
-            _behaviour = null;
+            DiagnosticLog.EndSession("diagnostics disabled");
         }
     }
 }
