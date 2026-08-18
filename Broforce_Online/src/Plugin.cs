@@ -110,7 +110,7 @@ namespace BroforceOnlineDiagnostics
             Settings.DiagnosticSessionId = GUILayout.TextField(
                 Settings.DiagnosticSessionId ?? string.Empty,
                 GUILayout.Width(260f));
-            GUILayout.Label("Diagnostic role (host or client)");
+            GUILayout.Label("Diagnostic label (optional; only used in log names)");
             Settings.DiagnosticRole = GUILayout.TextField(
                 Settings.DiagnosticRole ?? string.Empty,
                 GUILayout.Width(260f));

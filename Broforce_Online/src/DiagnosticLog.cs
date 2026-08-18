@@ -61,7 +61,8 @@ namespace BroforceOnlineDiagnostics
                         "INFO",
                         "SESSION_BEGIN trigger=" + SanitizeToken(trigger) +
                         "; sessionId=" + SanitizeToken(SessionId) +
-                        "; role=" + SanitizeToken(Role),
+                        "; role=" + SanitizeToken(Role) +
+                        "; networkRole=" + SanitizeToken(inferredRole),
                         false);
                 }
                 catch (Exception exception)
