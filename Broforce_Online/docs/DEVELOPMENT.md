@@ -22,6 +22,12 @@
 - 线上地图注入默认关闭；关闭时只记录诊断信息，不改变游戏行为。
 - 仍存在加入方英雄状态不同步、原生崩溃和地图兼容性风险。
 
+### 加入提示拦截
+
+后续双端验证已确认：启用 Workshop 注入的线上会话中，房主和加入方都不再显示“按开枪键加入游戏”横幅，攻击键加入功能保持可用。
+
+源码确认该横幅来自 `HeroController.Update` 对 `LevelTitle.ShowText` 的调用，使用本地化键 `LOC_HUD_PRESSTOJOIN`。当前 Mod 在 `LevelTitle.ShowText` 前置阶段只拦截这条精确文本，并在命中时立即隐藏已经激活的 `LevelTitle` 对象。它不修改 `AddLocalPlayer`、`RequestJoinGame`、Lobby 状态或地图加载；普通大厅和离线模式也不启用此处理。普通诊断日志命中时会记录 `Suppressed the in-game Press To Join banner for the Workshop client.`，其中 `client` 为历史日志名称，实际覆盖线上会话双方。
+
 ## 双端测试
 
 ### 官方流程
