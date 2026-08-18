@@ -17,7 +17,7 @@
 ## 当前状态
 
 - 已验证主机和朋友可以通过官方大厅流程进入同一张 Workshop 地图。
-- 最近一次双端测试已验证：主机先进入地图后，客户端晚加入可以进入，双方角色控制保持独立；仍需更多地图和测试轮次验证。
+- `test009` 双端测试已验证：过场加载期间加入可以进入地图，P2 角色可以正常创建，双方角色控制保持独立。
 - UMM 设置支持 Workshop ID、可选战役名、场景名、诊断会话 ID 和端角色。
 - 线上地图注入默认关闭；关闭时只记录诊断信息，不改变游戏行为。
 - 仍存在朋友端英雄状态不同步、原生崩溃和地图兼容性风险。
@@ -30,7 +30,7 @@
 
 1. 启动游戏，进入“开始” -> “街机模式”。
 2. 选择困难度和“线上主持游戏”，设置房间名、密码及玩家数量限制。
-3. 主机进入 `p1-p4` 等待玩家进入。朋友加入后必须按一次攻击键占用自己的位置；主机确认双方处于不同的玩家位置后，再按攻击键选择任务并进入地图。不要进入地图后才选择角色。
+3. 创建方进入 `p1-p4` 等待玩家进入。加入方必须按一次攻击键占用自己的位置；创建方确认双方处于不同的玩家位置后，再按攻击键选择任务并进入地图。不要进入地图后才选择角色。
 4. 如有需要，使用 `Esc` 打开 Steam 好友邀请界面。
 
 ### UMM 设置
@@ -41,7 +41,7 @@
 | `Workshop campaign name` | 可选的地图内部战役名；不确定时留空。 |
 | `Custom level scene` | 默认 `Test Evan2`。它是游戏通用场景名，不是地图名称；地图使用其它场景时再修改。 |
 | `Diagnostic session ID` | 单轮测试可以留空；多轮测试建议每轮使用不同值，例如 `test001`、`test002`。双端必须一致。 |
-| `Diagnostic role (host or client)` | 主机填写 `host`，朋友填写 `client`。 |
+| `Diagnostic label (optional)` | 只作为日志文件名和关联信息的标签，可留空；不参与联机行为。 |
 | `Inject configured workshop map into online level switching` | 默认关闭。确认配置和地图一致后再开启。 |
 
 首次双端测试可以使用：
@@ -51,13 +51,12 @@ Workshop ID: <实际的 Workshop 数字 ID>
 Workshop campaign name: 留空
 Custom level scene: Test Evan2
 Diagnostic session ID: test001
-主机 Diagnostic role: host
-朋友 Diagnostic role: client
+两端 Diagnostic label: 任意标识或留空
 ```
 
 填写或修改设置后，点击 UMM 设置面板的保存按钮。正常切换 Mod 或退出游戏时插件也会尝试保存；原生崩溃或强制终止进程时无法保证保存。旧配置中的场景名为空时，插件加载时会自动补回 `Test Evan2`，已经填写其它场景名的配置不会被覆盖。
 
-升级旧版本配置时，插件会清理旧版本遗留的测试默认值；已经填写的其它自定义值不会被覆盖。`Diagnostic role` 留空或填写非 `host`/`client` 值时，日志会根据创建大厅或加入大厅自动推断角色；双端排查仍应明确填写 `host` 和 `client`。
+升级旧版本配置时，插件会清理旧版本遗留的测试默认值；已经填写的其它自定义值不会被覆盖。旧设置字段仍保留以兼容已有配置，但它只作为日志标签；任意一端都可以创建大厅，实际网络角色由游戏大厅流程决定。
 
 ### 多轮测试
 
@@ -66,16 +65,16 @@ Diagnostic session ID: test001
 测试顺序应保持为：
 
 1. 双方确认使用同一版本 DLL、同一 Workshop ID 和同一地图文件版本。
-2. 双方填写相同的会话 ID，主机填写 `host`，朋友填写 `client`。
-3. 主机创建大厅并停留在 `newJoin`，朋友加入并确认出现在大厅。
-4. 主机选择任务，测试进入地图、玩家生成和后续切关卡。
+2. 双方填写相同的会话 ID；日志标签可按两台设备自行填写或留空。
+3. 任意一端创建大厅并停留在 `newJoin`，另一端加入并确认出现在大厅。
+4. 创建方选择任务，测试进入地图、玩家生成和后续切关卡。
 5. 测试结束后按会话 ID 收集双方日志，同时收集 UMM `Core\Log.txt` 和游戏 `error.log`。
 
 ### 晚加入支持
 
-当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查主机传来的 `RoomInfo.CurrentSceneName`。如果它与本地配置的 `Custom level scene` 一致，客户端会先通过原生 `HeroController.AddLocalPlayer(-1, 1)` 申请一个独立的本地玩家槽位，再使用本地 `Workshop ID`，结合主机的战役名和关卡号设置 `GameState`，最后通过现有 Workshop 下载完成回调加载地图。
+当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查创建方传来的 `RoomInfo.CurrentSceneName` 和 Steam Lobby 阶段。如果创建方处于 Workshop 的 `loading` 或 `ready` 阶段，加入方会主动刷新 Lobby 数据，通过原生 `HeroController.AddLocalPlayer(-1, 1)` 申请独立的本地玩家槽位，并使用本地 `Workshop ID` 并行加载地图。
 
-这是实验性分支，依赖主机已经把当前场景写入房间信息；主机仍处于 `newJoin`、任务选择界面或 LoadingScreen 时不会触发。客户端会在约 30 秒内等待本地玩家和地图加载条件，超时后放弃这次晚加入处理。晚加入后还可能受到玩家状态、英雄同步和地图脚本的影响，因此稳定测试仍应优先使用“朋友先加入、主机后进入地图”的顺序。
+这是实验性分支，依赖创建方和加入方使用相同版本 Mod。创建方处于 `newJoin` 或任务选择界面时，加入方不会启动晚加入地图加载；进入 Workshop 过场后即可触发，最多等待约 120 秒。host 端只在晚加入 Workshop 会话中放宽 `HeroController.RequestJoinGame` 的关卡完成和控制器注册保护，使加入方的 P2 请求能够创建角色。晚加入后仍可能受到玩家状态、英雄同步和地图脚本影响，因此稳定测试仍应优先使用“先加入大厅、创建方后进入地图”的顺序。
 
 ## 当前实现
 
@@ -97,7 +96,7 @@ Diagnostic session ID: test001
 
 每个线上房间只在首次选择任务时注入一次。创建或加入新大厅时会清理上一次 Workshop 状态并重置官方流程残留状态，避免重复回调或错误复用上一大厅的场景。
 
-客户端晚加入时，如果房间信息显示主机已在配置中的 Workshop 场景，`ConnectionLayer.OnJoinedLobby` 会先申请一个本地玩家槽位，再排队执行一次客户端 Workshop 加载；地图下载完成后复用同一个完成回调继续原生流程。
+加入方晚加入时，如果房间信息或 Lobby 阶段显示创建方正在进入配置中的 Workshop 场景，`ConnectionLayer.OnJoinedLobby` 会刷新 Lobby 数据，申请一个本地玩家槽位并执行一次 Workshop 加载；地图下载完成后复用同一个完成回调继续原生流程。host 端的 `RequestJoinGame` 补丁只对晚加入 Workshop 会话放宽两个原生保护条件，普通大厅仍使用原生判断。
 
 ### 英雄回复策略
 
@@ -113,7 +112,7 @@ Diagnostic session ID: test001
 ### 代码职责
 
 - `src/Plugin.cs`：UMM 加载、设置界面、保存和启用/禁用入口。
-- `src/DiagnosticSettings.cs`：Workshop、会话和角色配置；新配置默认场景为 `Test Evan2`，其它测试字段为空。
+- `src/DiagnosticSettings.cs`：Workshop、会话和日志标签配置；新配置默认场景为 `Test Evan2`，其它测试字段为空。
 - `src/DiagnosticLog.cs`：会话日志和 Harmony 追踪日志的创建、写入、刷新和清理。
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：线上房间、Steam Lobby、关卡切换、Workshop 加载和英雄请求追踪/注入。
@@ -138,7 +137,7 @@ diagnostics-host-<session>-<utc-time>.log
 diagnostics-host-<session>-<utc-time>.trace.log
 ```
 
-普通 `.log` 记录关键联机事件，`.trace.log` 记录详细 Harmony 调用。每行包含 UTC 时间、会话相对时间、会话 ID、端角色和日志级别。普通日志约每 750ms 刷新一次，警告、错误和会话结束时立即刷新。
+普通 `.log` 记录关键联机事件，`.trace.log` 记录详细 Harmony 调用。每行包含 UTC 时间、会话相对时间、会话 ID、日志标签和日志级别；会话开始事件还会记录实际网络角色。普通日志约每 750ms 刷新一次，警告、错误和会话结束时立即刷新。
 
 `SteamLayer.JoinLobby` 内部可能先调用一次 `LeaveMatch` 清理旧大厅；该调用不再被诊断系统当成正式离开，因此不会提前关闭客户端的加入会话日志。
 
@@ -156,7 +155,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 
 - 朋友端英雄类型回复可能丢失，当前本地备用生成只能缓解，不能替代网络同步。
 - Broforce 可能发生原生崩溃；日志中的异常和崩溃时间关系不能单独证明因果，必须结合 `error.log`、双方日志和 UMM 日志分析。
-- 晚加入只识别房间信息中的当前场景；主机正在切换场景、房间信息尚未刷新或场景名与配置不一致时，客户端仍可能卡在加入流程。
+- 晚加入依赖双方使用相同版本 Mod；过场期间可以并行加载，但地图脚本、网络状态或原生错误仍可能导致加入失败。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
 

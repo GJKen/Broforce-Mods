@@ -219,6 +219,7 @@ namespace BroforceOnlineDiagnostics
         {
             _heroFallbackStates.Clear();
             _fallbackResponseGuards.Clear();
+            HarmonyDiagnostics.NotifySceneLoaded(scene);
             DiagnosticLog.Info("Scene loaded: " + DescribeScene(scene) + "; loadMode=" + mode);
         }
 

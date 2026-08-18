@@ -15,6 +15,14 @@ namespace BroforceOnlineDiagnostics
         private const int DuplicateWindowSeconds = 5;
         private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
         private const int LateJoinControllerId = 1;
+        private const int LateJoinTimeoutSeconds = 120;
+        private const int WorkshopLobbyReadyPollMilliseconds = 500;
+        private const int WorkshopLobbyDataRefreshMilliseconds = 1000;
+        private const string WorkshopLobbyReadyKey = "GJKen_BroforceOnline_WorkshopReady";
+        private const string WorkshopLobbyPhaseKey = "GJKen_BroforceOnline_WorkshopPhase";
+        private const string WorkshopLobbyPhaseIdle = "idle";
+        private const string WorkshopLobbyPhaseLoading = "loading";
+        private const string WorkshopLobbyPhaseReady = "ready";
         private const int TraceCacheExpirySeconds = 60;
         private const int MaxTraceCacheEntries = 1024;
 
@@ -105,9 +113,16 @@ namespace BroforceOnlineDiagnostics
         private static bool _lateJoinPlayerJoinRequested;
         private static bool _joinLobbyInProgress;
         private static DateTime _lateJoinDeadlineUtc;
+        private static DateTime _lateJoinReadyPollAtUtc;
+        private static DateTime _lateJoinTransitionPollAtUtc;
+        private static DateTime _lateJoinLobbyRefreshAtUtc;
         private static string _lateJoinScene;
         private static string _lateJoinCampaign;
         private static int _lateJoinLevelNumber;
+        private static string _lateJoinLastWaitState;
+        private static bool _lateJoinLobbyRefreshWarningLogged;
+        private static bool _sessionIsHost;
+        private static DateTime _joinLobbyCleanupIgnoreUntilUtc;
 
         public static void Start()
         {
@@ -120,6 +135,8 @@ namespace BroforceOnlineDiagnostics
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
             _joinLobbyInProgress = false;
+            _sessionIsHost = false;
+            _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
             ClearDuplicateWorkshopLoadSuppression();
             ClearLateJoinState();
             SubscribeWorkshopCompletion();
@@ -135,6 +152,18 @@ namespace BroforceOnlineDiagnostics
                 "JoinedLobbyPostfix",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var joinedLobbyPostfix = new HarmonyMethod(joinedLobbyPostfixMethod);
+            var lobbyCreatedPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "LobbyCreatedPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var lobbyCreatedPostfix = new HarmonyMethod(lobbyCreatedPostfixMethod);
+            var playerHasJoinedMatchPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "PlayerHasJoinedMatchPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var playerHasJoinedMatchPostfix = new HarmonyMethod(playerHasJoinedMatchPostfixMethod);
+            var requestJoinGameTranspilerMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "RequestJoinGameTranspiler",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var requestJoinGameTranspiler = new HarmonyMethod(requestJoinGameTranspilerMethod);
             var patchedCount = 0;
 
             foreach (var target in Targets)
@@ -176,14 +205,22 @@ namespace BroforceOnlineDiagnostics
                     {
                         var postfix = target.TypeName == "SteamLayer" && target.MethodName == "JoinLobby"
                             ? joinLobbyPostfix
-                            : (target.TypeName == "ConnectionLayer" && target.MethodName == "OnJoinedLobby"
-                                ? joinedLobbyPostfix
-                                : (target.TypeName == "SteamLayer" && target.MethodName == "LeaveMatch"
-                                    ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                                        "LeaveMatchPostfix",
-                                        BindingFlags.NonPublic | BindingFlags.Static))
-                                    : null));
-                        _harmony.Patch(method, prefix, postfix, null, null);
+                            : (target.TypeName == "SteamLayer" && target.MethodName == "LobbyCreated_Callback"
+                                ? lobbyCreatedPostfix
+                                : (target.TypeName == "ConnectionLayer" && target.MethodName == "PlayerHasJoinedMatch"
+                                    ? playerHasJoinedMatchPostfix
+                                    : (target.TypeName == "ConnectionLayer" && target.MethodName == "OnJoinedLobby"
+                                    ? joinedLobbyPostfix
+                                    : (target.TypeName == "SteamLayer" && target.MethodName == "LeaveMatch"
+                                        ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
+                                            "LeaveMatchPostfix",
+                                            BindingFlags.NonPublic | BindingFlags.Static))
+                                        : null))));
+                        var transpiler = target.TypeName == "HeroController" &&
+                                         target.MethodName == "RequestJoinGame"
+                            ? requestJoinGameTranspiler
+                            : null;
+                        _harmony.Patch(method, prefix, postfix, transpiler, null);
                         patchedCount++;
                     }
                     catch (Exception exception)
@@ -202,6 +239,7 @@ namespace BroforceOnlineDiagnostics
             PatchWorldMapEnterMissionTranspiler();
             PatchGameStateLoadLevelPrefix();
             PatchLateHeroResponseGuard();
+            NotifySceneLoaded(SceneManager.GetActiveScene());
 
             DiagnosticLog.Info("Harmony method tracing enabled; patched methods=" + patchedCount + ".");
         }
@@ -229,6 +267,8 @@ namespace BroforceOnlineDiagnostics
                 _injectedForSession = false;
                 _workshopCompletionHandledForSession = false;
                 _joinLobbyInProgress = false;
+                _sessionIsHost = false;
+                _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
                 ClearDuplicateWorkshopLoadSuppression();
                 ClearLateJoinState();
                 lock (Sync)
@@ -246,9 +286,11 @@ namespace BroforceOnlineDiagnostics
                     __originalMethod.DeclaringType.Name == "SteamLayer" &&
                     (__originalMethod.Name == "CreateMatch" || __originalMethod.Name == "JoinLobby"))
                 {
+                    _sessionIsHost = __originalMethod.Name == "CreateMatch";
                     if (__originalMethod.Name == "JoinLobby")
                     {
                         _joinLobbyInProgress = true;
+                        _joinLobbyCleanupIgnoreUntilUtc = DateTime.UtcNow.AddSeconds(5);
                     }
 
                     DiagnosticLog.BeginSession(
@@ -287,9 +329,47 @@ namespace BroforceOnlineDiagnostics
             _joinLobbyInProgress = false;
         }
 
+        private static void LobbyCreatedPostfix()
+        {
+            SetWorkshopLobbyReady(false, "lobby created");
+            SetWorkshopLobbyPhase(WorkshopLobbyPhaseIdle, "lobby created");
+        }
+
+        private static void PlayerHasJoinedMatchPostfix()
+        {
+            try
+            {
+                if (!_sessionIsHost)
+                {
+                    return;
+                }
+
+                var phase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
+                if (!string.IsNullOrEmpty(phase))
+                {
+                    SetWorkshopLobbyPhase(phase, "new member joined");
+                }
+
+                var readiness = GetWorkshopLobbyData(WorkshopLobbyReadyKey);
+                if (!string.IsNullOrEmpty(readiness))
+                {
+                    SetWorkshopLobbyReady(
+                        string.Equals(readiness, "1", StringComparison.Ordinal),
+                        "new member joined");
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop lobby state rebroadcast after member join failed: " + exception);
+            }
+        }
+
         private static void LeaveMatchPostfix()
         {
-            if (_joinLobbyInProgress)
+            SetWorkshopLobbyReady(false, "leaving lobby");
+            SetWorkshopLobbyPhase(string.Empty, "leaving lobby");
+
+            if (_joinLobbyInProgress || DateTime.UtcNow <= _joinLobbyCleanupIgnoreUntilUtc)
             {
                 DiagnosticLog.Trace(
                     "SteamLayer.LeaveMatch occurred during JoinLobby cleanup; diagnostic session remains open.");
@@ -306,6 +386,7 @@ namespace BroforceOnlineDiagnostics
                 var room = __args != null && __args.Length > 0
                     ? __args[0] as RoomInfo
                     : null;
+                _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
                 QueueLateJoin(room);
             }
             catch (Exception exception)
@@ -316,8 +397,21 @@ namespace BroforceOnlineDiagnostics
 
         internal static void Update()
         {
-            if (!_lateJoinPending || _lateJoinStarted)
+            if (_lateJoinStarted)
             {
+                return;
+            }
+
+            if (!_lateJoinPending)
+            {
+                if (DateTime.UtcNow < _lateJoinTransitionPollAtUtc)
+                {
+                    return;
+                }
+
+                _lateJoinTransitionPollAtUtc = DateTime.UtcNow.AddMilliseconds(
+                    WorkshopLobbyReadyPollMilliseconds);
+                TryQueueLateJoinFromWorkshopPhase();
                 return;
             }
 
@@ -326,6 +420,35 @@ namespace BroforceOnlineDiagnostics
                 DiagnosticLog.Warning(
                     "Late workshop join timed out before the client could load " + _lateJoinScene + ".");
                 ClearLateJoinState();
+                return;
+            }
+
+            if (DateTime.UtcNow < _lateJoinReadyPollAtUtc)
+            {
+                return;
+            }
+            _lateJoinReadyPollAtUtc = DateTime.UtcNow.AddMilliseconds(
+                WorkshopLobbyReadyPollMilliseconds);
+
+            RefreshWorkshopLobbyDataIfNeeded("late join poll");
+            var lobbyPhase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
+            var lobbyReady = string.Equals(
+                GetWorkshopLobbyData(WorkshopLobbyReadyKey),
+                "1",
+                StringComparison.Ordinal);
+            var pidState = GetLocalPidState();
+            var online = IsOnline();
+            var onlineHost = IsOnlineHost();
+            LogLateJoinWaitState(lobbyPhase, lobbyReady, pidState, online, onlineHost);
+
+            // A loading phase is already enough to start a parallel local Workshop
+            // load. Waiting for ready made a client that joined during LoadingScreen
+            // depend on a lobby-data update it might never receive.
+            var workshopTransitionActive = lobbyReady ||
+                string.Equals(lobbyPhase, WorkshopLobbyPhaseLoading, StringComparison.Ordinal) ||
+                string.Equals(lobbyPhase, WorkshopLobbyPhaseReady, StringComparison.Ordinal);
+            if (!workshopTransitionActive)
+            {
                 return;
             }
 
@@ -344,13 +467,7 @@ namespace BroforceOnlineDiagnostics
                 return false;
             }
 
-            var pidType = AccessTools.TypeByName("PID");
-            var myIdHasBeenSet = pidType == null
-                ? null
-                : pidType.GetProperty(
-                    "MyIdHasBeenSet",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-            if (myIdHasBeenSet != null && !Convert.ToBoolean(myIdHasBeenSet.GetValue(null, null)))
+            if (string.Equals(GetLocalPidState(), "not-set", StringComparison.Ordinal))
             {
                 return false;
             }
@@ -394,10 +511,19 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
+            RefreshWorkshopLobbyDataIfNeeded("late workshop join detected");
             var configuredScene = GetConfiguredWorkshopSceneName();
             var hostScene = GetRoomInfoString(room, "CurrentSceneName");
+            var lobbyPhase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
+            var workshopTransitionIsActive = string.Equals(
+                lobbyPhase,
+                WorkshopLobbyPhaseLoading,
+                StringComparison.Ordinal) ||
+                string.Equals(lobbyPhase, WorkshopLobbyPhaseReady, StringComparison.Ordinal);
+            var hostAlreadyLoadedWorkshopScene = !string.IsNullOrEmpty(configuredScene) &&
+                string.Equals(hostScene, configuredScene, StringComparison.OrdinalIgnoreCase);
             if (string.IsNullOrEmpty(configuredScene) ||
-                !string.Equals(hostScene, configuredScene, StringComparison.OrdinalIgnoreCase))
+                (!hostAlreadyLoadedWorkshopScene && !workshopTransitionIsActive))
             {
                 return;
             }
@@ -411,17 +537,44 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            _lateJoinScene = hostScene;
+            _lateJoinScene = hostAlreadyLoadedWorkshopScene ? hostScene : configuredScene;
             _lateJoinCampaign = GetRoomInfoString(room, "campaignName");
             _lateJoinLevelNumber = GetRoomInfoInt(room, "levelNumber", 0);
-            _lateJoinDeadlineUtc = DateTime.UtcNow.AddSeconds(30);
+            _lateJoinDeadlineUtc = DateTime.UtcNow.AddSeconds(LateJoinTimeoutSeconds);
+            _lateJoinReadyPollAtUtc = DateTime.MinValue;
             _lateJoinPending = true;
             _lateJoinStarted = false;
             _lateJoinPlayerJoinRequested = false;
             DiagnosticLog.Info(
                 "Late workshop join detected: hostScene=" + hostScene +
                 ", campaign=" + (_lateJoinCampaign ?? string.Empty) +
-                ", levelNumber=" + _lateJoinLevelNumber + ".");
+                ", levelNumber=" + _lateJoinLevelNumber +
+                ", lobbyPhase=" + lobbyPhase + ".");
+        }
+
+        private static void TryQueueLateJoinFromWorkshopPhase()
+        {
+            try
+            {
+                if (!IsOnline() || IsOnlineHost())
+                {
+                    return;
+                }
+
+                RefreshWorkshopLobbyDataIfNeeded("late workshop phase check");
+                var phase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
+                if (!string.Equals(phase, WorkshopLobbyPhaseLoading, StringComparison.Ordinal) &&
+                    !string.Equals(phase, WorkshopLobbyPhaseReady, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                QueueLateJoin(GetCurrentRoom());
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Delayed late workshop join detection failed: " + exception);
+            }
         }
 
         private static void TryStartLateJoin()
@@ -478,6 +631,543 @@ namespace BroforceOnlineDiagnostics
                 _injectedForSession = false;
                 DiagnosticLog.Warning("Late workshop join load failed: " + exception);
             }
+        }
+
+        internal static void NotifySceneLoaded(Scene scene)
+        {
+            try
+            {
+                if (!_sessionIsHost)
+                {
+                    return;
+                }
+
+                var configuredScene = GetConfiguredWorkshopSceneName();
+                if (string.Equals(scene.name, configuredScene, StringComparison.OrdinalIgnoreCase))
+                {
+                    SetWorkshopLobbyPhase(WorkshopLobbyPhaseReady, "workshop scene loaded");
+                    SetWorkshopLobbyReady(true, "workshop scene loaded");
+                }
+                else if (string.Equals(scene.name, "LoadingScreen", StringComparison.OrdinalIgnoreCase))
+                {
+                    SetWorkshopLobbyReady(false, "loading screen entered");
+                    if (_injectedForSession)
+                    {
+                        SetWorkshopLobbyPhase(WorkshopLobbyPhaseLoading, "loading screen entered");
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop lobby readiness update failed: " + exception);
+            }
+        }
+
+        private static bool IsWorkshopLobbyReady()
+        {
+            return string.Equals(
+                GetWorkshopLobbyData(WorkshopLobbyReadyKey),
+                "1",
+                StringComparison.Ordinal);
+        }
+
+        private static string GetLocalPidState()
+        {
+            try
+            {
+                var pidType = AccessTools.TypeByName("PID");
+                var myIdHasBeenSet = pidType == null
+                    ? null
+                    : pidType.GetProperty(
+                        "MyIdHasBeenSet",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (myIdHasBeenSet == null)
+                {
+                    return "unknown";
+                }
+
+                return Convert.ToBoolean(myIdHasBeenSet.GetValue(null, null)) ? "set" : "not-set";
+            }
+            catch
+            {
+                return "error";
+            }
+        }
+
+        private static void LogLateJoinWaitState(
+            string phase,
+            bool ready,
+            string pidState,
+            bool online,
+            bool onlineHost)
+        {
+            var state =
+                "phase=" + (phase ?? string.Empty) +
+                "; readiness=" + (ready ? "ready" : "not-ready") +
+                "; pid=" + (pidState ?? string.Empty) +
+                "; online=" + online +
+                "; onlineHost=" + onlineHost +
+                "; scene=" + (_lateJoinScene ?? string.Empty);
+            if (string.Equals(_lateJoinLastWaitState, state, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lateJoinLastWaitState = state;
+            DiagnosticLog.Info("Late workshop join wait state: " + state + ".");
+        }
+
+        private static void RefreshWorkshopLobbyDataIfNeeded(string context)
+        {
+            if (_sessionIsHost || DateTime.UtcNow < _lateJoinLobbyRefreshAtUtc)
+            {
+                return;
+            }
+
+            _lateJoinLobbyRefreshAtUtc = DateTime.UtcNow.AddMilliseconds(
+                WorkshopLobbyDataRefreshMilliseconds);
+            try
+            {
+                var lobbyId = GetLobbySteamId();
+                if (lobbyId == null)
+                {
+                    return;
+                }
+
+                var matchmakingType = AccessTools.TypeByName("Steamworks.SteamMatchmaking");
+                var requestLobbyData = FindSteamMatchmakingMethod(matchmakingType, "RequestLobbyData", 1);
+                if (requestLobbyData == null)
+                {
+                    if (!_lateJoinLobbyRefreshWarningLogged)
+                    {
+                        _lateJoinLobbyRefreshWarningLogged = true;
+                        DiagnosticLog.Warning(
+                            "Workshop lobby data refresh could not find SteamMatchmaking.RequestLobbyData.");
+                    }
+                    return;
+                }
+
+                var result = Convert.ToBoolean(requestLobbyData.Invoke(null, new[] { lobbyId }));
+                DiagnosticLog.Trace(
+                    "Workshop lobby data refresh requested: context=" + context +
+                    "; result=" + result + ".");
+            }
+            catch (Exception exception)
+            {
+                if (!_lateJoinLobbyRefreshWarningLogged)
+                {
+                    _lateJoinLobbyRefreshWarningLogged = true;
+                    DiagnosticLog.Warning("Workshop lobby data refresh failed: " + exception);
+                }
+            }
+        }
+
+        private static bool SetWorkshopLobbyReady(bool ready, string context)
+        {
+            try
+            {
+                if (!_sessionIsHost)
+                {
+                    return false;
+                }
+
+                return SetWorkshopLobbyData(
+                    WorkshopLobbyReadyKey,
+                    ready ? "1" : "0",
+                    "readiness=" + (ready ? "ready" : "not-ready") + "; " + context);
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop lobby readiness write failed: " + exception);
+                return false;
+            }
+        }
+
+        private static bool SetWorkshopLobbyPhase(string phase, string context)
+        {
+            return SetWorkshopLobbyData(WorkshopLobbyPhaseKey, phase ?? string.Empty, "phase=" +
+                (string.IsNullOrEmpty(phase) ? "cleared" : phase) + "; " + context);
+        }
+
+        private static string GetWorkshopLobbyData(string key)
+        {
+            try
+            {
+                var lobbyId = GetLobbySteamId();
+                if (lobbyId == null)
+                {
+                    return string.Empty;
+                }
+
+                var matchmakingType = AccessTools.TypeByName("Steamworks.SteamMatchmaking");
+                var getLobbyData = FindSteamMatchmakingMethod(matchmakingType, "GetLobbyData", 2);
+                if (getLobbyData == null)
+                {
+                    return string.Empty;
+                }
+
+                return getLobbyData.Invoke(null, new[] { lobbyId, key }) as string ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool SetWorkshopLobbyData(string key, string value, string context)
+        {
+            try
+            {
+                if (!_sessionIsHost)
+                {
+                    return false;
+                }
+
+                var lobbyId = GetLobbySteamId();
+                if (lobbyId == null)
+                {
+                    DiagnosticLog.Warning(
+                        "Workshop lobby data could not find a valid lobby ID; key=" + key +
+                        "; context=" + context + ".");
+                    return false;
+                }
+
+                var matchmakingType = AccessTools.TypeByName("Steamworks.SteamMatchmaking");
+                var setLobbyData = FindSteamMatchmakingMethod(matchmakingType, "SetLobbyData", 3);
+                if (setLobbyData == null)
+                {
+                    DiagnosticLog.Warning("Workshop lobby data could not find SteamMatchmaking.SetLobbyData.");
+                    return false;
+                }
+
+                var result = Convert.ToBoolean(setLobbyData.Invoke(
+                    null,
+                    new[] { lobbyId, key, value ?? string.Empty }));
+                if (result)
+                {
+                    if (key == WorkshopLobbyReadyKey)
+                    {
+                        DiagnosticLog.Info(
+                            "Workshop lobby readiness=" +
+                            (value == "1" ? "ready" : "not-ready") +
+                            "; context=" + context + ".");
+                    }
+                    else if (key == WorkshopLobbyPhaseKey)
+                    {
+                        DiagnosticLog.Info(
+                            "Workshop lobby phase=" + (value ?? string.Empty) +
+                            "; context=" + context + ".");
+                    }
+                    else
+                    {
+                        DiagnosticLog.Info(
+                            "Workshop lobby data " + key + "=" + (value ?? string.Empty) +
+                            "; context=" + context + ".");
+                    }
+                }
+                else
+                {
+                    DiagnosticLog.Warning(
+                        "Workshop lobby data write returned false; key=" + key +
+                        "; context=" + context + ".");
+                }
+
+                return result;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Workshop lobby data write failed: " + exception);
+                return false;
+            }
+        }
+
+        private static object GetLobbySteamId()
+        {
+            var steamLayerType = AccessTools.TypeByName("SteamLayer");
+            if (steamLayerType == null)
+            {
+                return null;
+            }
+
+            var instanceProperty = steamLayerType.GetProperty(
+                "Instance",
+                BindingFlags.Public |
+                BindingFlags.NonPublic |
+                BindingFlags.Static |
+                BindingFlags.FlattenHierarchy);
+            var steamLayer = instanceProperty == null
+                ? null
+                : instanceProperty.GetValue(null, null);
+
+            // SteamLayer.Instance is a static field in the current game build,
+            // not a Unity component/property. Do not pass SteamLayer to
+            // FindObjectOfType unless a future build actually makes it a Unity
+            // object; Unity logs an error for ordinary game classes.
+            if (steamLayer == null)
+            {
+                var instanceField = steamLayerType.GetField(
+                    "Instance",
+                    BindingFlags.Public |
+                    BindingFlags.NonPublic |
+                    BindingFlags.Static |
+                    BindingFlags.FlattenHierarchy);
+                steamLayer = instanceField == null
+                    ? null
+                    : instanceField.GetValue(null);
+            }
+
+            if (steamLayer == null)
+            {
+                if (typeof(UnityEngine.Object).IsAssignableFrom(steamLayerType))
+                {
+                    steamLayer = UnityEngine.Object.FindObjectOfType(steamLayerType);
+                }
+            }
+            if (steamLayer == null)
+            {
+                return null;
+            }
+
+            var lobbyProperty = steamLayerType.GetProperty(
+                "LobbySteamId",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            var lobbyGetter = lobbyProperty == null ? null : lobbyProperty.GetGetMethod(true);
+            var lobbyId = lobbyGetter == null
+                ? null
+                : lobbyProperty.GetValue(lobbyGetter.IsStatic ? null : steamLayer, null);
+            if (lobbyId == null || !IsValidSteamId(lobbyId))
+            {
+                var lobbyField = steamLayerType.GetField(
+                    "_lobbySteamID",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                lobbyId = lobbyField == null
+                    ? null
+                    : lobbyField.GetValue(lobbyField.IsStatic ? null : steamLayer);
+            }
+            if (lobbyId == null)
+            {
+                return null;
+            }
+
+            return IsValidSteamId(lobbyId) ? lobbyId : null;
+        }
+
+        private static bool IsValidSteamId(object steamId)
+        {
+            if (steamId == null)
+            {
+                return false;
+            }
+
+            var isValid = steamId.GetType().GetMethod(
+                "IsValid",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (isValid == null)
+            {
+                return true;
+            }
+
+            return Convert.ToBoolean(isValid.Invoke(steamId, null));
+        }
+
+        private static MethodInfo FindSteamMatchmakingMethod(Type type, string name, int parameterCount)
+        {
+            if (type == null)
+            {
+                return null;
+            }
+
+            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            foreach (var method in methods)
+            {
+                if (method.Name == name && method.GetParameters().Length == parameterCount)
+                {
+                    return method;
+                }
+            }
+
+            return null;
+        }
+
+        private static RoomInfo GetCurrentRoom()
+        {
+            try
+            {
+                var connectType = AccessTools.TypeByName("Connect");
+                var layerGetter = connectType == null
+                    ? null
+                    : AccessTools.PropertyGetter(connectType, "Layer");
+                var layer = layerGetter == null ? null : layerGetter.Invoke(null, null);
+                var connectionType = AccessTools.TypeByName("ConnectionLayer");
+                var roomGetter = connectionType == null
+                    ? null
+                    : AccessTools.PropertyGetter(connectionType, "Room");
+                return roomGetter == null ? null : roomGetter.Invoke(layer, null) as RoomInfo;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static IEnumerable<CodeInstruction> RequestJoinGameTranspiler(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            var result = new List<CodeInstruction>(instructions);
+            var levelFinishedGetter = AccessTools.PropertyGetter(
+                AccessTools.TypeByName("GameModeController"),
+                "LevelFinished");
+            var controllerRegistrationGuard = FindRequestJoinGameControllerGuard();
+            var bypassGetter = typeof(HarmonyDiagnostics).GetMethod(
+                "ShouldAllowRequestJoinGame",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var controllerGuardBypass = typeof(HarmonyDiagnostics).GetMethod(
+                "ShouldRejectRequestJoinGameController",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (levelFinishedGetter == null || bypassGetter == null ||
+                controllerRegistrationGuard == null || controllerGuardBypass == null)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop join patch could not resolve HeroController.RequestJoinGame guard methods.");
+                return result;
+            }
+            var replacedLevelFinished = false;
+            var replacedControllerGuard = false;
+
+            for (var index = 0; index < result.Count; index++)
+            {
+                var method = result[index].operand as MethodInfo;
+                if (method == levelFinishedGetter)
+                {
+                    result[index].operand = bypassGetter;
+                    replacedLevelFinished = true;
+                }
+                else if (method == controllerRegistrationGuard)
+                {
+                    result[index].operand = controllerGuardBypass;
+                    replacedControllerGuard = true;
+                }
+            }
+
+            if (!replacedLevelFinished)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop join patch could not find HeroController.RequestJoinGame level-finished guard.");
+            }
+            if (!replacedControllerGuard)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop join patch could not find HeroController.RequestJoinGame controller-registration guard.");
+            }
+            if (replacedLevelFinished && replacedControllerGuard)
+            {
+                DiagnosticLog.Info(
+                    "Late workshop join patch enabled for HeroController.RequestJoinGame " +
+                    "level-finished and controller-registration guards.");
+            }
+
+            return result;
+        }
+
+        private static MethodInfo FindRequestJoinGameControllerGuard()
+        {
+            var connectionType = AccessTools.TypeByName("ConnectionLayer");
+            if (connectionType == null)
+            {
+                return null;
+            }
+
+            var methods = connectionType.GetMethods(
+                BindingFlags.Public |
+                BindingFlags.NonPublic |
+                BindingFlags.Static |
+                BindingFlags.Instance);
+            foreach (var method in methods)
+            {
+                if (method.Name == "IsControIdRegisteredToPID" && method.GetParameters().Length == 2)
+                {
+                    return method;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool ShouldRejectRequestJoinGameController(int controllerNum, object requesteeID)
+        {
+            if (IsLateWorkshopHostSession())
+            {
+                DiagnosticLog.Trace(
+                    "Late workshop host bypassed RequestJoinGame controller-registration guard: " +
+                    "controller=" + controllerNum + ".");
+                return false;
+            }
+
+            try
+            {
+                var controllerRegistrationGuard = FindRequestJoinGameControllerGuard();
+                if (controllerRegistrationGuard == null)
+                {
+                    return true;
+                }
+
+                return Convert.ToBoolean(controllerRegistrationGuard.Invoke(
+                    controllerRegistrationGuard.IsStatic ? null : GetCurrentConnectionLayer(),
+                    new[] { (object)controllerNum, requesteeID }));
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "RequestJoinGame controller-registration guard fallback failed: " + exception);
+                return true;
+            }
+        }
+
+        private static object GetCurrentConnectionLayer()
+        {
+            try
+            {
+                var connectType = AccessTools.TypeByName("Connect");
+                var layerGetter = connectType == null
+                    ? null
+                    : AccessTools.PropertyGetter(connectType, "Layer");
+                return layerGetter == null ? null : layerGetter.Invoke(null, null);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool ShouldAllowRequestJoinGame()
+        {
+            var levelFinishedGetter = AccessTools.PropertyGetter(
+                AccessTools.TypeByName("GameModeController"),
+                "LevelFinished");
+            if (levelFinishedGetter == null)
+            {
+                return true;
+            }
+
+            var levelFinished = Convert.ToBoolean(levelFinishedGetter.Invoke(null, null));
+            if (levelFinished)
+            {
+                return true;
+            }
+
+            return IsLateWorkshopHostSession();
+        }
+
+        private static bool IsLateWorkshopHostSession()
+        {
+            if (!_sessionIsHost || !_injectedForSession || !IsOnline() || !IsOnlineHost())
+            {
+                return false;
+            }
+
+            var phase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
+            return string.Equals(phase, WorkshopLobbyPhaseLoading, StringComparison.Ordinal) ||
+                string.Equals(phase, WorkshopLobbyPhaseReady, StringComparison.Ordinal);
         }
 
         private static object GetGameStateInstance(Type gameStateType)
@@ -542,9 +1232,14 @@ namespace BroforceOnlineDiagnostics
             _lateJoinStarted = false;
             _lateJoinPlayerJoinRequested = false;
             _lateJoinDeadlineUtc = DateTime.MinValue;
+            _lateJoinReadyPollAtUtc = DateTime.MinValue;
+            _lateJoinTransitionPollAtUtc = DateTime.MinValue;
+            _lateJoinLobbyRefreshAtUtc = DateTime.MinValue;
             _lateJoinScene = string.Empty;
             _lateJoinCampaign = string.Empty;
             _lateJoinLevelNumber = 0;
+            _lateJoinLastWaitState = string.Empty;
+            _lateJoinLobbyRefreshWarningLogged = false;
         }
 
         private static void PatchSwitchLevelTranspiler()
@@ -1025,6 +1720,10 @@ namespace BroforceOnlineDiagnostics
                 }
 
                 _injectedForSession = true;
+                if (_sessionIsHost)
+                {
+                    SetWorkshopLobbyPhase(WorkshopLobbyPhaseLoading, injectionContext);
+                }
                 DiagnosticLog.Info(
                     "Online workshop state injected " + injectionContext + ": id=" + workshopId +
                     ", scene=" + sceneName + ", campaign=" + campaignName + ".");
