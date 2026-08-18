@@ -12,6 +12,8 @@ namespace BroforceOnlineDiagnostics
         private const float HeroFallbackDelaySeconds = 18f;
         private const float UnityErrorDuplicateWindowSeconds = 5f;
         private const int MaxUnityErrorStackLength = 4000;
+        private const int MaxUnityErrorSignatureLength = 512;
+        private const int MaxUnityErrorStates = 64;
 
         private float _nextSnapshotAt;
         private float _nextHeroFallbackCheckAt;
@@ -56,6 +58,8 @@ namespace BroforceOnlineDiagnostics
 
         private void Update()
         {
+            HarmonyDiagnostics.Update();
+
             var now = Time.unscaledTime;
             if (now >= _nextSnapshotAt)
             {
@@ -227,7 +231,7 @@ namespace BroforceOnlineDiagnostics
 
             var safeCondition = condition ?? string.Empty;
             var safeStackTrace = stackTrace ?? string.Empty;
-            var signature = safeCondition + "\n" + safeStackTrace;
+            var signature = BuildUnityErrorSignature(type, safeCondition);
             var now = Time.unscaledTime;
             UnityErrorState state;
             if (_unityErrorStates.TryGetValue(signature, out state) && now < state.NextWriteAt)
@@ -238,24 +242,42 @@ namespace BroforceOnlineDiagnostics
 
             if (state == null)
             {
-                if (_unityErrorStates.Count >= 64)
+                if (_unityErrorStates.Count >= MaxUnityErrorStates)
                 {
                     _unityErrorStates.Clear();
                 }
 
-                state = new UnityErrorState();
+                state = new UnityErrorState(signature);
                 _unityErrorStates.Add(signature, state);
             }
             else if (state.SuppressedCount > 0)
             {
                 DiagnosticLog.Warning(
                     "Suppressed " + state.SuppressedCount +
-                    " repeated Unity errors: " + safeCondition);
+                    " repeated Unity errors: " + state.Signature);
             }
 
             state.SuppressedCount = 0;
             state.NextWriteAt = now + UnityErrorDuplicateWindowSeconds;
             DiagnosticLog.Error("Unity log: " + FormatUnityError(safeCondition, safeStackTrace));
+        }
+
+        private static string BuildUnityErrorSignature(LogType type, string condition)
+        {
+            var firstLine = condition ?? string.Empty;
+            var lineBreak = firstLine.IndexOfAny(new[] { '\r', '\n' });
+            if (lineBreak >= 0)
+            {
+                firstLine = firstLine.Substring(0, lineBreak);
+            }
+
+            firstLine = firstLine.Trim();
+            if (firstLine.Length > MaxUnityErrorSignatureLength)
+            {
+                firstLine = firstLine.Substring(0, MaxUnityErrorSignatureLength) + "...";
+            }
+
+            return type + "|" + firstLine;
         }
 
         private static string FormatUnityError(string condition, string stackTrace)
@@ -292,6 +314,12 @@ namespace BroforceOnlineDiagnostics
 
         private sealed class UnityErrorState
         {
+            public UnityErrorState(string signature)
+            {
+                Signature = signature;
+            }
+
+            public string Signature { get; private set; }
             public int SuppressedCount { get; set; }
             public float NextWriteAt { get; set; }
         }

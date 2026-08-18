@@ -7,7 +7,9 @@
 当前版本为实验性的 `0.3.0`。
 
 - 主机和朋友已经可以通过官方 Steam 大厅流程进入同一张 Workshop 地图。
-- UMM 设置支持 Workshop ID、可选的战役名和场景名。
+- 已加入实验性的晚加入处理：主机已经进入配置中的 Workshop 场景后，客户端加入大厅时会尝试自动加载同一张地图。
+- 最近一次双端测试已验证晚加入和双方独立角色控制；仍需更多地图和测试轮次验证。
+- UMM 设置支持 Workshop ID、可选的战役名和场景名，以及诊断会话 ID 和端角色。
 - Mod 保留官方英雄类型请求；朋友端收不到回复时，等待 18 秒后使用本地备用生成。
 - 仍存在英雄状态不同步和 Broforce 原生崩溃风险，尚未达到稳定发布状态。
 
@@ -29,11 +31,13 @@
 2. 进入“街机模式”，选择困难度。
 3. 选择“线上主持游戏”。
 4. 设置房间名、密码和玩家数量限制。
-5. 进入 `p1-p4` 玩家确认界面后，让朋友加入大厅并完成确认。
+5. 进入 `p1-p4` 玩家确认界面后，让朋友加入大厅并按一次攻击键占用独立位置；主机确认双方位置不同后，再选择任务。
 6. 主机按官方流程选择任务，Mod 在任务加载过程中替换为配置中的 Workshop 地图。
 7. 如果需要，可以使用 `Esc` 打开 Steam 好友邀请界面。
 
 主机和朋友必须在 UMM 设置中填写相同的 Workshop ID。战役名可以留空；标准 Workshop 战役通常使用 `Test Evan2` 作为场景名。
+
+正常测试仍建议朋友先加入并在 `p1-p4` 界面按一次攻击键占用独立位置，再由主机选择任务。晚加入分支只在房间信息中的当前场景与配置的 `Custom level scene` 一致时尝试触发，并会先申请一个独立的本地玩家槽位。
 
 ## 当前实现
 
@@ -52,8 +56,29 @@ UMM 设置项如下：
 
 - `Workshop ID`：Workshop 页面 URL 中 `id=` 后面的数字。
 - `Workshop campaign name`：可选的地图内部战役名。无法确定时可以留空，网页标题不一定等于内部战役名。
-- `Custom level scene`：标准 Workshop 战役通常使用 `Test Evan2`，它是通用场景名，不是地图名称。
+- `Custom level scene`：新配置默认使用 `Test Evan2`；如果地图使用其它场景名，再按实际场景修改。它是通用场景名，不是地图名称。
+- `Diagnostic session ID`：单轮测试可以留空；多轮测试建议每轮使用不同值，双端填写相同值。
+- `Diagnostic role (host or client)`：主机填写 `host`，朋友填写 `client`；留空时插件会按创建或加入大厅自动推断。
 - `Inject configured workshop map into online level switching`：线上地图注入开关，默认关闭。
+
+首次双端测试可以使用以下配置：
+
+```text
+Workshop ID: <实际的 Workshop 数字 ID>
+Workshop campaign name: 留空
+Custom level scene: Test Evan2
+Diagnostic session ID: test001
+主机 Diagnostic role: host
+朋友 Diagnostic role: client
+```
+
+两端的 Workshop ID 和 Diagnostic session ID 必须完全一致；保存双方 UMM 设置后，再开启线上地图注入。
+
+填写或修改设置后，应点击 UMM 设置面板的保存按钮；正常切换 Mod 或退出游戏时插件也会尝试自动保存。
+
+如果旧配置中的 `Custom level scene` 为空，插件加载时会自动补回默认值 `Test Evan2`；已经填写其它场景名的配置不会被覆盖。
+
+升级旧版本配置时，插件会清理旧版本遗留的测试默认值；已经填写的其它自定义值不会被覆盖。
 
 ### 英雄回复策略
 
@@ -78,8 +103,8 @@ UMM 设置项如下：
 
 1. 双方完全退出游戏后重新启动。
 2. 双方使用当前标准 DLL 和相同的 Workshop ID。
-3. 主机创建大厅后停留在 `newJoin`，先让朋友加入并确认出现在大厅，再由主机选择任务。
-4. 测试结束后同时收集双方同一时间段的 `diagnostics.log`、UMM `Core\\Log.txt` 和 `error.log`。
+3. 主机创建大厅后停留在 `newJoin`，先让朋友加入并按攻击键占用独立位置；主机确认双方位置不同后，再选择任务。
+4. 测试结束后同时收集双方对应会话的 `.log`、`.trace.log`、UMM `Core\\Log.txt` 和 `error.log`。
 
 诊断日志清洗未配对 UTF-16 代理项，并对重复 Unity 错误进行限频；因此日志异常不能单独证明是原生崩溃原因，仍需结合双方日志和 `error.log` 判断。
 
@@ -90,8 +115,10 @@ UMM 设置项如下：
 1. 根据 `LocalBroforcePath.props.example` 创建本机的 `LocalBroforcePath.props`。
 2. 设置 `BroforceManagedPath` 为 Broforce 的 `Broforce_beta_Data/Managed` 目录。
 3. 设置 `UnityModManagerPath` 为包含 `UnityModManager.dll` 和 `0Harmony.dll` 的 UMM 核心目录。
-4. 构建 `BroforceOnlineDiagnostics.csproj`。
-5. 将标准文件名 `BroforceOnlineDiagnostics.dll` 和 `modinfo.json` 部署到 UMM Mod 目录；部署时将 `modinfo.json` 重命名为 `Info.json`。
+4. 运行 `powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1`。
+5. 脚本直接将标准文件名 `BroforceOnlineDiagnostics.dll` 生成到项目内的 `BroforceOnlineDiagnostics` 可复制安装包，再覆盖本机 UMM Mod 目录和内网测试端的同名 DLL，并只在目标缺少 `Info.json` 时从 `modinfo.json` 初始化它。
+
+联机测试不得只直接运行 `csc.exe`，必须使用该脚本完成编译和双端同步。
 
 Visual Studio 2022 不是必须的。构建关键是使用兼容 `.NET Framework 3.5` 的编译器，并正确引用 Broforce、Unity 和 UMM 程序集。当前已验证系统自带的 `C:\Windows\Microsoft.NET\Framework64\v3.5\csc.exe` 可以完成构建。
 
@@ -106,16 +133,18 @@ Visual Studio 2022 不是必须的。构建关键是使用兼容 `.NET Framework
 ## 诊断日志约束
 
 - 不直接追踪 `Update`、`RunHeroRespawnLogic` 等每帧调用的方法；确需观察时应追踪低频下游事件。
-- 重复日志必须按方法、参数和状态组合限频，不能让参数交替调用绕过去重。
+- 重复日志必须按方法、参数和状态组合限频；高频状态同步方法按方法级别合并，并在恢复记录时报告被抑制的次数。
 - 部署新增追踪后，先检查本机日志增长速度；如果每秒持续写入多行，应先修复限频，再进行联机测试。
+- 详细 Harmony 追踪写入独立的 `.trace.log`，关键联机事件写入普通 `.log`。
+- 本项目不自动设置日志大小上限，也不自动删除旧日志；测试结束后按会话文件清理不需要的历史日志。
 
-默认日志文件位于：
+日志目录位于：
 
 ```text
-<Application.persistentDataPath>/BroforceOnlineDiagnostics/diagnostics.log
+<Application.persistentDataPath>/BroforceOnlineDiagnostics/
 ```
 
-分析联机时序时，必须同时对照主机和朋友端的 `diagnostics.log`、UMM `Core\\Log.txt` 和 `error.log`，不能仅凭单端日志判断问题发生位置。
+`SteamLayer.CreateMatch` 或 `SteamLayer.JoinLobby` 时会自动创建新的联机测试会话。双端可以在 UMM 设置中填写相同的 `Diagnostic session ID`，并分别填写 `host` 和 `client`。每行包含 UTC 时间、会话相对时间、会话 ID 和端角色。分析联机时序时，必须同时对照双方对应会话的 `.log`、`.trace.log`、UMM `Core\\Log.txt` 和 `error.log`，不能仅凭单端日志判断问题发生位置。
 
 ## Git 更新约定
 

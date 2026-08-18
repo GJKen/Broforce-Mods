@@ -2,17 +2,25 @@ namespace BroforceOnlineDiagnostics
 {
     public sealed class DiagnosticSettings : UnityModManagerNet.UnityModManager.ModSettings
     {
+        public const string DefaultWorkshopSceneName = "Test Evan2";
+
         public bool EnableOnlineWorkshopInjection;
         public string WorkshopId;
         public string WorkshopCampaignName;
         public string WorkshopSceneName;
+        public string DiagnosticSessionId;
+        public string DiagnosticRole;
+        public int DiagnosticSettingsVersion;
 
         public DiagnosticSettings()
         {
             EnableOnlineWorkshopInjection = false;
-            WorkshopId = "456121589";
-            WorkshopCampaignName = "the sweet taste of freedom 3";
-            WorkshopSceneName = "Test Evan2";
+            WorkshopId = string.Empty;
+            WorkshopCampaignName = string.Empty;
+            WorkshopSceneName = DefaultWorkshopSceneName;
+            DiagnosticSessionId = string.Empty;
+            DiagnosticRole = string.Empty;
+            DiagnosticSettingsVersion = 0;
         }
     }
 }

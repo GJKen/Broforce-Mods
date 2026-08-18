@@ -14,6 +14,9 @@ namespace BroforceOnlineDiagnostics
         private const string HarmonyId = "GJKen.BroforceOnlineDiagnostics.MethodTrace";
         private const int DuplicateWindowSeconds = 5;
         private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
+        private const int LateJoinControllerId = 1;
+        private const int TraceCacheExpirySeconds = 60;
+        private const int MaxTraceCacheEntries = 1024;
 
         private static readonly TraceTarget[] Targets =
         {
@@ -97,6 +100,14 @@ namespace BroforceOnlineDiagnostics
         private static bool _workshopCompletionHandledForSession;
         private static bool _skipDuplicateWorkshopSceneLoad;
         private static DateTime _skipDuplicateWorkshopSceneLoadUntilUtc;
+        private static bool _lateJoinPending;
+        private static bool _lateJoinStarted;
+        private static bool _lateJoinPlayerJoinRequested;
+        private static bool _joinLobbyInProgress;
+        private static DateTime _lateJoinDeadlineUtc;
+        private static string _lateJoinScene;
+        private static string _lateJoinCampaign;
+        private static int _lateJoinLevelNumber;
 
         public static void Start()
         {
@@ -108,12 +119,22 @@ namespace BroforceOnlineDiagnostics
             _harmony = new Harmony(HarmonyId);
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
+            _joinLobbyInProgress = false;
             ClearDuplicateWorkshopLoadSuppression();
+            ClearLateJoinState();
             SubscribeWorkshopCompletion();
             var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
                 "TracePrefix",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var prefix = new HarmonyMethod(prefixMethod);
+            var joinLobbyPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "JoinLobbyPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var joinLobbyPostfix = new HarmonyMethod(joinLobbyPostfixMethod);
+            var joinedLobbyPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "JoinedLobbyPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var joinedLobbyPostfix = new HarmonyMethod(joinedLobbyPostfixMethod);
             var patchedCount = 0;
 
             foreach (var target in Targets)
@@ -153,7 +174,16 @@ namespace BroforceOnlineDiagnostics
                     matched = true;
                     try
                     {
-                        _harmony.Patch(method, prefix, null, null, null);
+                        var postfix = target.TypeName == "SteamLayer" && target.MethodName == "JoinLobby"
+                            ? joinLobbyPostfix
+                            : (target.TypeName == "ConnectionLayer" && target.MethodName == "OnJoinedLobby"
+                                ? joinedLobbyPostfix
+                                : (target.TypeName == "SteamLayer" && target.MethodName == "LeaveMatch"
+                                    ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
+                                        "LeaveMatchPostfix",
+                                        BindingFlags.NonPublic | BindingFlags.Static))
+                                    : null));
+                        _harmony.Patch(method, prefix, postfix, null, null);
                         patchedCount++;
                     }
                     catch (Exception exception)
@@ -198,7 +228,9 @@ namespace BroforceOnlineDiagnostics
                 _harmony = null;
                 _injectedForSession = false;
                 _workshopCompletionHandledForSession = false;
+                _joinLobbyInProgress = false;
                 ClearDuplicateWorkshopLoadSuppression();
+                ClearLateJoinState();
                 lock (Sync)
                 {
                     TraceCache.Clear();
@@ -214,21 +246,305 @@ namespace BroforceOnlineDiagnostics
                     __originalMethod.DeclaringType.Name == "SteamLayer" &&
                     (__originalMethod.Name == "CreateMatch" || __originalMethod.Name == "JoinLobby"))
                 {
+                    if (__originalMethod.Name == "JoinLobby")
+                    {
+                        _joinLobbyInProgress = true;
+                    }
+
+                    DiagnosticLog.BeginSession(
+                        "SteamLayer." + __originalMethod.Name,
+                        __originalMethod.Name == "CreateMatch" ? "host" : "client");
+                    Interlocked.Exchange(ref _sequence, 0);
+                    lock (Sync)
+                    {
+                        TraceCache.Clear();
+                    }
                     ResetWorkshopStateForNewSession(__originalMethod.Name);
                 }
 
                 var sequence = Interlocked.Increment(ref _sequence);
                 var message = BuildTraceMessage(__originalMethod, __instance, __args);
                 var key = DescribeMethod(__originalMethod);
-                if (ShouldWrite(key, message))
+                string suppressionSummary;
+                if (ShouldWrite(key, message, out suppressionSummary))
                 {
-                    DiagnosticLog.Info("TRACE #" + sequence + " " + message);
+                    if (!string.IsNullOrEmpty(suppressionSummary))
+                    {
+                        DiagnosticLog.Trace(suppressionSummary);
+                    }
+
+                    DiagnosticLog.Trace("TRACE #" + sequence + " " + message);
                 }
             }
             catch (Exception exception)
             {
                 DiagnosticLog.Warning("Harmony trace formatter failed: " + exception.Message);
             }
+        }
+
+        private static void JoinLobbyPostfix()
+        {
+            _joinLobbyInProgress = false;
+        }
+
+        private static void LeaveMatchPostfix()
+        {
+            if (_joinLobbyInProgress)
+            {
+                DiagnosticLog.Trace(
+                    "SteamLayer.LeaveMatch occurred during JoinLobby cleanup; diagnostic session remains open.");
+                return;
+            }
+
+            DiagnosticLog.EndSession("SteamLayer.LeaveMatch");
+        }
+
+        private static void JoinedLobbyPostfix(object[] __args)
+        {
+            try
+            {
+                var room = __args != null && __args.Length > 0
+                    ? __args[0] as RoomInfo
+                    : null;
+                QueueLateJoin(room);
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Late workshop join detection failed: " + exception);
+            }
+        }
+
+        internal static void Update()
+        {
+            if (!_lateJoinPending || _lateJoinStarted)
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow > _lateJoinDeadlineUtc)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop join timed out before the client could load " + _lateJoinScene + ".");
+                ClearLateJoinState();
+                return;
+            }
+
+            if (!_lateJoinPlayerJoinRequested && !TryRequestLateJoinPlayer())
+            {
+                return;
+            }
+
+            TryStartLateJoin();
+        }
+
+        private static bool TryRequestLateJoinPlayer()
+        {
+            if (!IsOnline() || IsOnlineHost())
+            {
+                return false;
+            }
+
+            var pidType = AccessTools.TypeByName("PID");
+            var myIdHasBeenSet = pidType == null
+                ? null
+                : pidType.GetProperty(
+                    "MyIdHasBeenSet",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (myIdHasBeenSet != null && !Convert.ToBoolean(myIdHasBeenSet.GetValue(null, null)))
+            {
+                return false;
+            }
+
+            var heroControllerType = AccessTools.TypeByName("HeroController");
+            var addLocalPlayer = heroControllerType == null
+                ? null
+                : heroControllerType.GetMethod(
+                    "AddLocalPlayer",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                    null,
+                    new[] { typeof(int), typeof(int) },
+                    null);
+            if (addLocalPlayer == null)
+            {
+                DiagnosticLog.Warning("Late workshop join could not find HeroController.AddLocalPlayer(int, int).");
+                return false;
+            }
+
+            try
+            {
+                addLocalPlayer.Invoke(null, new object[] { -1, LateJoinControllerId });
+                _lateJoinPlayerJoinRequested = true;
+                DiagnosticLog.Info(
+                    "Late workshop join requested a local player slot: controller=" +
+                    LateJoinControllerId + ".");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Late workshop local player request failed: " + exception);
+                return false;
+            }
+        }
+
+        private static void QueueLateJoin(RoomInfo room)
+        {
+            var settings = Plugin.Settings;
+            if (room == null || settings == null || !settings.EnableOnlineWorkshopInjection || IsOnlineHost())
+            {
+                return;
+            }
+
+            var configuredScene = GetConfiguredWorkshopSceneName();
+            var hostScene = GetRoomInfoString(room, "CurrentSceneName");
+            if (string.IsNullOrEmpty(configuredScene) ||
+                !string.Equals(hostScene, configuredScene, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            ulong workshopId;
+            var configuredWorkshopId = (settings.WorkshopId ?? string.Empty).Trim();
+            if (!UInt64.TryParse(configuredWorkshopId, out workshopId) || workshopId == 0)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop join skipped: WorkshopId is not a positive numeric ID.");
+                return;
+            }
+
+            _lateJoinScene = hostScene;
+            _lateJoinCampaign = GetRoomInfoString(room, "campaignName");
+            _lateJoinLevelNumber = GetRoomInfoInt(room, "levelNumber", 0);
+            _lateJoinDeadlineUtc = DateTime.UtcNow.AddSeconds(30);
+            _lateJoinPending = true;
+            _lateJoinStarted = false;
+            _lateJoinPlayerJoinRequested = false;
+            DiagnosticLog.Info(
+                "Late workshop join detected: hostScene=" + hostScene +
+                ", campaign=" + (_lateJoinCampaign ?? string.Empty) +
+                ", levelNumber=" + _lateJoinLevelNumber + ".");
+        }
+
+        private static void TryStartLateJoin()
+        {
+            if (!IsOnline() || IsOnlineHost())
+            {
+                return;
+            }
+
+            var gameStateType = AccessTools.TypeByName("GameState");
+            var state = GetGameStateInstance(gameStateType);
+            var loadLevel = gameStateType == null
+                ? null
+                : gameStateType.GetMethod(
+                    "LoadLevel",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(string) },
+                    null);
+            if (state == null || loadLevel == null)
+            {
+                return;
+            }
+
+            if (!_injectedForSession)
+            {
+                ApplyWorkshopState(false, "for late client join");
+            }
+
+            if (!_injectedForSession)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(_lateJoinCampaign))
+                {
+                    SetFieldOrProperty(state, "campaignName", _lateJoinCampaign);
+                }
+
+                SetFieldOrProperty(state, "levelNumber", _lateJoinLevelNumber);
+                _lateJoinPending = false;
+                _lateJoinStarted = true;
+                DiagnosticLog.Info(
+                    "Starting late workshop join load: scene=" + _lateJoinScene +
+                    ", campaign=" + (_lateJoinCampaign ?? string.Empty) +
+                    ", levelNumber=" + _lateJoinLevelNumber + ".");
+                loadLevel.Invoke(loadLevel.IsStatic ? null : state, new object[] { _lateJoinScene });
+            }
+            catch (Exception exception)
+            {
+                _lateJoinStarted = false;
+                _injectedForSession = false;
+                DiagnosticLog.Warning("Late workshop join load failed: " + exception);
+            }
+        }
+
+        private static object GetGameStateInstance(Type gameStateType)
+        {
+            if (gameStateType == null)
+            {
+                return null;
+            }
+
+            var instanceProperty = gameStateType.GetProperty(
+                "Instance",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            return instanceProperty == null ? null : instanceProperty.GetValue(null, null);
+        }
+
+        private static string GetRoomInfoString(RoomInfo room, string fieldName)
+        {
+            var field = typeof(RoomInfo).GetField(
+                fieldName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field != null)
+            {
+                var value = field.GetValue(room) as string;
+                return value == null ? string.Empty : value.Trim();
+            }
+
+            var property = typeof(RoomInfo).GetProperty(
+                fieldName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (property != null && property.CanRead)
+            {
+                var value = property.GetValue(room, null) as string;
+                return value == null ? string.Empty : value.Trim();
+            }
+
+            return string.Empty;
+        }
+
+        private static int GetRoomInfoInt(RoomInfo room, string fieldName, int fallback)
+        {
+            var field = typeof(RoomInfo).GetField(
+                fieldName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field != null)
+            {
+                try
+                {
+                    return Convert.ToInt32(field.GetValue(room));
+                }
+                catch
+                {
+                    return fallback;
+                }
+            }
+
+            return fallback;
+        }
+
+        private static void ClearLateJoinState()
+        {
+            _lateJoinPending = false;
+            _lateJoinStarted = false;
+            _lateJoinPlayerJoinRequested = false;
+            _lateJoinDeadlineUtc = DateTime.MinValue;
+            _lateJoinScene = string.Empty;
+            _lateJoinCampaign = string.Empty;
+            _lateJoinLevelNumber = 0;
         }
 
         private static void PatchSwitchLevelTranspiler()
@@ -756,7 +1072,9 @@ namespace BroforceOnlineDiagnostics
         {
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
+            _joinLobbyInProgress = false;
             ClearDuplicateWorkshopLoadSuppression();
+            ClearLateJoinState();
 
             try
             {
@@ -1186,20 +1504,88 @@ namespace BroforceOnlineDiagnostics
             return result;
         }
 
-        private static bool ShouldWrite(string key, string message)
+        private static bool ShouldWrite(string key, string message, out string suppressionSummary)
         {
+            suppressionSummary = string.Empty;
             lock (Sync)
             {
-                var cacheKey = key + "\n" + message;
+                var now = DateTime.UtcNow;
+                var cacheKey = ShouldCoalesceByMethod(key) ? key : key + "\n" + message;
                 TraceCacheEntry previous;
                 if (TraceCache.TryGetValue(cacheKey, out previous) &&
-                    DateTime.UtcNow - previous.Timestamp < TimeSpan.FromSeconds(DuplicateWindowSeconds))
+                    now - previous.Timestamp < TimeSpan.FromSeconds(DuplicateWindowSeconds))
                 {
+                    previous.SuppressedCount++;
+                    previous.LastMessage = message;
                     return false;
                 }
 
-                TraceCache[cacheKey] = new TraceCacheEntry(message, DateTime.UtcNow);
+                if (previous != null && previous.SuppressedCount > 0)
+                {
+                    suppressionSummary =
+                        "TRACE_SUPPRESSED method=" + key +
+                        "; count=" + previous.SuppressedCount +
+                        "; latest=" + Sanitize(message, 500);
+                }
+
+                TraceCache[cacheKey] = new TraceCacheEntry(message, now);
+                PruneTraceCache(now);
                 return true;
+            }
+        }
+
+        private static bool ShouldCoalesceByMethod(string key)
+        {
+            return key.EndsWith("ConnectionLayer.UpdateOnlinePlayerList", StringComparison.Ordinal) ||
+                   key.EndsWith("RoomInfo.RefreshInfo", StringComparison.Ordinal) ||
+                   key.EndsWith("RoomInfo.PushUpdatedInfo", StringComparison.Ordinal) ||
+                   key.EndsWith("RoomInfo.PullUpdatedInfo", StringComparison.Ordinal) ||
+                   key.EndsWith("HeroController.UpdatePlayerData", StringComparison.Ordinal) ||
+                   key.EndsWith("HeroController.UpdatePlayerUserData", StringComparison.Ordinal) ||
+                   key.EndsWith("Player.RespawnBro", StringComparison.Ordinal);
+        }
+
+        private static void PruneTraceCache(DateTime now)
+        {
+            if (TraceCache.Count <= MaxTraceCacheEntries)
+            {
+                return;
+            }
+
+            var cutoff = now - TimeSpan.FromSeconds(TraceCacheExpirySeconds);
+            var staleKeys = new List<string>();
+            foreach (var pair in TraceCache)
+            {
+                if (pair.Value.Timestamp < cutoff)
+                {
+                    staleKeys.Add(pair.Key);
+                }
+            }
+
+            foreach (var staleKey in staleKeys)
+            {
+                TraceCache.Remove(staleKey);
+            }
+
+            while (TraceCache.Count > MaxTraceCacheEntries)
+            {
+                string oldestKey = null;
+                DateTime oldestTimestamp = DateTime.MaxValue;
+                foreach (var pair in TraceCache)
+                {
+                    if (pair.Value.Timestamp < oldestTimestamp)
+                    {
+                        oldestKey = pair.Key;
+                        oldestTimestamp = pair.Value.Timestamp;
+                    }
+                }
+
+                if (oldestKey == null)
+                {
+                    break;
+                }
+
+                TraceCache.Remove(oldestKey);
             }
         }
 
@@ -1230,12 +1616,13 @@ namespace BroforceOnlineDiagnostics
         {
             public TraceCacheEntry(string message, DateTime timestamp)
             {
-                Message = message;
+                LastMessage = message;
                 Timestamp = timestamp;
             }
 
-            public string Message { get; private set; }
+            public string LastMessage { get; set; }
             public DateTime Timestamp { get; private set; }
+            public int SuppressedCount { get; set; }
         }
     }
 }
