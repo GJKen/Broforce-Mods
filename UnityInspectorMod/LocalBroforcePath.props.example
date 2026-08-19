@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <BroforceManagedPath>C:\Program Files (x86)\Steam\steamapps\common\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
+    <UnityModManagerPath>C:\Path\To\Broforce\r2mod\Broforce\profiles\Broforce\UMM\Core</UnityModManagerPath>
+  </PropertyGroup>
+</Project>

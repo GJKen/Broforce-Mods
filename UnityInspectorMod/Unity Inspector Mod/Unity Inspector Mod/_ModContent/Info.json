@@ -1,0 +1,8 @@
+{
+	"Id": "Unity Inspector Mod",
+	"DisplayName": "Unity Inspector Mod",
+	"Author": "AlexN",
+	"Version": "1.0.0",
+	"AssemblyName": "Unity Inspector Mod.dll",
+	"EntryMethod": "Unity_Inspector_Mod.Main.Load"
+}
