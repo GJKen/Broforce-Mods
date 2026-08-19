@@ -27,6 +27,10 @@ namespace BroforceOnlineDiagnostics
         private const string WorkshopLobbyPhaseIdle = "idle";
         private const string WorkshopLobbyPhaseLoading = "loading";
         private const string WorkshopLobbyPhaseReady = "ready";
+        private const string WorkshopVictorySceneName = "VictoryCustomCampaignSteam";
+        private const int WorkshopOnlineLobbyReturnDelayMilliseconds = 250;
+        private const int WorkshopOnlineLobbyNavigationFailureGraceMilliseconds = 1000;
+        private const int WorkshopOnlineLobbyNavigationTimeoutSeconds = 30;
         private const int TraceCacheExpirySeconds = 60;
         private const int MaxTraceCacheEntries = 1024;
 
@@ -156,6 +160,14 @@ namespace BroforceOnlineDiagnostics
         private static bool _sessionIsHost;
         private static bool _networkSessionActive;
         private static DateTime _joinLobbyCleanupIgnoreUntilUtc;
+        private static bool _returnToWorkshopOnlineLobbyPending;
+        private static bool _returnToWorkshopOnlineLobbyAttempted;
+        private static DateTime _returnToWorkshopOnlineLobbyAtUtc;
+        private static bool _returnToWorkshopOnlineLobbyVisualsSuppressed;
+        private static DateTime _returnToWorkshopOnlineLobbyNavigationStartedAtUtc;
+        private static bool _restoreMainMenuAfterLobbyReturnPending;
+        private static readonly Dictionary<Renderer, bool> MainMenuRendererStates =
+            new Dictionary<Renderer, bool>();
 
         public static void Start()
         {
@@ -171,6 +183,8 @@ namespace BroforceOnlineDiagnostics
             _sessionIsHost = false;
             _networkSessionActive = false;
             _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+            ClearWorkshopOnlineLobbyReturnState();
+            _restoreMainMenuAfterLobbyReturnPending = false;
             _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
             _workshopSpawnRebroadcastPending = false;
             _workshopSpawnRebroadcastUseCurrentPositions = false;
@@ -305,6 +319,11 @@ namespace BroforceOnlineDiagnostics
             PatchGameStateLoadLevelPrefix();
             PatchLateHeroResponseGuard();
             PatchWorkshopJoinPromptSuppression();
+            PatchMainMenuInitializationPostfix();
+            PatchMainMenuInitializationDelay();
+            PatchLobbyMainMenuReturnPostfix();
+            PatchMainMenuMenuActiveSetter();
+            PatchMainMenuShowRoutineCompletion();
             NotifySceneLoaded(SceneManager.GetActiveScene());
 
             DiagnosticLog.Info("Harmony method tracing enabled; patched methods=" + patchedCount + ".");
@@ -336,6 +355,9 @@ namespace BroforceOnlineDiagnostics
                 _sessionIsHost = false;
                 _networkSessionActive = false;
                 _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+                ClearWorkshopOnlineLobbyReturnState();
+                _restoreMainMenuAfterLobbyReturnPending = false;
+                MainMenuRendererStates.Clear();
                 _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
                 _workshopSpawnRebroadcastPending = false;
                 _workshopSpawnRebroadcastUseCurrentPositions = false;
@@ -401,6 +423,7 @@ namespace BroforceOnlineDiagnostics
                     PrepareLateWorkshopJoinSlot();
                 }
 
+                ObserveWorkshopOnlineLobbyReturnBeforeTrace(__originalMethod, __args);
                 ObserveLifecycleBeforeTrace(__originalMethod, __instance, __args);
                 var sequence = Interlocked.Increment(ref _sequence);
                 var message = BuildTraceMessage(__originalMethod, __instance, __args);
@@ -1165,6 +1188,8 @@ namespace BroforceOnlineDiagnostics
         internal static void Update()
         {
             TryRebroadcastWorkshopSpawns();
+            TryReturnToWorkshopOnlineLobby();
+            TryRecoverWorkshopOnlineLobbyNavigationFailure();
 
             if (_lateJoinStarted)
             {
@@ -1267,6 +1292,226 @@ namespace BroforceOnlineDiagnostics
             }
 
             TryRequestLateJoinPlayer();
+        }
+
+        private static void TryReturnToWorkshopOnlineLobby()
+        {
+            if (!_returnToWorkshopOnlineLobbyPending ||
+                _returnToWorkshopOnlineLobbyAttempted ||
+                DateTime.UtcNow < _returnToWorkshopOnlineLobbyAtUtc ||
+                !string.Equals(SceneManager.GetActiveScene().name, "MainMenu", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            try
+            {
+                var mainMenuType = AccessTools.TypeByName("MainMenu");
+                if (mainMenuType == null)
+                {
+                    _returnToWorkshopOnlineLobbyAttempted = true;
+                    RestoreWorkshopOnlineLobbyMainMenuVisuals();
+                    ClearWorkshopOnlineLobbyReturnState();
+                    DiagnosticLog.Warning(
+                        "Workshop Esc return could not find MainMenu; staying on the default main menu.");
+                    return;
+                }
+
+                var instance = GetMainMenuInstance(mainMenuType);
+                if (instance == null)
+                {
+                    return;
+                }
+
+                // MainMenu initializes its item list after a native three-second delay. Opening the
+                // lobby before that coroutine finishes disables MainMenu and permanently cancels it.
+                if (!GetBoolFieldOrProperty(instance, "hasInitialized"))
+                {
+                    return;
+                }
+
+                var playModeType = AccessTools.TypeByName("MultiplayerPlayMode");
+                if (playModeType == null)
+                {
+                    _returnToWorkshopOnlineLobbyAttempted = true;
+                    RestoreWorkshopOnlineLobbyMainMenuVisuals();
+                    ClearWorkshopOnlineLobbyReturnState();
+                    DiagnosticLog.Warning(
+                        "Workshop Esc return could not find MultiplayerPlayMode; staying on the default main menu.");
+                    return;
+                }
+
+                var method = mainMenuType.GetMethod(
+                    "TryToGoToLobby",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static,
+                    null,
+                    new[] { playModeType },
+                    null);
+                if (method == null)
+                {
+                    _returnToWorkshopOnlineLobbyAttempted = true;
+                    RestoreWorkshopOnlineLobbyMainMenuVisuals();
+                    ClearWorkshopOnlineLobbyReturnState();
+                    DiagnosticLog.Warning(
+                        "Workshop Esc return could not find MainMenu.TryToGoToLobby(MultiplayerPlayMode); staying on the default main menu.");
+                    return;
+                }
+
+                _returnToWorkshopOnlineLobbyAttempted = true;
+                _returnToWorkshopOnlineLobbyNavigationStartedAtUtc = DateTime.UtcNow;
+                SuppressWorkshopOnlineLobbyMainMenuVisuals(instance);
+                ResetStalePauseStateForWorkshopSession("Workshop Esc return after MainMenu initialization");
+                var onlineMode = Enum.Parse(playModeType, "Online");
+                method.Invoke(method.IsStatic ? null : instance, new[] { onlineMode });
+                DiagnosticLog.Info(
+                    "Workshop Esc return waited for MainMenu initialization and navigated directly " +
+                    "to the online lobby browser via " +
+                    "MainMenu.TryToGoToLobby(MultiplayerPlayMode.Online).");
+            }
+            catch (Exception exception)
+            {
+                RestoreWorkshopOnlineLobbyMainMenuVisuals();
+                ClearWorkshopOnlineLobbyReturnState();
+                DiagnosticLog.Warning(
+                    "Workshop Esc return to the online lobby browser failed: " + exception);
+            }
+        }
+
+        private static void TryRecoverWorkshopOnlineLobbyNavigationFailure()
+        {
+            if (!_returnToWorkshopOnlineLobbyAttempted ||
+                !_returnToWorkshopOnlineLobbyVisualsSuppressed ||
+                !string.Equals(SceneManager.GetActiveScene().name, "MainMenu", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var mainMenu = GetMainMenuInstance(AccessTools.TypeByName("MainMenu")) as MainMenu;
+            if (mainMenu == null)
+            {
+                return;
+            }
+
+            if (mainMenu.lobby != null && mainMenu.lobby.gameObject.activeSelf)
+            {
+                _returnToWorkshopOnlineLobbyVisualsSuppressed = false;
+                DiagnosticLog.Info(
+                    "Workshop Esc return opened the online lobby without rendering the intermediate main menu.");
+                ClearWorkshopOnlineLobbyReturnState();
+                return;
+            }
+
+            var navigationTimedOut =
+                _returnToWorkshopOnlineLobbyNavigationStartedAtUtc != DateTime.MinValue &&
+                DateTime.UtcNow >= _returnToWorkshopOnlineLobbyNavigationStartedAtUtc.AddSeconds(
+                    WorkshopOnlineLobbyNavigationTimeoutSeconds);
+            var failureGraceElapsed =
+                _returnToWorkshopOnlineLobbyNavigationStartedAtUtc != DateTime.MinValue &&
+                DateTime.UtcNow >= _returnToWorkshopOnlineLobbyNavigationStartedAtUtc.AddMilliseconds(
+                    WorkshopOnlineLobbyNavigationFailureGraceMilliseconds);
+            if (!navigationTimedOut &&
+                (IsPersistentOverlayMessageShowing() || !failureGraceElapsed))
+            {
+                return;
+            }
+
+            RestoreWorkshopOnlineLobbyMainMenuVisuals();
+            ClearWorkshopOnlineLobbyReturnState();
+            DiagnosticLog.Warning(
+                "Workshop Esc return could not open the online lobby; restored the fully initialized " +
+                "main menu instead of leaving hidden or incomplete controls.");
+        }
+
+        private static void SuppressWorkshopOnlineLobbyMainMenuVisuals(object instance)
+        {
+            if (!_returnToWorkshopOnlineLobbyPending)
+            {
+                return;
+            }
+
+            var mainMenu = instance as MainMenu;
+            if (mainMenu == null)
+            {
+                return;
+            }
+
+            var alreadySuppressed = _returnToWorkshopOnlineLobbyVisualsSuppressed;
+            mainMenu.MenuActive = false;
+            if (mainMenu.logo != null)
+            {
+                mainMenu.logo.SetActive(false);
+            }
+
+            _returnToWorkshopOnlineLobbyVisualsSuppressed = true;
+            if (!alreadySuppressed)
+            {
+                DiagnosticLog.Info(
+                    "Workshop Esc return suppressed intermediate MainMenu visuals while native menu " +
+                    "initialization remains active.");
+            }
+        }
+
+        private static void RestoreWorkshopOnlineLobbyMainMenuVisuals()
+        {
+            if (!_returnToWorkshopOnlineLobbyVisualsSuppressed)
+            {
+                return;
+            }
+
+            var mainMenu = GetMainMenuInstance(AccessTools.TypeByName("MainMenu")) as MainMenu;
+            if (mainMenu != null)
+            {
+                if (mainMenu.logo != null)
+                {
+                    mainMenu.logo.SetActive(true);
+                }
+
+                mainMenu.MenuActive = true;
+                mainMenu.TransitionIn();
+            }
+
+            InputReader.IsBlocked = false;
+            _returnToWorkshopOnlineLobbyVisualsSuppressed = false;
+        }
+
+        private static bool IsPersistentOverlayMessageShowing()
+        {
+            try
+            {
+                var overlayType = AccessTools.TypeByName("Interface.PersistentOverlayUI");
+                var property = overlayType == null
+                    ? null
+                    : overlayType.GetProperty(
+                        "IsOverlayMessageShowing",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                return property != null && Convert.ToBoolean(property.GetValue(null, null));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static object GetMainMenuInstance(Type mainMenuType)
+        {
+            if (mainMenuType == null)
+            {
+                return null;
+            }
+
+            var instanceField = mainMenuType.GetField(
+                "instance",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (instanceField != null)
+            {
+                var instance = instanceField.GetValue(null);
+                if (instance != null)
+                {
+                    return instance;
+                }
+            }
+
+            return UnityEngine.Object.FindObjectOfType(mainMenuType);
         }
 
         private static bool TryRequestLateJoinPlayer()
@@ -1495,6 +1740,24 @@ namespace BroforceOnlineDiagnostics
             try
             {
                 var configuredScene = GetConfiguredWorkshopSceneName();
+                if (string.Equals(scene.name, WorkshopVictorySceneName, StringComparison.OrdinalIgnoreCase) &&
+                    _injectedForSession && IsOnline() && IsEscReturnPauseState())
+                {
+                    ArmWorkshopOnlineLobbyReturn("VictoryCustomCampaignSteam scene loaded");
+                }
+
+                if (string.Equals(scene.name, "MainMenu", StringComparison.OrdinalIgnoreCase) &&
+                    _returnToWorkshopOnlineLobbyPending)
+                {
+                    _returnToWorkshopOnlineLobbyAtUtc = DateTime.UtcNow.AddMilliseconds(
+                        WorkshopOnlineLobbyReturnDelayMilliseconds);
+                    DiagnosticLog.Info(
+                        "Workshop Esc return reached MainMenu; intermediate menu visuals will stay hidden " +
+                        "until native initialization completes and the online lobby opens.");
+                    SuppressWorkshopOnlineLobbyMainMenuVisuals(
+                        GetMainMenuInstance(AccessTools.TypeByName("MainMenu")));
+                }
+
                 if (!_sessionIsHost && _lateJoinStarted &&
                     string.Equals(scene.name, _lateJoinScene, StringComparison.OrdinalIgnoreCase))
                 {
@@ -2391,6 +2654,15 @@ namespace BroforceOnlineDiagnostics
             _lateJoinLobbyRefreshWarningLogged = false;
         }
 
+        private static void ClearWorkshopOnlineLobbyReturnState()
+        {
+            _returnToWorkshopOnlineLobbyPending = false;
+            _returnToWorkshopOnlineLobbyAttempted = false;
+            _returnToWorkshopOnlineLobbyAtUtc = DateTime.MinValue;
+            _returnToWorkshopOnlineLobbyVisualsSuppressed = false;
+            _returnToWorkshopOnlineLobbyNavigationStartedAtUtc = DateTime.MinValue;
+        }
+
         private static void PatchSwitchLevelTranspiler()
         {
             var type = AccessTools.TypeByName("GameModeController");
@@ -2656,6 +2928,8 @@ namespace BroforceOnlineDiagnostics
         {
             try
             {
+                PrepareWorkshopOnlineLobbyMainMenuLoad(nextScene);
+
                 if (_skipDuplicateWorkshopSceneLoad &&
                     DateTime.UtcNow <= _skipDuplicateWorkshopSceneLoadUntilUtc &&
                     !string.IsNullOrEmpty(nextScene) &&
@@ -2688,6 +2962,29 @@ namespace BroforceOnlineDiagnostics
             }
 
             return true;
+        }
+
+        private static void PrepareWorkshopOnlineLobbyMainMenuLoad(string nextScene)
+        {
+            if (!_returnToWorkshopOnlineLobbyPending ||
+                !string.Equals(nextScene, "MainMenu", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var gameStateType = AccessTools.TypeByName("GameState");
+            var state = GetGameStateInstance(gameStateType);
+            if (state == null)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop Esc return could not clear the custom-campaign menu redirect because " +
+                    "GameState.Instance is null.");
+                return;
+            }
+
+            SetFieldOrProperty(state, "immediatelyGoToCustomCampaign", false);
+            DiagnosticLog.Info(
+                "Workshop Esc return cleared GameState.immediatelyGoToCustomCampaign before MainMenu load.");
         }
 
         private static void PatchLateHeroResponseGuard()
@@ -2759,6 +3056,552 @@ namespace BroforceOnlineDiagnostics
             {
                 DiagnosticLog.Warning("Workshop join-prompt suppression patch failed: " + exception);
             }
+        }
+
+        private static void PatchMainMenuInitializationPostfix()
+        {
+            var type = AccessTools.TypeByName("MainMenu");
+            var method = type == null
+                ? null
+                : type.GetMethod(
+                    "InitializeMenu",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("Workshop lobby return target not found: MainMenu.InitializeMenu.");
+                return;
+            }
+
+            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "MainMenuInitializeMenuPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(method, null, new HarmonyMethod(postfixMethod), null, null);
+                DiagnosticLog.Info("Workshop lobby return postfix enabled for MainMenu.InitializeMenu.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop lobby return postfix failed for MainMenu.InitializeMenu: " + exception);
+            }
+        }
+
+        private static void PatchMainMenuInitializationDelay()
+        {
+            var mainMenuType = AccessTools.TypeByName("MainMenu");
+            if (mainMenuType == null)
+            {
+                DiagnosticLog.Warning("Workshop lobby return delay target type not found: MainMenu.");
+                return;
+            }
+
+            MethodInfo moveNext = null;
+            var nestedTypes = mainMenuType.GetNestedTypes(
+                BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (var nestedType in nestedTypes)
+            {
+                if (nestedType.Name.IndexOf("DelayInitializeMenu", StringComparison.Ordinal) < 0)
+                {
+                    continue;
+                }
+
+                moveNext = nestedType.GetMethod(
+                    "MoveNext",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (moveNext != null)
+                {
+                    break;
+                }
+            }
+
+            if (moveNext == null)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop lobby return delay target method not found: MainMenu.DelayInitializeMenu.MoveNext.");
+                return;
+            }
+
+            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "MainMenuInitializationDelayTranspiler",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(moveNext, null, null, new HarmonyMethod(transpilerMethod), null);
+                DiagnosticLog.Info(
+                    "Workshop lobby return delay patch enabled; pending returns use a zero-second menu initialization delay.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop lobby return delay patch failed: " + exception);
+            }
+        }
+
+        private static IEnumerable<CodeInstruction> MainMenuInitializationDelayTranspiler(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            var result = new List<CodeInstruction>(instructions);
+            var getter = typeof(HarmonyDiagnostics).GetMethod(
+                "GetMainMenuInitializationDelay",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var replaced = false;
+
+            for (var index = 0; index < result.Count; index++)
+            {
+                var instruction = result[index];
+                var operandValue = instruction.operand is float
+                    ? (float)instruction.operand
+                    : 0f;
+                if (!replaced && instruction.opcode == OpCodes.Ldc_R4 &&
+                    instruction.operand is float && operandValue > 2.999f && operandValue < 3.001f)
+                {
+                    result[index] = new CodeInstruction(OpCodes.Call, getter);
+                    replaced = true;
+                }
+            }
+
+            if (!replaced)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop lobby return delay patch found no 3-second WaitForSeconds constant.");
+            }
+
+            return result;
+        }
+
+        private static float GetMainMenuInitializationDelay()
+        {
+            return _returnToWorkshopOnlineLobbyPending ? 0f : 3f;
+        }
+
+        private static void PatchLobbyMainMenuReturnPostfix()
+        {
+            var lobbyType = AccessTools.TypeByName("Lobby");
+            var method = lobbyType == null
+                ? null
+                : lobbyType.GetMethod(
+                    "GoBackToMainMenu",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("MainMenu return layout target not found: Lobby.GoBackToMainMenu.");
+                return;
+            }
+
+            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "LobbyGoBackToMainMenuPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(method, new HarmonyMethod(postfixMethod), null, null, null);
+                DiagnosticLog.Info(
+                    "MainMenu return layout prefix enabled for Lobby.GoBackToMainMenu.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "MainMenu return layout prefix failed for Lobby.GoBackToMainMenu: " + exception);
+            }
+        }
+
+        private static void LobbyGoBackToMainMenuPrefix()
+        {
+            try
+            {
+                var mainMenu = GetMainMenuInstance(AccessTools.TypeByName("MainMenu")) as MainMenu;
+                if (mainMenu == null || !GetBoolFieldOrProperty(mainMenu, "hasInitialized"))
+                {
+                    return;
+                }
+
+                // Prepare the regular spacing before native MainMenu.Show() starts its
+                // entrance coroutine, so the animation keeps its original timing.
+                _restoreMainMenuAfterLobbyReturnPending = true;
+                SetMenuHighlightIndex(0);
+                InvokeMenuLayoutMethod(mainMenu, "RearragneSpacing");
+                SetMainMenuItemsActive(mainMenu, false);
+                SetMainMenuChromeActive(mainMenu, false);
+                SetMainMenuItemRenderersActive(mainMenu, false);
+                DiagnosticLog.Info(
+                    "Prepared the regular MainMenu layout before native Lobby.GoBackToMainMenu.Show().");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "MainMenu layout restoration after Lobby.GoBackToMainMenu could not be queued: " + exception);
+            }
+        }
+
+        private static void PatchMainMenuShowRoutineCompletion()
+        {
+            var mainMenuType = AccessTools.TypeByName("MainMenu");
+            if (mainMenuType == null)
+            {
+                DiagnosticLog.Warning("MainMenu.ShowRoutine completion target type not found.");
+                return;
+            }
+
+            MethodInfo moveNext = null;
+            foreach (var nestedType in mainMenuType.GetNestedTypes(
+                BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (nestedType.Name.IndexOf("ShowRoutine", StringComparison.Ordinal) < 0)
+                {
+                    continue;
+                }
+
+                moveNext = nestedType.GetMethod(
+                    "MoveNext",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (moveNext != null)
+                {
+                    break;
+                }
+            }
+
+            if (moveNext == null)
+            {
+                DiagnosticLog.Warning(
+                    "MainMenu.ShowRoutine completion target method not found.");
+                return;
+            }
+
+            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "MainMenuShowRoutineMoveNextPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(moveNext, null, new HarmonyMethod(postfixMethod), null, null);
+                DiagnosticLog.Info(
+                    "MainMenu.ShowRoutine completion patch enabled for post-return layout restoration.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "MainMenu.ShowRoutine completion patch failed: " + exception);
+            }
+        }
+
+        private static void PatchMainMenuMenuActiveSetter()
+        {
+            var property = typeof(Menu).GetProperty(
+                "MenuActive",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var setter = property == null ? null : property.GetSetMethod(true);
+            if (setter == null)
+            {
+                DiagnosticLog.Warning("MainMenu MenuActive setter target not found.");
+                return;
+            }
+
+            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "MainMenuMenuActiveSetterPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                _harmony.Patch(setter, null, new HarmonyMethod(postfixMethod), null, null);
+                DiagnosticLog.Info(
+                    "MainMenu MenuActive setter patch enabled for return-animation visual gating.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "MainMenu MenuActive setter patch failed: " + exception);
+            }
+        }
+
+        private static void MainMenuMenuActiveSetterPostfix(Menu __instance, bool value)
+        {
+            if (!_restoreMainMenuAfterLobbyReturnPending || !value ||
+                !(__instance is MainMenu))
+            {
+                return;
+            }
+
+            SetMainMenuItemsActive(__instance as MainMenu, false);
+            SetMainMenuChromeActive(__instance as MainMenu, false);
+            SetMainMenuItemRenderersActive(__instance as MainMenu, false);
+        }
+
+        private static void MainMenuShowRoutineMoveNextPostfix(bool __result)
+        {
+            if (!_restoreMainMenuAfterLobbyReturnPending)
+            {
+                return;
+            }
+
+            var mainMenu = GetMainMenuInstance(AccessTools.TypeByName("MainMenu")) as MainMenu;
+            if (__result)
+            {
+                SetMainMenuItemsActive(mainMenu, false);
+                SetMainMenuChromeActive(mainMenu, false);
+                SetMainMenuItemRenderersActive(mainMenu, false);
+                return;
+            }
+
+            _restoreMainMenuAfterLobbyReturnPending = false;
+            try
+            {
+                if (mainMenu == null || !GetBoolFieldOrProperty(mainMenu, "hasInitialized"))
+                {
+                    return;
+                }
+
+                mainMenu.MenuActive = true;
+                if (mainMenu.logo != null)
+                {
+                    mainMenu.logo.SetActive(true);
+                }
+
+                SetMainMenuItemsActive(mainMenu, true);
+                SetMainMenuChromeActive(mainMenu, true);
+                SetMainMenuItemRenderersActive(mainMenu, true);
+                InputReader.IsBlocked = false;
+                DiagnosticLog.Info(
+                    "Native MainMenu.ShowRoutine completed after Lobby.GoBackToMainMenu.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "MainMenu layout restoration after ShowRoutine completion failed: " + exception);
+            }
+        }
+
+        private static void SetMainMenuItemsActive(MainMenu mainMenu, bool active)
+        {
+            if (mainMenu == null)
+            {
+                return;
+            }
+
+            var field = typeof(Menu).GetField(
+                "items",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var value = field == null ? null : field.GetValue(mainMenu) as Array;
+            if (value == null)
+            {
+                return;
+            }
+
+            foreach (var item in value)
+            {
+                var component = item as Component;
+                if (component != null)
+                {
+                    component.gameObject.SetActive(active);
+                }
+            }
+        }
+
+        private static void SetMainMenuChromeActive(MainMenu mainMenu, bool active)
+        {
+            if (mainMenu == null)
+            {
+                return;
+            }
+
+            var highlightField = typeof(Menu).GetField(
+                "menuHighlight",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var highlight = highlightField == null
+                ? null
+                : highlightField.GetValue(mainMenu) as Component;
+            if (highlight != null)
+            {
+                highlight.gameObject.SetActive(active);
+            }
+
+            var holderField = typeof(Menu).GetField(
+                "menuHolder",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var holder = holderField == null
+                ? null
+                : holderField.GetValue(mainMenu) as GameObject;
+            if (holder != null)
+            {
+                holder.SetActive(active);
+            }
+        }
+
+        private static void SetMainMenuItemRenderersActive(MainMenu mainMenu, bool active)
+        {
+            if (mainMenu == null)
+            {
+                return;
+            }
+
+            var field = typeof(Menu).GetField(
+                "items",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var value = field == null ? null : field.GetValue(mainMenu) as Array;
+            if (value == null)
+            {
+                return;
+            }
+
+            foreach (var item in value)
+            {
+                var component = item as Component;
+                if (component == null)
+                {
+                    continue;
+                }
+
+                var renderers = component.GetComponentsInChildren<Renderer>(true);
+                foreach (var renderer in renderers)
+                {
+                    if (renderer == null)
+                    {
+                        continue;
+                    }
+
+                    if (!active)
+                    {
+                        if (!MainMenuRendererStates.ContainsKey(renderer))
+                        {
+                            MainMenuRendererStates.Add(renderer, renderer.enabled);
+                        }
+
+                        renderer.enabled = false;
+                    }
+                    else
+                    {
+                        bool originalState;
+                        if (MainMenuRendererStates.TryGetValue(renderer, out originalState))
+                        {
+                            renderer.enabled = originalState;
+                        }
+                    }
+                }
+            }
+
+            if (active)
+            {
+                MainMenuRendererStates.Clear();
+            }
+        }
+
+        private static void InvokeMenuLayoutMethod(MainMenu mainMenu, string methodName)
+        {
+            if (mainMenu == null || string.IsNullOrEmpty(methodName))
+            {
+                return;
+            }
+
+            var method = typeof(Menu).GetMethod(
+                methodName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                Type.EmptyTypes,
+                null);
+            if (method == null)
+            {
+                DiagnosticLog.Warning("MainMenu layout method not found: Menu." + methodName + ".");
+                return;
+            }
+
+            method.Invoke(mainMenu, null);
+        }
+
+        private static void SetMenuHighlightIndex(int index)
+        {
+            var field = typeof(Menu).GetField(
+                "highlightIndex",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field == null)
+            {
+                DiagnosticLog.Warning("MainMenu highlight index field not found.");
+                return;
+            }
+
+            var mainMenu = GetMainMenuInstance(AccessTools.TypeByName("MainMenu"));
+            if (mainMenu != null)
+            {
+                field.SetValue(mainMenu, index);
+            }
+        }
+
+        private static void MainMenuInitializeMenuPostfix(object __instance)
+        {
+            if (!_returnToWorkshopOnlineLobbyPending ||
+                _returnToWorkshopOnlineLobbyAttempted ||
+                !string.Equals(SceneManager.GetActiveScene().name, "MainMenu", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            SuppressWorkshopOnlineLobbyMainMenuVisuals(__instance);
+            TryReturnToWorkshopOnlineLobby();
+        }
+
+        private static void ObserveWorkshopOnlineLobbyReturnBeforeTrace(
+            MethodBase method,
+            object[] arguments)
+        {
+            if (method == null || method.DeclaringType == null ||
+                method.DeclaringType.Name != "GameModeController" ||
+                method.Name != "LoadNextScene" ||
+                !IsWorkshopOnlineSession() ||
+                !IsEscReturnPauseState() ||
+                !IsWorkshopVictoryGameState(arguments))
+            {
+                return;
+            }
+
+            ArmWorkshopOnlineLobbyReturn("GameModeController.LoadNextScene");
+            var state = arguments[0];
+            SetFieldOrProperty(state, "sceneToLoad", "MainMenu");
+            SetFieldOrProperty(state, "loadCustomCampaign", false);
+            SetFieldOrProperty(state, "immediatelyGoToCustomCampaign", false);
+            DiagnosticLog.Info(
+                "Workshop Esc return redirected VictoryCustomCampaignSteam directly to MainMenu; " +
+                "the completion-time and rating screens will be skipped.");
+        }
+
+        private static bool IsWorkshopVictoryGameState(object[] arguments)
+        {
+            if (arguments == null || arguments.Length == 0 || arguments[0] == null)
+            {
+                return false;
+            }
+
+            var state = arguments[0];
+            var sceneName = GetStringFieldOrProperty(state, "_sceneToLoad");
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                sceneName = GetStringFieldOrProperty(state, "sceneToLoad");
+            }
+
+            return string.Equals(sceneName, WorkshopVictorySceneName, StringComparison.OrdinalIgnoreCase) &&
+                   GetBoolFieldOrProperty(state, "loadCustomCampaign") &&
+                   !string.IsNullOrEmpty(GetStringFieldOrProperty(state, "customLevelID"));
+        }
+
+        private static bool IsEscReturnPauseState()
+        {
+            return PauseController.pauseStatus == PauseStatus.MenuPause ||
+                   PauseController.pauseStatus == PauseStatus.ConfirmationPause;
+        }
+
+        private static void ArmWorkshopOnlineLobbyReturn(string source)
+        {
+            if (_returnToWorkshopOnlineLobbyPending || _returnToWorkshopOnlineLobbyAttempted)
+            {
+                return;
+            }
+
+            _returnToWorkshopOnlineLobbyPending = true;
+            _returnToWorkshopOnlineLobbyAtUtc = DateTime.MinValue;
+            DiagnosticLog.Info(
+                "Queued direct return to the online lobby browser after Workshop Esc return: source=" +
+                source + ".");
         }
 
         private static bool LevelTitleShowTextPrefix(string s)
@@ -3171,6 +4014,90 @@ namespace BroforceOnlineDiagnostics
             }
 
             return 0;
+        }
+
+        private static bool GetBoolFieldOrProperty(object instance, string name)
+        {
+            if (instance == null)
+            {
+                return false;
+            }
+
+            var type = instance.GetType();
+            var field = type.GetField(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (field != null)
+            {
+                try
+                {
+                    return Convert.ToBoolean(field.GetValue(instance));
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            var property = type.GetProperty(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (property != null && property.CanRead)
+            {
+                try
+                {
+                    return Convert.ToBoolean(property.GetValue(instance, null));
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            return false;
+        }
+
+        private static string GetStringFieldOrProperty(object instance, string name)
+        {
+            if (instance == null)
+            {
+                return string.Empty;
+            }
+
+            var type = instance.GetType();
+            var field = type.GetField(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (field != null)
+            {
+                try
+                {
+                    var value = field.GetValue(instance);
+                    return value == null ? string.Empty : Convert.ToString(value);
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+
+            var property = type.GetProperty(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (property != null && property.CanRead)
+            {
+                try
+                {
+                    var value = property.GetValue(instance, null);
+                    return value == null ? string.Empty : Convert.ToString(value);
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+
+            return string.Empty;
         }
 
         private static string BuildTraceMessage(
