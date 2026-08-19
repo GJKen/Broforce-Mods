@@ -4,22 +4,22 @@
 
 所有玩家必须安装相同版本的 Mod，并提前订阅、下载相同的 Workshop 地图。
 
-## 当前状态
+## 当前状态(更改此条目需要用户确认)
 
 当前版本为实验性 `0.4.0`：
 
 - 已验证房主和加入方可以通过官方大厅流程进入同一张 Workshop 地图。
 - 已支持实验性的晚加入处理：创建方正在进入或已经进入配置中的 Workshop 场景时，加入方会尝试自动加载同一张地图。
-- `test009` 已验证双方完全准备后进入，以及创建方先进入、加入方后进入两种流程都不会多生成加入方角色；后者的 P2 角色出现前有短暂等待，原因仍需结合双端日志确认。
+- 已验证双方完全准备后进入，以及创建方先进入、加入方后进入两种流程都不会多生成加入方角色；后者的 P2 角色出现前有短暂等待，原因仍需结合双端日志确认。
 - 已验证 Workshop 线上会话中房主和加入方都不再显示“按开枪键加入游戏”横幅；该处理不改变攻击键加入功能。
 - 已支持在 UMM 设置中填写 Workshop ID、可选的战役名和场景名，并使用会话 ID 和可选日志标签关联双端日志。
+- 已接入 `unity-inspector-mcp` 调试桥接，可在游戏运行时读取关卡、玩家槽位、角色对象和截图
 - 已保留官方英雄类型请求；加入方收不到回复时，会在等待 18 秒后使用本地备用生成。
 - 已知部分 Workshop 地图会在 `GeneratePole.Awake` 抛出空引用错误；该地图对象问题与晚加入角色创建问题分开处理。
-- 仍存在英雄状态不同步和 Broforce 原生崩溃风险，尚未达到稳定发布状态。
 
 ## 使用方式
 
-> 目前所有测试环境只包含 `UMM` 以及 `BroforceOnlineDiagnostics.dll`, 待逐渐完善后再考虑装载其它mod的情况下测试.
+> 目前所有测试环境只包含 `UMM` 以及 `BroforceOnlineDiagnostics.dll`, 已测试双方安装了不同的mod仍可三方图大厅联机.
 
 1. 所有玩家必须安装 `r2modman`
 2. `r2modman` 管理器安装好了之后, 找到 `UMM` 并安装, 之后启动一次游戏, 确认 `UMM` 加载成功.
@@ -72,15 +72,39 @@ Diagnostic session ID: test001
 
 7. 任意一端按官方流程创建线上大厅，另一端先加入 `p1-p4` 选择界面。加入方必须按一次攻击键占用自己的位置，创建方确认双方出现在不同位置后，再按攻击键开始进入地图游玩；不要等进入地图后才选择角色。
 
-当前版本也支持“创建方正在进入或已经进入 Workshop 地图时，另一端再加入”。加入方检测到创建方处于 Workshop 加载阶段后，会主动刷新 Lobby 数据；已有本地玩家槽位时直接复用它，否则才申请一个新的本地槽位并行加载地图。host 端只在晚加入 Workshop 会话中绕过会让原生 `RequestJoinGame` 提前返回的两个保护条件，并记录即时玩家槽位状态。若发现 `playersPlaying=true` 但对应 `Player` 对象已经为空，会在原生分配前清理该明确失效槽位。启用有效 Workshop 注入配置的线上会话中，每台机器同一时间只允许一个本地加入请求；开始 `SpawnJoinedPlayers` 广播前也会移除额外的本地空槽位。角色出生后，Mod 会在物理状态稳定后向其它客户端重发角色当前的权威坐标，不再把绳索上的固定出生点覆盖回已下落的角色。`test009` 已确认两种主要进入流程都没有多生成加入方角色；创建方先进入地图的流程中 P2 出现前仍有短暂等待，待结合双端日志定位。正常测试仍建议先加入大厅、确认占用独立位置后，再由创建方进入地图。
+当前版本也支持“创建方正在进入或已经进入 Workshop 地图时，另一端再加入”。加入方检测到创建方处于 Workshop 加载阶段后，会主动刷新 Lobby 数据并先加载地图；Workshop 场景和原生 `SpawnJoinedPlayers` 都就绪后，Mod 使用本机主控制器自动发起一次本地玩家加入。已有本地玩家槽位或待处理请求时直接复用，不再要求玩家在加载期间提前按攻击键，也不会追加第二个请求。host 端只在晚加入 Workshop 会话中绕过会让原生 `RequestJoinGame` 提前返回的两个保护条件，并记录即时玩家槽位状态。若发现 `playersPlaying=true` 但对应 `Player` 对象已经为空，会在原生分配前清理该明确失效槽位。启用有效 Workshop 注入配置的线上会话中，每台机器同一时间只允许一个本地加入请求；开始 `SpawnJoinedPlayers` 广播前也会移除额外的本地空槽位。角色出生后，Mod 会在物理状态稳定后向其它客户端重发角色当前的权威坐标，不再把绳索上的固定出生点覆盖回已下落的角色。正常测试仍建议先加入大厅、确认占用独立位置后，再由创建方进入地图。
 
-晚加入测试成功时，host 日志应出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方应出现 `Late workshop join requested a local player slot` 和 `Starting late workshop join load`，随后加入方按攻击键可以创建 P2 角色。正常进入时，两端应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不再重新计算出生点。
+晚加入测试成功时，host 日志应出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方应依次出现 `Starting late workshop join load`、`Late workshop client scene loaded`、`Late workshop SpawnJoinedPlayers observed`、`Late workshop join requested a local player slot after scene readiness` 和 `Late workshop automatic join completed`，无需再次按攻击键即可创建 P2 角色。正常进入时，两端应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不再重新计算出生点。
 
 双端排查时可以在 UMM 设置中填写相同的 `Diagnostic session ID`，并为两端填写不同的可选 `Diagnostic label`。进入或加入 Steam 大厅时会自动创建新的会话日志；Harmony 详细追踪会写入同名的 `.trace.log` 文件，普通事件日志不会与上一次联机测试混在一起。日志还会记录实际网络角色，但标签本身不参与联机行为。
 
 每次测试结束后，必须同时收集本机测试端和内网测试端的诊断 `.log`、`.trace.log`，并结合两端的 UMM `Core\Log.txt` 和游戏 `error.log` 分析。内网测试端的 DLL 部署目录只用于安装 Mod，不是日志目录；内网测试端运行游戏后，日志仍写入该机器自己的 `Application.persistentDataPath\BroforceOnlineDiagnostics\`。除非明确要求跳过，否则不得只分析单端日志。
 
-Mod 默认关闭注入；关闭注入时只记录诊断信息，不改变游戏行为。
+Mod 默认关闭注入；关闭注入时只记录诊断信息。
+
+### MCP 调试
+
+本项目可以配合 `Broforce_src/unity-inspector-mcp` 使用。启动 Broforce 并在 UMM 中确认 `Unity Inspector Mod` 显示 `TCP Server Status: Running`、端口为 `9999` 后，支持 MCP 的客户端即可调用 `ping`、`game_state`、`inspect_player`、`take_screenshot`、`read_log` 和 `watch_log` 等工具。
+
+联机问题建议按事件阶段采样，而不是只在最后查看画面：
+
+1. 双方进入地图后记录一次连接、关卡和玩家状态。
+2. 房主退出并完成主机迁移后再次记录。
+3. 加入方重新加入、但尚未按攻击键时再次记录。
+4. 按攻击键后立即记录，并比较玩家数量、`playerNum`、`character` 和本地角色标记的变化。
+
+默认的 `unity_inspector` MCP 端点连接当前电脑；如果为内网机器配置独立的 `unity_inspector_remote` 端点，也可以通过局域网读取另一台正在运行的 Broforce。远程客户端退出后，MCP 仍无法读取已经退出的进程状态。`read_log` 和 `watch_log` 默认查找 `Default` profile；使用 `profiles\Broforce` 等自定义 r2modman profile 时，应配置实际的 UMM `Core\Log.txt` 路径或直接收集该文件。
+
+#### MCP 监控约束(修改此条目前需要用户确认)
+
+- 只有收到明确的“开始”指令后才启动 MCP 监控；准备阶段不调用 MCP、不测试端口，也不重复排查连通性。
+- 用户确认游戏和 Unity Inspector Mod 已运行后，开始时只做一次基础状态读取，并记录当前诊断会话日志及读取位置，然后立即进入监控。
+- 重点关注线上房间创建、Steam Lobby、玩家加入、关卡加载和 Workshop 地图相关类与方法。先记录调用关系和关键参数，确认后的最小修改应转化为 Harmony 运行时补丁。
+- 每轮监控必须同时观测运行时状态和现有诊断事件，不能只轮询 `game_state`、`inspect_player` 或只看最终玩家数量。P2 晚出现问题至少要跟踪加入方的 `AddLocalPlayer`、`RequestHeroTypeFromMaster`、`Player.Start`、`SpawnHero`、`SetPlayerCharacter`，并用房主端的 `RequestJoinGame`、`AddPlayer` 对齐时序。
+- 双端 MCP 都可用时默认同时观测。用户要求“重点观测加入方”只改变分析重点，不表示跳过房主；只有用户明确要求不观测某一端时才可省略该端。
+- `read_log` 和 `watch_log` 只读取所配置的 UMM 日志时，不能视为已经完成事件观测；还必须通过 MCP 的只读日志访问读取当前会话的诊断 `.log`、`.trace.log`。如使用只读 `execute_code` 定位或读取 `DiagnosticLog.TraceFilePath`，表达式只能解析路径和读取文件。
+- 每轮监控固定持续 40 秒；角色消失、进入观战、场景切换或短暂连接异常都不能作为提前停止条件,结束后再统一分析结果。
+- 自己根据用户提出的问题来按需诊断需要监控什么事件, 日后开发必定围绕各种事件来开发
 
 ### 加入提示
 
