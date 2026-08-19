@@ -20,6 +20,7 @@
 - 双端测试已验证：过场加载期间加入可以进入地图，P2 角色可以正常创建，双方角色控制保持独立。
 - UMM 设置支持 Workshop ID、可选战役名、场景名、诊断会话 ID 和端角色。
 - 线上地图注入默认关闭；关闭时只记录诊断信息。
+- 已验证 `Esc` 返回路径会先进入 `VictoryCustomCampaignSteam`，再离开 Steam Lobby 并加载 `MainMenu`；当前实现会在启用 Workshop 注入的线上会话中，于 `MainMenu` 加载后调用官方 `MainMenu.TryToGoToLobby`，直接打开在线房间查看界面。
 
 ### MCP 状态调试
 
@@ -140,6 +141,27 @@ MCP 双端观测确认，原房主通过暂停确认框离开后再以 client �
 新的有效 Workshop 线上会话在 `SteamLayer.CreateMatch` 或 `SteamLayer.JoinLobby` 开始时会把陈旧暂停状态恢复为 `UnPaused`，将暂停控制器重置为 `-1`，并隐藏仍存在的暂停相机和线上玩家列表。命中时普通日志记录 `Cleared stale pause state before Workshop online session`，同时保留修复前的暂停状态和控制器编号。该处理只在启用了有效 Workshop 注入配置时执行，不修改 `playerControllerIDs`；不同机器上的本地控制器都使用编号 `0` 是允许的，原生本地输入查询会结合 `PID.IsMine` 判断所属端。
 
 修复后已完成实机验证：房主退出并发生主机迁移后，原房主重新加入房间可以正常生成本地角色，并恢复移动、跳跃和开火；输入被暂停状态清零的问题未再复现。Workshop 地图自身的 `GeneratePole.Awake` 异常仍按独立地图兼容性问题记录。
+
+### Workshop 线上 Esc 返回大厅
+
+MCP 观测到按 `Esc` 返回时的调用链为：
+
+```text
+GameModeController.LoadNextScene(VictoryCustomCampaignSteam)
+VictoryCustomCampaignSteam（通关时间）
+CustomLevelRatingMenuSteam（地图评分）
+MainMenu
+```
+
+原生流程会先进入 `VictoryCustomCampaignSteam` 显示通关时间，再进入 `CustomLevelRatingMenuSteam` 显示地图评分。玩家从评分界面选择“返回主菜单”时，该菜单还会把 `GameState.immediatelyGoToCustomCampaign` 设置为 `true`，导致 `MainMenu.Start` 自动打开自定义战役界面。
+
+Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause` 或 `ConfirmationPause` 且下一场景为 `VictoryCustomCampaignSteam` 后，将这次 `GameModeController.LoadNextScene` 携带的 `GameState.sceneToLoad` 直接改为 `MainMenu`，同时关闭 `loadCustomCampaign` 并清除 `immediatelyGoToCustomCampaign`。因此通关时间和地图评分两个界面都不会加载。`MainMenu.Awake` 随后通过原生 `RecreateConnectObject` 调用 `Connect.Disconnect` 清理旧 Lobby。
+
+`MainMenu` 的菜单项由 `DelayInitializeMenu` 创建。普通启动仍使用原生约 3 秒等待；Workshop Esc 返回大厅时，Mod 将这次协程的等待临时改为 0 秒，让在线房间浏览器尽快打开。等待期间只隐藏主菜单的 Logo 和菜单视觉，不禁用 `MainMenu` 根对象，因此原生初始化协程可以完整执行。`MainMenu.InitializeMenu` 的 Harmony 后置补丁会在菜单项创建完成的同一帧再次隐藏菜单视觉，清除退出地图遗留的 `ConfirmationPause` 和暂停控制器，再调用 `MainMenu.TryToGoToLobby(MultiplayerPlayMode.Online)`。平台联机状态检查使用原生等待层，成功后只显示在线房间列表，不会渲染中间主菜单。
+
+从在线房间大厅返回主菜单时，Mod 复用原生 `Lobby.GoBackToMainMenu -> MainMenu.Show -> MainMenu.ShowRoutine` 调用链。`MainMenu.Show` 开始前只通过字段恢复高亮索引和普通间距，不调用会提前激活文字的 `ResetHighlightIndex`。由于原生 `MenuActive=true` 会在 `ShowRoutine` 的第一步重新激活菜单项，Mod 仅在这次返回动画期间额外关闭菜单项、菜单高亮和子 Renderer 的可见性；协程完成后再按原始 Renderer 状态恢复，因此文字不会在 Logo 动画结束前出现，也不改变原生布局和缩放动画。
+
+如果在原生初始化前打开大厅，`MainMenu` 被隐藏时会中断初始化协程，之后从大厅返回只会显示高亮框而没有菜单项。当前后置补丁保证大厅返回时 `MainMenu.ShowRoutine` 能基于已经存在的菜单项恢复完整主菜单和输入。如果平台检查失败、等待层意外消失或 30 秒仍未打开大厅，Mod 会恢复完整的主菜单视觉和输入，避免留下隐藏或不可操作的界面。若目标类型、实例或方法不可用，只记录警告并保留原生主菜单流程。
 
 ### 代码职责
 
