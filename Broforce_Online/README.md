@@ -76,6 +76,10 @@ Diagnostic session ID: test001
 
 晚加入测试成功时，host 日志应出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方应依次出现 `Starting late workshop join load`、`Late workshop client scene loaded`、`Late workshop SpawnJoinedPlayers observed`、`Late workshop join requested a local player slot after scene readiness` 和 `Late workshop automatic join completed`，无需再次按攻击键即可创建 P2 角色。正常进入时，两端应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不再重新计算出生点。
 
+房主通过暂停确认框退出后，原房主重新加入已经发生主机迁移的 Workshop 房间时，游戏原生流程可能遗留 `ConfirmationPause` 和原暂停控制器编号。角色即使正常生成为本地角色，`Player.GetInput` 仍会把该控制器的全部输入清零。Mod 现在会在新的有效 Workshop 线上会话开始时清除这组陈旧暂停状态并隐藏遗留暂停界面；命中时日志记录 `Cleared stale pause state before Workshop online session`。该处理不改写玩家槽位或远端控制器编号。
+
+主机迁移后原房主重新加入无法操作的问题已完成实机验证：角色可以正常生成并恢复移动、跳跃和开火，未再复现输入被清零。该修复不影响正常大厅流程；`GeneratePole.Awake` 等 Workshop 地图对象异常仍需单独排查。
+
 双端排查时可以在 UMM 设置中填写相同的 `Diagnostic session ID`，并为两端填写不同的可选 `Diagnostic label`。进入或加入 Steam 大厅时会自动创建新的会话日志；Harmony 详细追踪会写入同名的 `.trace.log` 文件，普通事件日志不会与上一次联机测试混在一起。日志还会记录实际网络角色，但标签本身不参与联机行为。
 
 每次测试结束后，必须同时收集本机测试端和内网测试端的诊断 `.log`、`.trace.log`，并结合两端的 UMM `Core\Log.txt` 和游戏 `error.log` 分析。内网测试端的 DLL 部署目录只用于安装 Mod，不是日志目录；内网测试端运行游戏后，日志仍写入该机器自己的 `Application.persistentDataPath\BroforceOnlineDiagnostics\`。除非明确要求跳过，否则不得只分析单端日志。
