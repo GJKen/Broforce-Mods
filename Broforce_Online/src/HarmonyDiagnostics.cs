@@ -519,11 +519,11 @@ namespace BroforceOnlineDiagnostics
 
         private static bool IsWorkshopJoinProtectionActive()
         {
-            if (!IsOnline() || !_networkSessionActive)
-            {
-                return false;
-            }
+            return IsOnline() && _networkSessionActive && HasValidWorkshopInjectionConfiguration();
+        }
 
+        private static bool HasValidWorkshopInjectionConfiguration()
+        {
             var settings = Plugin.Settings;
             if (settings == null || !settings.EnableOnlineWorkshopInjection)
             {
@@ -533,6 +533,59 @@ namespace BroforceOnlineDiagnostics
             ulong workshopId;
             return UInt64.TryParse((settings.WorkshopId ?? string.Empty).Trim(), out workshopId) &&
                    workshopId != 0;
+        }
+
+        private static void ResetStalePauseStateForWorkshopSession(string trigger)
+        {
+            if (!HasValidWorkshopInjectionConfiguration())
+            {
+                return;
+            }
+
+            var previousStatus = PauseController.pauseStatus;
+            var previousController = PauseController.pausedByController;
+            if (previousStatus == PauseStatus.UnPaused && previousController < 0)
+            {
+                return;
+            }
+
+            PauseController.pauseStatus = PauseStatus.UnPaused;
+            PauseController.pausedByController = -1;
+
+            try
+            {
+                var pauseController = PauseController.instance;
+                if (pauseController != null)
+                {
+                    if (pauseController.pauseCam != null)
+                    {
+                        pauseController.pauseCam.gameObject.SetActive(false);
+                    }
+
+                    var playerListCanvasField = typeof(PauseController).GetField(
+                        "playerListCanvas",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var playerListCanvas = playerListCanvasField == null
+                        ? null
+                        : playerListCanvasField.GetValue(pauseController) as Behaviour;
+                    if (playerListCanvas != null)
+                    {
+                        playerListCanvas.enabled = false;
+                        playerListCanvas.gameObject.SetActive(false);
+                    }
+                }
+
+                DiagnosticLog.Info(
+                    "Cleared stale pause state before Workshop online session: trigger=" + trigger +
+                    "; previousStatus=" + previousStatus +
+                    "; previousController=" + previousController + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop online session cleared stale pause ownership but could not hide all pause UI: " +
+                    exception.Message);
+            }
         }
 
         private static bool HasActiveWorkshopLocalPlayer()
@@ -3001,6 +3054,7 @@ namespace BroforceOnlineDiagnostics
 
         private static void ResetWorkshopStateForNewSession(string trigger)
         {
+            ResetStalePauseStateForWorkshopSession(trigger);
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
             _joinLobbyInProgress = false;

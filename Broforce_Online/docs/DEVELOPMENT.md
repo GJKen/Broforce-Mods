@@ -133,6 +133,14 @@ Diagnostic session ID: test001
 
 主动重试已经删除，因为它会制造迟到回复；备用生成也不是重新发送网络回复，不能保证所有同步问题都被解决。
 
+### 主机迁移后重新加入的输入恢复
+
+MCP 双端观测确认，原房主通过暂停确认框离开后再以 client 身份加入原房间时，角色创建、英雄回复和 `SetPlayerCharacter` 都可以成功，但退出端可能把 `PauseController.pauseStatus=ConfirmationPause` 和 `pausedByController` 带入新会话。游戏原生 `PauseController.SetPause(UnPaused)` 对 `ConfirmationPause` 不会真正复位，而 `Player.GetInput` 只要发现本地角色的 `controllerNum` 等于 `pausedByController`，就会直接清空该角色的全部输入。
+
+新的有效 Workshop 线上会话在 `SteamLayer.CreateMatch` 或 `SteamLayer.JoinLobby` 开始时会把陈旧暂停状态恢复为 `UnPaused`，将暂停控制器重置为 `-1`，并隐藏仍存在的暂停相机和线上玩家列表。命中时普通日志记录 `Cleared stale pause state before Workshop online session`，同时保留修复前的暂停状态和控制器编号。该处理只在启用了有效 Workshop 注入配置时执行，不修改 `playerControllerIDs`；不同机器上的本地控制器都使用编号 `0` 是允许的，原生本地输入查询会结合 `PID.IsMine` 判断所属端。
+
+修复后已完成实机验证：房主退出并发生主机迁移后，原房主重新加入房间可以正常生成本地角色，并恢复移动、跳跃和开火；输入被暂停状态清零的问题未再复现。Workshop 地图自身的 `GeneratePole.Awake` 异常仍按独立地图兼容性问题记录。
+
 ### 代码职责
 
 - `src/Plugin.cs`：UMM 加载、设置界面、保存和启用/禁用入口。
