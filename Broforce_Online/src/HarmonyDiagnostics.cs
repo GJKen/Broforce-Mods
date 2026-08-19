@@ -16,6 +16,7 @@ namespace BroforceOnlineDiagnostics
         private const int DuplicateWindowSeconds = 5;
         private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
         private const int WorkshopLocalJoinRequestRetrySeconds = 10;
+        private const int LateJoinPlayerRequestTimeoutSeconds = 5;
         private const int DefaultLateJoinControllerId = 0;
         private const int LateJoinAutoJoinDelayMilliseconds = 250;
         private const int LateJoinTimeoutSeconds = 120;
@@ -129,6 +130,12 @@ namespace BroforceOnlineDiagnostics
             new Dictionary<int, DateTime>();
         private static readonly Dictionary<string, DateTime> WorkshopLocalJoinSuppressionWarnings =
             new Dictionary<string, DateTime>();
+        private static readonly Dictionary<int, HeroType> WorkshopKnownHeroTypes =
+            new Dictionary<int, HeroType>();
+        private static readonly Dictionary<int, HeroType> WorkshopDropoutHeroTypes =
+            new Dictionary<int, HeroType>();
+        private static readonly Dictionary<int, int> WorkshopDropoutControllerIds =
+            new Dictionary<int, int>();
 
         private static Harmony _harmony;
         private static int _sequence;
@@ -149,9 +156,11 @@ namespace BroforceOnlineDiagnostics
         private static DateTime _lateJoinTransitionPollAtUtc;
         private static DateTime _lateJoinLobbyRefreshAtUtc;
         private static DateTime _lateJoinAutoJoinAtUtc;
+        private static DateTime _lateJoinPlayerRequestAtUtc;
         private static DateTime _workshopSpawnRebroadcastAtUtc;
         private static bool _workshopSpawnRebroadcastPending;
         private static bool _workshopSpawnRebroadcastUseCurrentPositions;
+        private static int _lastLocalWorkshopControllerId = -1;
         private static string _lateJoinScene;
         private static string _lateJoinCampaign;
         private static int _lateJoinLevelNumber;
@@ -188,6 +197,7 @@ namespace BroforceOnlineDiagnostics
             _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
             _workshopSpawnRebroadcastPending = false;
             _workshopSpawnRebroadcastUseCurrentPositions = false;
+            _lastLocalWorkshopControllerId = -1;
             ClearDuplicateWorkshopLoadSuppression();
             ClearWorkshopLocalJoinRequests();
             ClearLateJoinState();
@@ -318,6 +328,7 @@ namespace BroforceOnlineDiagnostics
             PatchWorldMapEnterMissionTranspiler();
             PatchGameStateLoadLevelPrefix();
             PatchLateHeroResponseGuard();
+            PatchWorkshopHeroTypePreservation();
             PatchWorkshopJoinPromptSuppression();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
@@ -361,6 +372,7 @@ namespace BroforceOnlineDiagnostics
                 _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
                 _workshopSpawnRebroadcastPending = false;
                 _workshopSpawnRebroadcastUseCurrentPositions = false;
+                _lastLocalWorkshopControllerId = -1;
                 ClearDuplicateWorkshopLoadSuppression();
                 ClearWorkshopLocalJoinRequests();
                 ClearLateJoinState();
@@ -379,10 +391,13 @@ namespace BroforceOnlineDiagnostics
                 if (__originalMethod != null &&
                     __originalMethod.DeclaringType != null &&
                     __originalMethod.DeclaringType.Name == "HeroController" &&
-                    __originalMethod.Name == "AddLocalPlayer" &&
-                    ShouldSuppressDuplicateWorkshopLocalJoin(__args))
+                    __originalMethod.Name == "AddLocalPlayer")
                 {
-                    return false;
+                    NormalizeWorkshopLocalJoinController(__args);
+                    if (ShouldSuppressDuplicateWorkshopLocalJoin(__args))
+                    {
+                        return false;
+                    }
                 }
 
                 if (__originalMethod != null &&
@@ -464,6 +479,7 @@ namespace BroforceOnlineDiagnostics
             {
                 if (!HasActiveWorkshopLocalPlayerForController(controllerNum))
                 {
+                    RebindActiveLocalWorkshopPlayer(controllerNum);
                     LogWorkshopLocalJoinSuppressionWarning(
                         "a local slot is already active",
                         playerNum,
@@ -492,6 +508,103 @@ namespace BroforceOnlineDiagnostics
 
             WorkshopLocalJoinRequests[controllerNum] = DateTime.UtcNow;
             return false;
+        }
+
+        private static void RebindActiveLocalWorkshopPlayer(int controllerNum)
+        {
+            if (controllerNum < 0 || HeroController.PIDS == null ||
+                HeroController.playerControllerIDs == null)
+            {
+                return;
+            }
+
+            var playersPlaying = GetPlayersPlayingArray();
+            var count = System.Math.Min(
+                4,
+                System.Math.Min(HeroController.PIDS.Length, HeroController.playerControllerIDs.Length));
+            for (var index = 0; index < count; index++)
+            {
+                var pid = HeroController.PIDS[index];
+                if (pid == null || !pid.IsMine ||
+                    (playersPlaying != null &&
+                     (index >= playersPlaying.Length || !playersPlaying[index])))
+                {
+                    continue;
+                }
+
+                var previousController = HeroController.playerControllerIDs[index];
+                HeroController.playerControllerIDs[index] = controllerNum;
+                var player = HeroController.players == null || index >= HeroController.players.Length
+                    ? null
+                    : HeroController.players[index];
+                if (player != null)
+                {
+                    SetFieldOrProperty(player, "controllerNum", controllerNum);
+                }
+
+                RememberLastLocalWorkshopController(controllerNum);
+                DiagnosticLog.Warning(
+                    "Switched active local Workshop player to the controller that requested join: " +
+                    "player=" + index + "; previousController=" + previousController +
+                    "; controller=" + controllerNum + ".");
+                return;
+            }
+        }
+
+        private static void RememberLastLocalWorkshopController(int controllerNum)
+        {
+            if (controllerNum >= 0)
+            {
+                _lastLocalWorkshopControllerId = controllerNum;
+            }
+        }
+
+        private static void NormalizeWorkshopLocalJoinController(object[] arguments)
+        {
+            if (!IsWorkshopJoinProtectionActive() || arguments == null || arguments.Length < 2 ||
+                !(arguments[0] is int) || !(arguments[1] is int) ||
+                WorkshopDropoutControllerIds.Count == 0 || PendingLocalWorkshopRejoins.Count == 0)
+            {
+                return;
+            }
+
+            var requestedPlayerNum = (int)arguments[0];
+            var requestedControllerId = (int)arguments[1];
+            var playerNum = requestedPlayerNum;
+            if (playerNum < 0)
+            {
+                playerNum = GetImmediateNextUnusedPlayerNumber();
+            }
+
+            var savedControllerId = -1;
+            var hasSavedController = playerNum >= 0 &&
+                WorkshopDropoutControllerIds.TryGetValue(playerNum, out savedControllerId) &&
+                savedControllerId >= 0;
+            if (!hasSavedController)
+            {
+                foreach (var pendingPlayerNum in PendingLocalWorkshopRejoins)
+                {
+                    if (WorkshopDropoutControllerIds.TryGetValue(
+                            pendingPlayerNum,
+                            out savedControllerId) && savedControllerId >= 0)
+                    {
+                        playerNum = pendingPlayerNum;
+                        hasSavedController = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasSavedController || savedControllerId == requestedControllerId)
+            {
+                return;
+            }
+
+            arguments[1] = savedControllerId;
+            DiagnosticLog.Info(
+                "Rewrote local Workshop rejoin controller to saved binding: player=" +
+                playerNum + "; requestedController=" + requestedControllerId +
+                "; controller=" + savedControllerId + ".");
         }
 
         private static void LogWorkshopLocalJoinSuppressionWarning(
@@ -567,16 +680,19 @@ namespace BroforceOnlineDiagnostics
 
             var previousStatus = PauseController.pauseStatus;
             var previousController = PauseController.pausedByController;
-            if (previousStatus == PauseStatus.UnPaused && previousController < 0)
-            {
-                return;
-            }
+            var previousDelayInput = PauseController.DelayInput;
+            var previousInputBlocked = InputReader.IsBlocked;
 
             PauseController.pauseStatus = PauseStatus.UnPaused;
             PauseController.pausedByController = -1;
+            InputReader.IsBlocked = false;
 
             try
             {
+                // DelayInput is exposed as a read-only property by this game build;
+                // clear its backing static field so a previous menu transition cannot
+                // keep Player.GetInput returning an empty input state.
+                SetStaticFieldOrProperty(typeof(PauseController), "delayInput", false);
                 var pauseController = PauseController.instance;
                 if (pauseController != null)
                 {
@@ -601,13 +717,78 @@ namespace BroforceOnlineDiagnostics
                 DiagnosticLog.Info(
                     "Cleared stale pause state before Workshop online session: trigger=" + trigger +
                     "; previousStatus=" + previousStatus +
-                    "; previousController=" + previousController + ".");
+                    "; previousController=" + previousController +
+                    "; previousDelayInput=" + previousDelayInput +
+                    "; previousInputBlocked=" + previousInputBlocked + ".");
             }
             catch (Exception exception)
             {
                 DiagnosticLog.Warning(
-                    "Workshop online session cleared stale pause ownership but could not hide all pause UI: " +
+                    "Workshop online session cleared stale input ownership but could not hide all pause UI: " +
                     exception.Message);
+            }
+
+            NormalizeLocalWorkshopPlayerControlState(trigger);
+        }
+
+        private static void NormalizeLocalWorkshopPlayerControlState(string trigger)
+        {
+            try
+            {
+                var controller = HeroController.Instance;
+                if (controller != null && controller.IDroppedOutThisRound)
+                {
+                    controller.IDroppedOutThisRound = false;
+                    DiagnosticLog.Warning(
+                        "Cleared stale local Workshop dropout-round flag: trigger=" + trigger + ".");
+                }
+
+                if (HeroController.PIDS == null || HeroController.players == null ||
+                    HeroController.playerControllerIDs == null)
+                {
+                    return;
+                }
+
+                var count = System.Math.Min(4, System.Math.Min(
+                    HeroController.PIDS.Length,
+                    System.Math.Min(HeroController.players.Length, HeroController.playerControllerIDs.Length)));
+                for (var index = 0; index < count; index++)
+                {
+                    var pid = HeroController.PIDS[index];
+                    var player = HeroController.players[index];
+                    var controllerNum = HeroController.playerControllerIDs[index];
+                    int savedDropoutController;
+                    if (pid != null && pid.IsMine &&
+                        WorkshopDropoutControllerIds.TryGetValue(index, out savedDropoutController) &&
+                        savedDropoutController >= 0 && controllerNum != savedDropoutController)
+                    {
+                        var savedControllerPrevious = controllerNum;
+                        controllerNum = savedDropoutController;
+                        HeroController.playerControllerIDs[index] = controllerNum;
+                        DiagnosticLog.Warning(
+                            "Restored saved local Workshop controller binding: player=" + index +
+                            "; previousController=" + savedControllerPrevious +
+                            "; controller=" + controllerNum + ".");
+                    }
+                    if (pid == null || !pid.IsMine || player == null || controllerNum < 0 ||
+                        player.controllerNum == controllerNum)
+                    {
+                        continue;
+                    }
+
+                    var previousController = player.controllerNum;
+                    SetFieldOrProperty(player, "controllerNum", controllerNum);
+                    DiagnosticLog.Warning(
+                        "Restored local Workshop controller ownership: player=" + index +
+                        "; previousController=" + previousController +
+                        "; controller=" + controllerNum +
+                        "; trigger=" + trigger + ".");
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop local player control-state normalization failed: " + exception);
             }
         }
 
@@ -741,6 +922,16 @@ namespace BroforceOnlineDiagnostics
                 HeroController.PIDS[playerNum].IsMine)
             {
                 ClearWorkshopLocalJoinRequests();
+                if (_lateJoinStarted && !_lateJoinAutoJoinCompleted)
+                {
+                    _lateJoinPlayerJoinRequested = false;
+                    _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
+                    _lateJoinAutoJoinAtUtc = DateTime.UtcNow.AddMilliseconds(
+                        LateJoinAutoJoinDelayMilliseconds);
+                    DiagnosticLog.Info(
+                        "Late workshop local player dropout released the pending automatic join request; " +
+                        "the same local slot can be requested again.");
+                }
             }
         }
 
@@ -750,9 +941,27 @@ namespace BroforceOnlineDiagnostics
             WorkshopLocalJoinSuppressionWarnings.Clear();
         }
 
+        private static void ResetLateJoinPlayerRequestForRetry(string reason)
+        {
+            if (!_lateJoinPlayerJoinRequested)
+            {
+                return;
+            }
+
+            ClearWorkshopLocalJoinRequests();
+            _lateJoinPlayerJoinRequested = false;
+            _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
+            _lateJoinAutoJoinAtUtc = DateTime.UtcNow.AddMilliseconds(
+                LateJoinAutoJoinDelayMilliseconds);
+            DiagnosticLog.Warning(
+                "Late workshop local player request did not produce an active local slot; " +
+                "retrying the automatic join: reason=" + reason + ".");
+        }
+
         private static void JoinLobbyPostfix()
         {
             _joinLobbyInProgress = false;
+            ResetStalePauseStateForWorkshopSession("SteamLayer.JoinLobby completed");
         }
 
         private static void ObserveLifecycleBeforeTrace(
@@ -765,10 +974,32 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            if (method.DeclaringType.Name == "HeroController" && method.Name == "DropoutRPC")
+            if (method.DeclaringType.Name == "HeroController" &&
+                (method.Name == "Dropout" || method.Name == "DropoutRPC"))
             {
-                ForgetWorkshopLocalJoinRequest(arguments);
-                RememberLocalWorkshopDropout(arguments);
+                if (method.Name == "DropoutRPC")
+                {
+                    ForgetWorkshopLocalJoinRequest(arguments);
+                    RememberLocalWorkshopDropout(arguments);
+                }
+                else if (arguments != null && arguments.Length > 0 && arguments[0] is int)
+                {
+                    CaptureWorkshopDropoutHeroType((int)arguments[0]);
+                }
+
+                return;
+            }
+
+            if (method.DeclaringType.Name == "HeroController" &&
+                method.Name == "RegisterHeroToPlayer")
+            {
+                RememberWorkshopHeroType(arguments);
+                return;
+            }
+
+            if (method.DeclaringType.Name == "Player" && method.Name == "SetHeroType")
+            {
+                RememberWorkshopHeroType(instance as Player, arguments);
                 return;
             }
 
@@ -834,16 +1065,187 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
+            CaptureWorkshopDropoutHeroType(playerNum);
+
             var pid = HeroController.PIDS[playerNum];
             if (pid == null || !pid.IsMine)
             {
                 return;
             }
 
+            if (HeroController.playerControllerIDs != null &&
+                playerNum < HeroController.playerControllerIDs.Length)
+            {
+                var controllerId = HeroController.playerControllerIDs[playerNum];
+                if (controllerId >= 0)
+                {
+                    WorkshopDropoutControllerIds[playerNum] = controllerId;
+                    DiagnosticLog.Info(
+                        "Saved local Workshop controller for dropout rejoin: player=" +
+                        playerNum + "; controller=" + controllerId + ".");
+                }
+            }
+
             PendingLocalWorkshopRejoins.Add(playerNum);
+            if (_lateJoinStarted)
+            {
+                // A native dropout can remove the local Player object after the
+                // initial late-join request was already marked complete. Re-arm
+                // the same readiness path so the slot is requested again.
+                _lateJoinAutoJoinCompleted = false;
+                _lateJoinPlayerJoinRequested = false;
+                _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
+                _lateJoinAutoJoinAtUtc = DateTime.UtcNow.AddMilliseconds(
+                    LateJoinAutoJoinDelayMilliseconds);
+                DiagnosticLog.Info(
+                    "Re-armed late workshop automatic join after local dropout: " +
+                    "player=" + playerNum + "; retry scheduled after " +
+                    LateJoinAutoJoinDelayMilliseconds + "ms.");
+            }
             DiagnosticLog.Warning(
                 "Local Workshop player dropout observed: player=" + playerNum +
                 "; waiting for the same local slot to rejoin so its round state can be restored.");
+        }
+
+        private static void CaptureWorkshopDropoutHeroType(int playerNum)
+        {
+            if (!IsWorkshopOnlineSession() || playerNum < 0 || playerNum >= 4)
+            {
+                return;
+            }
+
+            HeroType heroType;
+            var player = HeroController.players == null || playerNum >= HeroController.players.Length
+                ? null
+                : HeroController.players[playerNum];
+            if (!TryGetPlayerHeroType(player, out heroType) &&
+                !WorkshopKnownHeroTypes.TryGetValue(playerNum, out heroType))
+            {
+                return;
+            }
+
+            if (heroType == HeroType.None)
+            {
+                return;
+            }
+
+            WorkshopDropoutHeroTypes[playerNum] = heroType;
+            DiagnosticLog.Info(
+                "Saved Workshop hero type for dropout rejoin: player=" +
+                playerNum + "; hero=" + heroType + ".");
+        }
+
+        private static void RememberWorkshopHeroType(object[] arguments)
+        {
+            if (arguments == null || arguments.Length < 3 || !(arguments[1] is int))
+            {
+                return;
+            }
+
+            HeroType heroType;
+            if (!TryConvertHeroType(arguments[2], out heroType))
+            {
+                return;
+            }
+
+            RememberWorkshopHeroType((int)arguments[1], heroType);
+        }
+
+        private static void RememberWorkshopHeroType(Player player, object[] arguments)
+        {
+            if (player == null || arguments == null || arguments.Length == 0)
+            {
+                return;
+            }
+
+            HeroType heroType;
+            if (TryConvertHeroType(arguments[0], out heroType))
+            {
+                RememberWorkshopHeroType(player.playerNum, heroType);
+            }
+        }
+
+        private static void RememberWorkshopHeroType(int playerNum, HeroType heroType)
+        {
+            if (!IsWorkshopOnlineSession() || playerNum < 0 || playerNum >= 4 || heroType == HeroType.None)
+            {
+                return;
+            }
+
+            WorkshopKnownHeroTypes[playerNum] = heroType;
+            HeroType expectedHeroType;
+            if (WorkshopDropoutHeroTypes.TryGetValue(playerNum, out expectedHeroType) &&
+                expectedHeroType == heroType)
+            {
+                WorkshopDropoutHeroTypes.Remove(playerNum);
+            }
+        }
+
+        private static bool TryGetPlayerHeroType(Player player, out HeroType heroType)
+        {
+            heroType = HeroType.None;
+            if (player == null)
+            {
+                return false;
+            }
+
+            return TryConvertHeroType(GetFieldOrPropertyValue(player, "heroType"), out heroType) &&
+                   heroType != HeroType.None;
+        }
+
+        private static bool TryConvertHeroType(object value, out HeroType heroType)
+        {
+            heroType = HeroType.None;
+            if (value == null)
+            {
+                return false;
+            }
+
+            if (value is HeroType)
+            {
+                heroType = (HeroType)value;
+                return true;
+            }
+
+            try
+            {
+                heroType = (HeroType)Enum.Parse(typeof(HeroType), value.ToString(), true);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static object GetFieldOrPropertyValue(object instance, string name)
+        {
+            if (instance == null)
+            {
+                return null;
+            }
+
+            var type = instance.GetType();
+            var field = type.GetField(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (field != null)
+            {
+                return field.GetValue(instance);
+            }
+
+            var property = type.GetProperty(
+                name,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            return property == null || !property.CanRead
+                ? null
+                : property.GetValue(instance, null);
+        }
+
+        internal static bool TryGetWorkshopRejoinHeroType(int playerNum, out HeroType heroType)
+        {
+            return WorkshopDropoutHeroTypes.TryGetValue(playerNum, out heroType) &&
+                   heroType != HeroType.None;
         }
 
         private static void PrepareLocalWorkshopRejoin(Player player)
@@ -877,6 +1279,24 @@ namespace BroforceOnlineDiagnostics
 
         private static void PlayerStartPostfix(Player __instance)
         {
+            if (__instance != null && __instance.IsMine && IsWorkshopOnlineSession())
+            {
+                RememberLastLocalWorkshopController(__instance.controllerNum);
+                ResetStalePauseStateForWorkshopSession("local Workshop Player.Start");
+            }
+
+            if (__instance != null && __instance.IsMine && _lateJoinStarted &&
+                !_lateJoinAutoJoinCompleted)
+            {
+                ClearWorkshopLocalJoinRequests();
+                _lateJoinPlayerJoinRequested = false;
+                _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
+                _lateJoinAutoJoinCompleted = true;
+                DiagnosticLog.Info(
+                    "Late workshop automatic join confirmed by local Player.Start: player=" +
+                    __instance.playerNum + "; controller=" + __instance.controllerNum + ".");
+            }
+
             if (!IsWorkshopOnlineSession() || __instance == null || !__instance.IsMine ||
                 !PreparedLocalWorkshopRejoins.Remove(__instance.playerNum))
             {
@@ -974,6 +1394,31 @@ namespace BroforceOnlineDiagnostics
         private static void SetPlayerCharacterPostfix(int index, TestVanDammeAnim character)
         {
             ApplyDeferredSpawnPosition(index, character);
+            if (character != null && IsWorkshopOnlineSession() && HeroController.PIDS != null &&
+                index >= 0 && index < HeroController.PIDS.Length && HeroController.PIDS[index] != null &&
+                HeroController.PIDS[index].IsMine)
+            {
+                if (HeroController.playerControllerIDs != null &&
+                    index < HeroController.playerControllerIDs.Length)
+                {
+                    RememberLastLocalWorkshopController(HeroController.playerControllerIDs[index]);
+                }
+                ResetStalePauseStateForWorkshopSession("local Workshop character assigned");
+            }
+
+            if (character != null && _lateJoinStarted && !_lateJoinAutoJoinCompleted &&
+                HeroController.PIDS != null && index >= 0 && index < HeroController.PIDS.Length &&
+                HeroController.PIDS[index] != null && HeroController.PIDS[index].IsMine)
+            {
+                ClearWorkshopLocalJoinRequests();
+                _lateJoinPlayerJoinRequested = false;
+                _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
+                _lateJoinAutoJoinCompleted = true;
+                DiagnosticLog.Info(
+                    "Late workshop automatic join confirmed by local SetPlayerCharacter: player=" +
+                    index + ".");
+            }
+
             if (character != null)
             {
                 QueueWorkshopSpawnRebroadcast(
@@ -1034,6 +1479,9 @@ namespace BroforceOnlineDiagnostics
             SnappedRemoteWorkshopCharacters.Clear();
             PendingLocalWorkshopRejoins.Clear();
             PreparedLocalWorkshopRejoins.Clear();
+            WorkshopKnownHeroTypes.Clear();
+            WorkshopDropoutHeroTypes.Clear();
+            WorkshopDropoutControllerIds.Clear();
         }
 
         private static void SnapFirstRemoteWorkshopCharacter(
@@ -1177,6 +1625,7 @@ namespace BroforceOnlineDiagnostics
                     ? __args[0] as RoomInfo
                     : null;
                 _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+                ResetStalePauseStateForWorkshopSession("ConnectionLayer.OnJoinedLobby");
                 QueueLateJoin(room);
             }
             catch (Exception exception)
@@ -1278,10 +1727,20 @@ namespace BroforceOnlineDiagnostics
 
             if (HasActiveWorkshopLocalPlayer())
             {
+                ClearWorkshopLocalJoinRequests();
+                _lateJoinPlayerJoinRequested = false;
+                _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
                 DiagnosticLog.Info(
                     "Late workshop automatic join completed with one active local player slot.");
                 _lateJoinAutoJoinCompleted = true;
                 return;
+            }
+
+            if (_lateJoinPlayerJoinRequested &&
+                DateTime.UtcNow - _lateJoinPlayerRequestAtUtc >=
+                TimeSpan.FromSeconds(LateJoinPlayerRequestTimeoutSeconds))
+            {
+                ResetLateJoinPlayerRequestForRetry("request timeout");
             }
 
             if (_lateJoinPlayerJoinRequested || !_lateJoinClientSceneLoaded ||
@@ -1529,6 +1988,7 @@ namespace BroforceOnlineDiagnostics
             if (HasActiveWorkshopLocalPlayer())
             {
                 _lateJoinPlayerJoinRequested = true;
+                _lateJoinPlayerRequestAtUtc = DateTime.UtcNow;
                 DiagnosticLog.Info(
                     "Late workshop join reused an existing local player slot; " +
                     "skipping AddLocalPlayer to avoid a duplicate local character.");
@@ -1539,6 +1999,7 @@ namespace BroforceOnlineDiagnostics
             if (WorkshopLocalJoinRequests.Count > 0)
             {
                 _lateJoinPlayerJoinRequested = true;
+                _lateJoinPlayerRequestAtUtc = DateTime.UtcNow;
                 DiagnosticLog.Info(
                     "Late workshop automatic join reused an already pending local-player request.");
                 return true;
@@ -1561,7 +2022,7 @@ namespace BroforceOnlineDiagnostics
             }
 
             _lateJoinNoFreeSlotWarningLogged = false;
-            var controllerId = GetLateJoinControllerId();
+            var controllerId = GetLateJoinControllerId(nextPlayerNumber);
 
             var heroControllerType = AccessTools.TypeByName("HeroController");
             var addLocalPlayer = heroControllerType == null
@@ -1582,6 +2043,7 @@ namespace BroforceOnlineDiagnostics
             {
                 addLocalPlayer.Invoke(null, new object[] { -1, controllerId });
                 _lateJoinPlayerJoinRequested = true;
+                _lateJoinPlayerRequestAtUtc = DateTime.UtcNow;
                 DiagnosticLog.Info(
                     "Late workshop join requested a local player slot after scene readiness: player=" +
                     nextPlayerNumber + "; controller=" + controllerId + ".");
@@ -1758,6 +2220,16 @@ namespace BroforceOnlineDiagnostics
                         GetMainMenuInstance(AccessTools.TypeByName("MainMenu")));
                 }
 
+                var isConfiguredWorkshopScene = string.Equals(
+                    scene.name,
+                    configuredScene,
+                    StringComparison.OrdinalIgnoreCase);
+                if (isConfiguredWorkshopScene)
+                {
+                    ResetStalePauseStateForWorkshopSession("Workshop scene loaded");
+                    NormalizeLocalWorkshopPlayerControlState("Workshop scene loaded");
+                }
+
                 if (!_sessionIsHost && _lateJoinStarted &&
                     string.Equals(scene.name, _lateJoinScene, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1772,7 +2244,7 @@ namespace BroforceOnlineDiagnostics
                     return;
                 }
 
-                if (string.Equals(scene.name, configuredScene, StringComparison.OrdinalIgnoreCase))
+                if (isConfiguredWorkshopScene)
                 {
                     SetWorkshopLobbyPhase(WorkshopLobbyPhaseReady, "workshop scene loaded");
                     SetWorkshopLobbyReady(true, "workshop scene loaded");
@@ -2294,7 +2766,7 @@ namespace BroforceOnlineDiagnostics
 
         private static bool IsLateWorkshopHostSession()
         {
-            if (!_sessionIsHost || !_injectedForSession || !IsOnline() || !IsOnlineHost())
+            if (!_injectedForSession || !IsOnline() || !IsOnlineHost())
             {
                 return false;
             }
@@ -2647,6 +3119,7 @@ namespace BroforceOnlineDiagnostics
             _lateJoinTransitionPollAtUtc = DateTime.MinValue;
             _lateJoinLobbyRefreshAtUtc = DateTime.MinValue;
             _lateJoinAutoJoinAtUtc = DateTime.MinValue;
+            _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
             _lateJoinScene = string.Empty;
             _lateJoinCampaign = string.Empty;
             _lateJoinLevelNumber = 0;
@@ -3015,8 +3488,11 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
-        private static bool RecieveHeroTypeFromMasterPrefix(int playerNum)
+        private static bool RecieveHeroTypeFromMasterPrefix(object[] __args)
         {
+            NormalizeWorkshopHeroResponsePlayerNumber(__args);
+            PreserveWorkshopHeroTypePrefix(null, __args);
+            var playerNum = FindPlayerNumberArgument(__args);
             if (!Plugin.ShouldSkipLateHeroResponse(playerNum))
             {
                 return true;
@@ -3025,6 +3501,207 @@ namespace BroforceOnlineDiagnostics
             DiagnosticLog.Warning(
                 "Skipped a late hero-type response after local fallback for player " + playerNum + ".");
             return false;
+        }
+
+        private static void NormalizeWorkshopHeroResponsePlayerNumber(object[] arguments)
+        {
+            if (!IsWorkshopOnlineSession() || arguments == null || arguments.Length < 2)
+            {
+                return;
+            }
+
+            var responsePlayerNum = arguments[1] is int ? (int)arguments[1] : -1;
+            var pendingPlayerNum = FindPendingLocalHeroResponsePlayer();
+            if (responsePlayerNum >= 0 && responsePlayerNum < 4 &&
+                HeroController.players != null && responsePlayerNum < HeroController.players.Length &&
+                HeroController.players[responsePlayerNum] != null &&
+                (HeroController.players[responsePlayerNum].IsMine || pendingPlayerNum < 0 ||
+                 pendingPlayerNum == responsePlayerNum))
+            {
+                return;
+            }
+
+            if (pendingPlayerNum < 0)
+            {
+                return;
+            }
+
+            arguments[1] = pendingPlayerNum;
+            DiagnosticLog.Warning(
+                "Normalized malformed Workshop hero response player number: received=" +
+                responsePlayerNum + "; using local pending player=" + pendingPlayerNum + ".");
+        }
+
+        private static int FindPendingLocalHeroResponsePlayer()
+        {
+            if (HeroController.players == null || HeroController.PIDS == null)
+            {
+                return -1;
+            }
+
+            var count = System.Math.Min(4, System.Math.Min(
+                HeroController.players.Length,
+                HeroController.PIDS.Length));
+            var dropoutPlayerNum = -1;
+            var pendingPlayerNum = -1;
+            for (var index = 0; index < count; index++)
+            {
+                var player = HeroController.players[index];
+                var pid = HeroController.PIDS[index];
+                if (player == null || pid == null || !pid.IsMine || player.character != null ||
+                    !player.awaitingHeroTypeFromServer)
+                {
+                    continue;
+                }
+
+                if (WorkshopDropoutHeroTypes.ContainsKey(index))
+                {
+                    dropoutPlayerNum = index;
+                    break;
+                }
+
+                if (pendingPlayerNum < 0)
+                {
+                    pendingPlayerNum = index;
+                }
+                else
+                {
+                    // Do not redirect an ambiguous response to an arbitrary slot.
+                    return -1;
+                }
+            }
+
+            return dropoutPlayerNum >= 0 ? dropoutPlayerNum : pendingPlayerNum;
+        }
+
+        private static void PatchWorkshopHeroTypePreservation()
+        {
+            var heroControllerType = AccessTools.TypeByName("HeroController");
+            var requestMethod = heroControllerType == null
+                ? null
+                : heroControllerType.GetMethod(
+                    "RequestHeroTypeFromMasterRPC",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (requestMethod != null)
+            {
+                try
+                {
+                    var prefix = typeof(HarmonyDiagnostics).GetMethod(
+                        "PreserveWorkshopHeroTypePrefix",
+                        BindingFlags.NonPublic | BindingFlags.Static);
+                    _harmony.Patch(requestMethod, new HarmonyMethod(prefix), null, null, null);
+                    DiagnosticLog.Info("Workshop dropout hero-type preservation enabled for the master request path.");
+                }
+                catch (Exception exception)
+                {
+                    DiagnosticLog.Warning(
+                        "Workshop dropout hero-type preservation patch failed for the master request path: " +
+                        exception);
+                }
+            }
+            else
+            {
+                DiagnosticLog.Warning(
+                    "Workshop dropout hero-type preservation target not found: " +
+                    "HeroController.RequestHeroTypeFromMasterRPC.");
+            }
+
+            var playerType = AccessTools.TypeByName("Player");
+            if (playerType == null)
+            {
+                return;
+            }
+
+            var spawnPrefix = typeof(HarmonyDiagnostics).GetMethod(
+                "PreserveWorkshopHeroTypePrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var matched = false;
+            foreach (var method in playerType.GetMethods(
+                         BindingFlags.Public | BindingFlags.NonPublic |
+                         BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            {
+                if (method.Name != "SpawnHero" || method.ContainsGenericParameters || method.IsAbstract)
+                {
+                    continue;
+                }
+
+                matched = true;
+                try
+                {
+                    _harmony.Patch(method, new HarmonyMethod(spawnPrefix), null, null, null);
+                }
+                catch (Exception exception)
+                {
+                    DiagnosticLog.Warning(
+                        "Workshop dropout hero-type preservation patch failed for " +
+                        DescribeMethod(method) + ": " + exception);
+                }
+            }
+
+            if (!matched)
+            {
+                DiagnosticLog.Warning("Workshop dropout hero-type preservation target not found: Player.SpawnHero.");
+            }
+        }
+
+        private static void PreserveWorkshopHeroTypePrefix(object __instance, object[] __args)
+        {
+            if (!IsWorkshopOnlineSession() || __args == null)
+            {
+                return;
+            }
+
+            var playerNum = __instance is Player
+                ? ((Player)__instance).playerNum
+                : FindPlayerNumberArgument(__args);
+            HeroType savedHeroType;
+            if (!TryGetWorkshopRejoinHeroType(playerNum, out savedHeroType))
+            {
+                return;
+            }
+
+            for (var index = 0; index < __args.Length; index++)
+            {
+                HeroType argumentHeroType;
+                if (!TryConvertHeroType(__args[index], out argumentHeroType))
+                {
+                    continue;
+                }
+
+                if (argumentHeroType == savedHeroType)
+                {
+                    return;
+                }
+
+                __args[index] = savedHeroType;
+                DiagnosticLog.Warning(
+                    "Restored saved Workshop hero type during dropout rejoin: player=" +
+                    playerNum + "; requested=" + argumentHeroType +
+                    "; restored=" + savedHeroType + ".");
+                return;
+            }
+        }
+
+        private static int FindPlayerNumberArgument(object[] arguments)
+        {
+            if (arguments == null)
+            {
+                return -1;
+            }
+
+            foreach (var argument in arguments)
+            {
+                if (argument is int)
+                {
+                    var value = (int)argument;
+                    if (value >= 0 && value < 4)
+                    {
+                        return value;
+                    }
+                }
+            }
+
+            return -1;
         }
 
         private static void PatchWorkshopJoinPromptSuppression()
@@ -3682,8 +4359,59 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
-        private static int GetLateJoinControllerId()
+        private static int GetLateJoinControllerId(int playerNum)
         {
+            int savedControllerId;
+            if (WorkshopDropoutControllerIds.TryGetValue(playerNum, out savedControllerId) &&
+                savedControllerId >= 0)
+            {
+                DiagnosticLog.Info(
+                    "Reusing saved local Workshop controller for dropout rejoin: player=" +
+                    playerNum + "; controller=" + savedControllerId + ".");
+                return savedControllerId;
+            }
+
+            foreach (var pendingPlayerNum in PendingLocalWorkshopRejoins)
+            {
+                if (WorkshopDropoutControllerIds.TryGetValue(
+                        pendingPlayerNum,
+                        out savedControllerId) && savedControllerId >= 0)
+                {
+                    DiagnosticLog.Info(
+                        "Reusing saved local Workshop controller for pending dropout rejoin: " +
+                        "requestedPlayer=" + playerNum + "; savedPlayer=" + pendingPlayerNum +
+                        "; controller=" + savedControllerId + ".");
+                    return savedControllerId;
+                }
+            }
+
+            if (_lastLocalWorkshopControllerId >= 0)
+            {
+                DiagnosticLog.Info(
+                    "Reusing the last known local Workshop controller for late join: player=" +
+                    playerNum + "; controller=" + _lastLocalWorkshopControllerId + ".");
+                return _lastLocalWorkshopControllerId;
+            }
+
+            try
+            {
+                var activeInputController = InputReader.ActiveInputID;
+                if (activeInputController >= 0 &&
+                    activeInputController < InputReader.TOTAL_NUM_OF_CONTROL_IDS)
+                {
+                    DiagnosticLog.Info(
+                        "Using the active local input controller for late Workshop join: player=" +
+                        playerNum + "; controller=" + activeInputController + ".");
+                    return activeInputController;
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop automatic join could not read the active input controller: " +
+                    exception.Message);
+            }
+
             try
             {
                 var platform = SingletonMono<Utility.Platforms.Platform>.Instance;
