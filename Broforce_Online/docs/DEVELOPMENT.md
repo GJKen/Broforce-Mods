@@ -14,13 +14,29 @@
 - 订阅并下载相同的 Workshop 地图。
 - 使用官方线上主持流程创建或加入大厅。
 
-## 当前状态
+## 当前状态(更改此条目需要用户确认)
 
 - 已验证房主和加入方可以通过官方大厅流程进入同一张 Workshop 地图。
-- `test009` 双端测试已验证：过场加载期间加入可以进入地图，P2 角色可以正常创建，双方角色控制保持独立。
+- 双端测试已验证：过场加载期间加入可以进入地图，P2 角色可以正常创建，双方角色控制保持独立。
 - UMM 设置支持 Workshop ID、可选战役名、场景名、诊断会话 ID 和端角色。
-- 线上地图注入默认关闭；关闭时只记录诊断信息，不改变游戏行为。
-- 仍存在加入方英雄状态不同步、原生崩溃和地图兼容性风险。
+- 线上地图注入默认关闭；关闭时只记录诊断信息。
+
+### MCP 状态调试
+
+`Broforce_src/unity-inspector-mcp` 可以通过 Unity Inspector Mod 的 TCP 服务读取当前客户端状态。开始采样前确认 MCP 的 `ping` 成功，然后使用 `game_state` 和 `inspect_player` 记录关卡、玩家槽位、`playerNum`、角色对象、生命和位置。每个联机事件完成后立即采样一次，建议至少记录：进入地图、房主退出后的主机迁移、加入方重新加入、加入方按攻击键后。
+
+默认的 MCP 端点连接当前运行它的客户端；为内网机器配置独立的远程端点后，也可以读取另一台仍在运行的 Broforce。远程房主进程退出后仍无法继续读取其状态，因此主机退出后的记录只能说明剩余客户端看到的状态，双端结论仍需要两台机器各自的诊断日志、UMM `Core\Log.txt` 和 `error.log`。
+
+#### MCP 监控约束(修改此条目前需要用户确认)
+
+- 只有收到明确的“开始”指令后才启动 MCP 监控；环境准备阶段不调用 MCP、不测试端口，也不重复排查已确认的连通性。
+- 用户确认游戏和 Unity Inspector Mod 已运行后，开始时只读取一次基础状态，并记录当前诊断会话日志及读取位置，然后立即进入监控。
+- 重点关注线上房间创建、Steam Lobby、玩家加入、关卡加载和 Workshop 地图相关类与方法。先记录调用关系和关键参数，确认后的最小修改应转化为 Harmony 运行时补丁。
+- 每轮监控必须同时观测运行时状态和现有诊断事件，不能只轮询 `game_state`、`inspect_player` 或只看最终玩家数量。至少要跟踪加入方的 `AddLocalPlayer`、`RequestHeroTypeFromMaster`、`Player.Start`、`SpawnHero`、`SetPlayerCharacter`，并用房主端的 `RequestJoinGame`、`AddPlayer` 对齐时序。
+- 双端 MCP 都可用时默认同时观测, 只有用户明确要求不观测某一端时才可省略该端。
+- `read_log` 和 `watch_log` 只读取所配置的 UMM 日志时，不能视为已经完成事件观测；还必须通过 MCP 的只读日志访问读取当前会话的诊断 `.log`、`.trace.log`。如使用只读 `execute_code` 定位或读取 `DiagnosticLog.TraceFilePath`，表达式只能解析路径和读取文件。
+- 每轮监控固定持续 40 秒；角色消失、进入观战、场景切换或短暂连接异常都不能作为提前停止条件,结束后再统一分析结果。
+- 自己根据用户提出的问题来按需诊断需要监控什么事件, 日后开发必定围绕各种事件来开发
 
 ### 加入提示拦截
 
@@ -78,7 +94,7 @@ Diagnostic session ID: test001
 
 ### 晚加入支持
 
-当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查创建方传来的 `RoomInfo.CurrentSceneName` 和 Steam Lobby 阶段。如果创建方处于 Workshop 的 `loading` 或 `ready` 阶段，加入方会主动刷新 Lobby 数据，通过原生 `HeroController.AddLocalPlayer(-1, 1)` 申请独立的本地玩家槽位，并使用本地 `Workshop ID` 并行加载地图。
+当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查创建方传来的 `RoomInfo.CurrentSceneName` 和 Steam Lobby 阶段。如果创建方处于 Workshop 的 `loading` 或 `ready` 阶段，加入方会主动刷新 Lobby 数据并使用本地 `Workshop ID` 并行加载地图。客户端 Workshop 场景和原生 `SpawnJoinedPlayers` 都就绪后，Mod 等待 250ms 让玩家列表稳定，再使用本机主控制器调用一次原生 `HeroController.AddLocalPlayer(-1, controllerId)`；已有本地槽位或待处理请求时直接复用。
 
 这是实验性分支，依赖创建方和加入方使用相同版本 Mod。创建方处于 `newJoin` 或任务选择界面时，加入方不会启动晚加入地图加载；进入 Workshop 过场后即可触发，最多等待约 120 秒。host 端只在晚加入 Workshop 会话中放宽 `HeroController.RequestJoinGame` 的关卡完成和控制器注册保护，使加入方的 P2 请求能够创建角色。晚加入后仍可能受到玩家状态、英雄同步和地图脚本影响，因此稳定测试仍应优先使用“先加入大厅、创建方后进入地图”的顺序。
 
@@ -102,9 +118,9 @@ Diagnostic session ID: test001
 
 每个线上房间只在首次选择任务时注入一次。创建或加入新大厅时会清理上一次 Workshop 状态并重置官方流程残留状态，避免重复回调或错误复用上一大厅的场景。
 
-加入方晚加入时，如果房间信息或 Lobby 阶段显示创建方正在进入配置中的 Workshop 场景，`ConnectionLayer.OnJoinedLobby` 会刷新 Lobby 数据，并在没有本地玩家槽位时申请一个本地玩家槽位、执行一次 Workshop 加载；地图下载完成后复用同一个完成回调继续原生流程。host 端的 `RequestJoinGame` 补丁只对晚加入 Workshop 会话绕过两个会使原生方法提前返回的保护条件，普通大厅仍使用原生判断。进入原生请求前会记录 `GetNextUnusedPlayerNumber()` 和四个玩家槽位；如果发现已标记为 playing 但对应 `Player` 对象为空，会清理该明确失效槽位。请求成功后，拥有角色的一端会在物理状态稳定后向其它客户端重发该角色当前的权威 `SetSpawnPositon` 坐标，并保留出生类型；不得通过 `WorkOutSpawnPosition` 重新计算出生位置，因为它会把已经不是首次部署的角色改判为中途空投。启用有效 Workshop 注入配置的线上会话中，每台机器同一时间只允许一个本地 `AddLocalPlayer` 请求；已有本地槽位时晚加入流程复用该槽位，且 `SpawnJoinedPlayers` 会在广播前清理额外的本地空槽位。明确本地掉线后才释放请求锁以允许正常重入。
+加入方晚加入时，如果房间信息或 Lobby 阶段显示创建方正在进入配置中的 Workshop 场景，`ConnectionLayer.OnJoinedLobby` 会刷新 Lobby 数据并先执行一次 Workshop 加载；地图下载完成后复用同一个完成回调继续原生流程。晚加入状态机在配置场景的 `sceneLoaded` 回调和 `SpawnJoinedPlayers` 都发生后才自动申请本地玩家槽位，避免玩家在加载阶段按下的攻击键丢失，也避免在原生玩家列表建立前发出无效请求。host 端的 `RequestJoinGame` 补丁只对晚加入 Workshop 会话绕过两个会使原生方法提前返回的保护条件，普通大厅仍使用原生判断。进入原生请求前会记录 `GetNextUnusedPlayerNumber()` 和四个玩家槽位；如果发现已标记为 playing 但对应 `Player` 对象为空，会清理该明确失效槽位。请求成功后，拥有角色的一端会在物理状态稳定后向其它客户端重发该角色当前的权威 `SetSpawnPositon` 坐标，并保留出生类型；不得通过 `WorkOutSpawnPosition` 重新计算出生位置，因为它会把已经不是首次部署的角色改判为中途空投。启用有效 Workshop 注入配置的线上会话中，每台机器同一时间只允许一个本地 `AddLocalPlayer` 请求；已有本地槽位或请求时晚加入流程直接复用，且 `SpawnJoinedPlayers` 会在广播前清理额外的本地空槽位。明确本地掉线后才释放请求锁以允许正常重入。
 
-晚加入测试成功判据：host 日志出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方日志出现 `Late workshop join requested a local player slot` 和 `Starting late workshop join load`；进入地图后，加入方按攻击键能够创建 P2 角色。普通进入时，双方都应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不会重新计算远程角色出生点。
+晚加入测试成功判据：host 日志出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方日志按顺序出现 `Starting late workshop join load`、`Late workshop client scene loaded`、`Late workshop SpawnJoinedPlayers observed`、`Late workshop join requested a local player slot after scene readiness` 和 `Late workshop automatic join completed`；无需再次按攻击键即可创建 P2 角色。普通进入时，双方都应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不会重新计算远程角色出生点。
 
 ### 英雄回复策略
 
@@ -155,6 +171,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 
 - 不直接追踪 `Update`、`RunHeroRespawnLogic` 等每帧方法；需要观察时改为追踪低频下游事件。
 - 重复日志按方法、参数和状态组合限频；高频状态同步方法按方法级别合并，并在恢复记录时报告被抑制次数。
+- 已绑定本地玩家的同一控制器继续触发空槽 `AddLocalPlayer` 时静默拦截；其它控制器的额外加入尝试每个控制器每 10 秒最多记录一条警告。
 - 新增追踪后先检查本机日志增长速度；如果每秒持续写入多行，先修复限频再进行双端测试。
 - 日志写入前会清洗未配对 UTF-16 代理项，避免异常字符串再次破坏 Unity 日志路径。
 - 本项目不自动设置日志大小上限，也不自动删除旧日志；测试结束后按会话文件清理不需要的历史日志。
@@ -166,7 +183,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - 加入方英雄类型回复可能丢失，当前本地备用生成只能缓解，不能替代网络同步。
 - Broforce 可能发生原生崩溃；日志中的异常和崩溃时间关系不能单独证明因果，必须结合 `error.log`、双方日志和 UMM 日志分析。
 - 晚加入依赖双方使用相同版本 Mod；过场期间可以并行加载，但地图脚本、网络状态或原生错误仍可能导致加入失败。
-- `test009` 中创建方先进入地图、加入方后进入时，P2 角色出现前有短暂等待；尚未根据双端日志判断是网络传输延迟还是本地角色生成流程等待。
+- `test011` 已确认创建方先进入地图时，加入方可在场景就绪后自动创建 P2；仍需继续验证不同地图和控制器组合。
 - `test009` 使用的 Workshop 地图曾在 `GeneratePole.Awake` 抛出 `NullReferenceException`。该错误来自地图对象初始化，当前未阻止本轮晚加入和 P2 创建，但更换地图或地图对象时仍需单独排查。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
@@ -240,9 +257,8 @@ BroforceOnlineDiagnostics\
 <BROFORCE_DIR>\Broforce_beta_Data\Managed\Assembly-CSharp.dll
 ```
 
-重点关注线上房间创建、Steam Lobby、玩家加入、关卡加载和 Workshop 地图相关类与方法。先记录调用关系和关键参数，不直接修改原始 DLL；确认后的最小修改应转化为 Harmony 运行时补丁。
 
-## 修改协作约定
+## 修改协作约定(更改此条目需要用户确认)
 
 - 提交或同步前检查上级仓库的 `git status` 和 `git diff`，不要把 `LocalBroforcePath.props`、日志、缓存或无关文件加入提交。
 - `LocalBroforcePath.props` 包含机器专用路径，不应提交到公共仓库。

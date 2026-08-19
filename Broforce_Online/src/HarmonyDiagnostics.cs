@@ -16,7 +16,8 @@ namespace BroforceOnlineDiagnostics
         private const int DuplicateWindowSeconds = 5;
         private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
         private const int WorkshopLocalJoinRequestRetrySeconds = 10;
-        private const int LateJoinControllerId = 1;
+        private const int DefaultLateJoinControllerId = 0;
+        private const int LateJoinAutoJoinDelayMilliseconds = 250;
         private const int LateJoinTimeoutSeconds = 120;
         private const int WorkshopLobbyReadyPollMilliseconds = 500;
         private const int WorkshopLobbyDataRefreshMilliseconds = 1000;
@@ -122,6 +123,8 @@ namespace BroforceOnlineDiagnostics
             new HashSet<int>();
         private static readonly Dictionary<int, DateTime> WorkshopLocalJoinRequests =
             new Dictionary<int, DateTime>();
+        private static readonly Dictionary<string, DateTime> WorkshopLocalJoinSuppressionWarnings =
+            new Dictionary<string, DateTime>();
 
         private static Harmony _harmony;
         private static int _sequence;
@@ -132,11 +135,16 @@ namespace BroforceOnlineDiagnostics
         private static bool _lateJoinPending;
         private static bool _lateJoinStarted;
         private static bool _lateJoinPlayerJoinRequested;
+        private static bool _lateJoinClientSceneLoaded;
+        private static bool _lateJoinSpawnJoinedPlayersSeen;
+        private static bool _lateJoinAutoJoinCompleted;
+        private static bool _lateJoinNoFreeSlotWarningLogged;
         private static bool _joinLobbyInProgress;
         private static DateTime _lateJoinDeadlineUtc;
         private static DateTime _lateJoinReadyPollAtUtc;
         private static DateTime _lateJoinTransitionPollAtUtc;
         private static DateTime _lateJoinLobbyRefreshAtUtc;
+        private static DateTime _lateJoinAutoJoinAtUtc;
         private static DateTime _workshopSpawnRebroadcastAtUtc;
         private static bool _workshopSpawnRebroadcastPending;
         private static bool _workshopSpawnRebroadcastUseCurrentPositions;
@@ -431,9 +439,14 @@ namespace BroforceOnlineDiagnostics
 
             if (HasActiveWorkshopLocalPlayer())
             {
-                DiagnosticLog.Warning(
-                    "Suppressed duplicate Workshop local-player request because a local slot is already active: " +
-                    "player=" + playerNum + "; controller=" + controllerNum + ".");
+                if (!HasActiveWorkshopLocalPlayerForController(controllerNum))
+                {
+                    LogWorkshopLocalJoinSuppressionWarning(
+                        "a local slot is already active",
+                        playerNum,
+                        controllerNum);
+                }
+
                 return true;
             }
 
@@ -442,22 +455,43 @@ namespace BroforceOnlineDiagnostics
                 DateTime.UtcNow - previousRequestAtUtc <
                 TimeSpan.FromSeconds(WorkshopLocalJoinRequestRetrySeconds))
             {
-                DiagnosticLog.Warning(
-                    "Suppressed duplicate Workshop local-player request while the first request is pending: " +
-                    "player=" + playerNum + "; controller=" + controllerNum + ".");
                 return true;
             }
 
             if (WorkshopLocalJoinRequests.Count > 0)
             {
-                DiagnosticLog.Warning(
-                    "Suppressed duplicate Workshop local-player request while another local slot request is pending: " +
-                    "player=" + playerNum + "; controller=" + controllerNum + ".");
+                LogWorkshopLocalJoinSuppressionWarning(
+                    "another local slot request is pending",
+                    playerNum,
+                    controllerNum);
                 return true;
             }
 
             WorkshopLocalJoinRequests[controllerNum] = DateTime.UtcNow;
             return false;
+        }
+
+        private static void LogWorkshopLocalJoinSuppressionWarning(
+            string reason,
+            int playerNum,
+            int controllerNum)
+        {
+            var key = reason + "|" + controllerNum;
+            var now = DateTime.UtcNow;
+            DateTime previousWarningAtUtc;
+            if (WorkshopLocalJoinSuppressionWarnings.TryGetValue(key, out previousWarningAtUtc) &&
+                now - previousWarningAtUtc <
+                TimeSpan.FromSeconds(WorkshopLocalJoinRequestRetrySeconds))
+            {
+                return;
+            }
+
+            WorkshopLocalJoinSuppressionWarnings[key] = now;
+            DiagnosticLog.Warning(
+                "Suppressed additional Workshop local-player request because " + reason + ": " +
+                "player=" + playerNum + "; controller=" + controllerNum +
+                "; further matching warnings are silent for " +
+                WorkshopLocalJoinRequestRetrySeconds + " seconds.");
         }
 
         private static void RemoveExpiredWorkshopLocalJoinRequests()
@@ -527,8 +561,50 @@ namespace BroforceOnlineDiagnostics
             return false;
         }
 
+        private static bool HasActiveWorkshopLocalPlayerForController(int controllerNum)
+        {
+            if (HeroController.PIDS == null || HeroController.playerControllerIDs == null)
+            {
+                return false;
+            }
+
+            var playersPlaying = GetPlayersPlayingArray();
+            var count = System.Math.Min(
+                4,
+                System.Math.Min(HeroController.PIDS.Length, HeroController.playerControllerIDs.Length));
+            for (var index = 0; index < count; index++)
+            {
+                var pid = HeroController.PIDS[index];
+                if (pid == null || !pid.IsMine ||
+                    HeroController.playerControllerIDs[index] != controllerNum)
+                {
+                    continue;
+                }
+
+                if (playersPlaying == null || index >= playersPlaying.Length || playersPlaying[index])
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static void PrepareWorkshopSpawnJoinedPlayers()
         {
+            if (_lateJoinStarted && !_sessionIsHost)
+            {
+                if (!_lateJoinSpawnJoinedPlayersSeen)
+                {
+                    DiagnosticLog.Info(
+                        "Late workshop SpawnJoinedPlayers observed; automatic local join is now eligible.");
+                }
+
+                _lateJoinSpawnJoinedPlayersSeen = true;
+                _lateJoinAutoJoinAtUtc = DateTime.UtcNow.AddMilliseconds(
+                    LateJoinAutoJoinDelayMilliseconds);
+            }
+
             if (!IsWorkshopJoinProtectionActive() || HeroController.PIDS == null ||
                 HeroController.players == null || HeroController.playerControllerIDs == null)
             {
@@ -595,6 +671,7 @@ namespace BroforceOnlineDiagnostics
         private static void ClearWorkshopLocalJoinRequests()
         {
             WorkshopLocalJoinRequests.Clear();
+            WorkshopLocalJoinSuppressionWarnings.Clear();
         }
 
         private static void JoinLobbyPostfix()
@@ -1038,6 +1115,7 @@ namespace BroforceOnlineDiagnostics
 
             if (_lateJoinStarted)
             {
+                TryCompleteLateWorkshopJoin();
                 return;
             }
 
@@ -1091,12 +1169,51 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            if (!_lateJoinPlayerJoinRequested && !TryRequestLateJoinPlayer())
+            if (string.Equals(pidState, "not-set", StringComparison.Ordinal))
             {
                 return;
             }
 
             TryStartLateJoin();
+        }
+
+        private static void TryCompleteLateWorkshopJoin()
+        {
+            if (_lateJoinAutoJoinCompleted)
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow > _lateJoinDeadlineUtc)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop join timed out before the automatic local player join completed: scene=" +
+                    _lateJoinScene + ".");
+                _lateJoinAutoJoinCompleted = true;
+                return;
+            }
+
+            if (!IsOnline() || IsOnlineHost())
+            {
+                return;
+            }
+
+            if (HasActiveWorkshopLocalPlayer())
+            {
+                DiagnosticLog.Info(
+                    "Late workshop automatic join completed with one active local player slot.");
+                _lateJoinAutoJoinCompleted = true;
+                return;
+            }
+
+            if (_lateJoinPlayerJoinRequested || !_lateJoinClientSceneLoaded ||
+                !_lateJoinSpawnJoinedPlayersSeen || DateTime.UtcNow < _lateJoinAutoJoinAtUtc ||
+                string.Equals(GetLocalPidState(), "not-set", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            TryRequestLateJoinPlayer();
         }
 
         private static bool TryRequestLateJoinPlayer()
@@ -1120,6 +1237,34 @@ namespace BroforceOnlineDiagnostics
                 return true;
             }
 
+            RemoveExpiredWorkshopLocalJoinRequests();
+            if (WorkshopLocalJoinRequests.Count > 0)
+            {
+                _lateJoinPlayerJoinRequested = true;
+                DiagnosticLog.Info(
+                    "Late workshop automatic join reused an already pending local-player request.");
+                return true;
+            }
+
+            var nextPlayerNumber = GetImmediateNextUnusedPlayerNumber();
+            if (nextPlayerNumber < 0)
+            {
+                if (!_lateJoinNoFreeSlotWarningLogged)
+                {
+                    _lateJoinNoFreeSlotWarningLogged = true;
+                    DiagnosticLog.Warning(
+                        "Late workshop automatic join is waiting for a free local player slot: " +
+                        FormatWorkshopPlayerSlots() + ".");
+                }
+
+                _lateJoinAutoJoinAtUtc = DateTime.UtcNow.AddMilliseconds(
+                    WorkshopLobbyReadyPollMilliseconds);
+                return false;
+            }
+
+            _lateJoinNoFreeSlotWarningLogged = false;
+            var controllerId = GetLateJoinControllerId();
+
             var heroControllerType = AccessTools.TypeByName("HeroController");
             var addLocalPlayer = heroControllerType == null
                 ? null
@@ -1137,11 +1282,11 @@ namespace BroforceOnlineDiagnostics
 
             try
             {
-                addLocalPlayer.Invoke(null, new object[] { -1, LateJoinControllerId });
+                addLocalPlayer.Invoke(null, new object[] { -1, controllerId });
                 _lateJoinPlayerJoinRequested = true;
                 DiagnosticLog.Info(
-                    "Late workshop join requested a local player slot: controller=" +
-                    LateJoinControllerId + ".");
+                    "Late workshop join requested a local player slot after scene readiness: player=" +
+                    nextPlayerNumber + "; controller=" + controllerId + ".");
                 return true;
             }
             catch (Exception exception)
@@ -1193,6 +1338,11 @@ namespace BroforceOnlineDiagnostics
             _lateJoinPending = true;
             _lateJoinStarted = false;
             _lateJoinPlayerJoinRequested = false;
+            _lateJoinClientSceneLoaded = false;
+            _lateJoinSpawnJoinedPlayersSeen = false;
+            _lateJoinAutoJoinCompleted = false;
+            _lateJoinNoFreeSlotWarningLogged = false;
+            _lateJoinAutoJoinAtUtc = DateTime.MinValue;
             DiagnosticLog.Info(
                 "Late workshop join detected: hostScene=" + hostScene +
                 ", campaign=" + (_lateJoinCampaign ?? string.Empty) +
@@ -1267,10 +1417,16 @@ namespace BroforceOnlineDiagnostics
                 SetFieldOrProperty(state, "levelNumber", _lateJoinLevelNumber);
                 _lateJoinPending = false;
                 _lateJoinStarted = true;
+                _lateJoinClientSceneLoaded = false;
+                _lateJoinSpawnJoinedPlayersSeen = false;
+                _lateJoinAutoJoinCompleted = false;
+                _lateJoinNoFreeSlotWarningLogged = false;
+                _lateJoinAutoJoinAtUtc = DateTime.MinValue;
                 DiagnosticLog.Info(
                     "Starting late workshop join load: scene=" + _lateJoinScene +
                     ", campaign=" + (_lateJoinCampaign ?? string.Empty) +
-                    ", levelNumber=" + _lateJoinLevelNumber + ".");
+                    ", levelNumber=" + _lateJoinLevelNumber +
+                    "; automatic local join will wait for scene readiness.");
                 loadLevel.Invoke(loadLevel.IsStatic ? null : state, new object[] { _lateJoinScene });
             }
             catch (Exception exception)
@@ -1285,12 +1441,21 @@ namespace BroforceOnlineDiagnostics
         {
             try
             {
+                var configuredScene = GetConfiguredWorkshopSceneName();
+                if (!_sessionIsHost && _lateJoinStarted &&
+                    string.Equals(scene.name, _lateJoinScene, StringComparison.OrdinalIgnoreCase))
+                {
+                    _lateJoinClientSceneLoaded = true;
+                    DiagnosticLog.Info(
+                        "Late workshop client scene loaded; automatic local join is waiting for " +
+                        "SpawnJoinedPlayers: scene=" + scene.name + ".");
+                }
+
                 if (!_sessionIsHost)
                 {
                     return;
                 }
 
-                var configuredScene = GetConfiguredWorkshopSceneName();
                 if (string.Equals(scene.name, configuredScene, StringComparison.OrdinalIgnoreCase))
                 {
                     SetWorkshopLobbyPhase(WorkshopLobbyPhaseReady, "workshop scene loaded");
@@ -2157,10 +2322,15 @@ namespace BroforceOnlineDiagnostics
             _lateJoinPending = false;
             _lateJoinStarted = false;
             _lateJoinPlayerJoinRequested = false;
+            _lateJoinClientSceneLoaded = false;
+            _lateJoinSpawnJoinedPlayersSeen = false;
+            _lateJoinAutoJoinCompleted = false;
+            _lateJoinNoFreeSlotWarningLogged = false;
             _lateJoinDeadlineUtc = DateTime.MinValue;
             _lateJoinReadyPollAtUtc = DateTime.MinValue;
             _lateJoinTransitionPollAtUtc = DateTime.MinValue;
             _lateJoinLobbyRefreshAtUtc = DateTime.MinValue;
+            _lateJoinAutoJoinAtUtc = DateTime.MinValue;
             _lateJoinScene = string.Empty;
             _lateJoinCampaign = string.Empty;
             _lateJoinLevelNumber = 0;
@@ -2614,6 +2784,33 @@ namespace BroforceOnlineDiagnostics
                 DiagnosticLog.Warning("Workshop join-prompt comparison failed: " + exception.Message);
                 return false;
             }
+        }
+
+        private static int GetLateJoinControllerId()
+        {
+            try
+            {
+                var platform = SingletonMono<Utility.Platforms.Platform>.Instance;
+                if (platform != null)
+                {
+                    var controllerId = platform.GetPrimaryUserController();
+                    if (controllerId >= 0)
+                    {
+                        return controllerId;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop automatic join could not read the primary controller: " +
+                    exception.Message);
+            }
+
+            DiagnosticLog.Warning(
+                "Late workshop automatic join is using the default local controller: controller=" +
+                DefaultLateJoinControllerId + ".");
+            return DefaultLateJoinControllerId;
         }
 
         private static string GetConfiguredWorkshopSceneName()
