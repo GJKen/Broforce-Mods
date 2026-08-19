@@ -134,19 +134,29 @@ namespace BroforceOnlineDiagnostics
             state.FallbackUsed = true;
             try
             {
-                var unlockedHeroes = HeroUnlockController.GetUnlockedHeroes(true);
-                var availableHeroes = unlockedHeroes == null
-                    ? new List<HeroType>()
-                    : new List<HeroType>(unlockedHeroes);
-                var yetToBeSeenHeroes = PlayerProgress.Instance == null ||
-                                        PlayerProgress.Instance.yetToBePlayedUnlockedHeroes == null
-                    ? new List<HeroType>()
-                    : new List<HeroType>(PlayerProgress.Instance.yetToBePlayedUnlockedHeroes);
-                var heroType = HeroController.GetHeroType(
-                    player.playerNum,
-                    availableHeroes,
-                    yetToBeSeenHeroes,
-                    true);
+                HeroType heroType;
+                if (HarmonyDiagnostics.TryGetWorkshopRejoinHeroType(player.playerNum, out heroType))
+                {
+                    DiagnosticLog.Info(
+                        "Using the saved Workshop hero type for local dropout rejoin fallback: player=" +
+                        player.playerNum + "; hero=" + heroType + ".");
+                }
+                else
+                {
+                    var unlockedHeroes = HeroUnlockController.GetUnlockedHeroes(true);
+                    var availableHeroes = unlockedHeroes == null
+                        ? new List<HeroType>()
+                        : new List<HeroType>(unlockedHeroes);
+                    var yetToBeSeenHeroes = PlayerProgress.Instance == null ||
+                                            PlayerProgress.Instance.yetToBePlayedUnlockedHeroes == null
+                        ? new List<HeroType>()
+                        : new List<HeroType>(PlayerProgress.Instance.yetToBePlayedUnlockedHeroes);
+                    heroType = HeroController.GetHeroType(
+                        player.playerNum,
+                        availableHeroes,
+                        yetToBeSeenHeroes,
+                        true);
+                }
 
                 _fallbackResponseGuards.Add(player.GetInstanceID());
                 player.awaitingHeroTypeFromServer = false;
