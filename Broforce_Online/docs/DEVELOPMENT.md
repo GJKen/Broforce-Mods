@@ -21,6 +21,7 @@
 - UMM 设置支持 Workshop ID、可选战役名、场景名、诊断会话 ID 和端角色。
 - 线上地图注入默认关闭；关闭时只记录诊断信息。
 - 已验证 `Esc` 返回路径会先进入 `VictoryCustomCampaignSteam`，再离开 Steam Lobby 并加载 `MainMenu`；当前实现会在启用 Workshop 注入的线上会话中，于 `MainMenu` 加载后调用官方 `MainMenu.TryToGoToLobby`，直接打开在线房间查看界面。
+- 已验证从在线房间大厅返回主菜单时，Logo 入场动画完成前不会显示菜单文字或高亮框；普通主菜单流程和本地地图返回流程不受影响。
 
 ### MCP 状态调试
 
@@ -31,12 +32,14 @@
 #### MCP 监控约束(修改此条目前需要用户确认)
 
 - 只有收到明确的“开始”指令后才启动 MCP 监控；环境准备阶段不调用 MCP、不测试端口，也不重复排查已确认的连通性。
+- 在每轮监控正式开始、调用 MCP 工具之前，必须先向用户发送“倒计时开始了!!!”；固定 40 秒监控结束后，必须向用户发送“倒计时结束了!!!”。
 - 用户确认游戏和 Unity Inspector Mod 已运行后，开始时只读取一次基础状态，并记录当前诊断会话日志及读取位置，然后立即进入监控。
 - 重点关注线上房间创建、Steam Lobby、玩家加入、关卡加载和 Workshop 地图相关类与方法。先记录调用关系和关键参数，确认后的最小修改应转化为 Harmony 运行时补丁。
 - 每轮监控必须同时观测运行时状态和现有诊断事件，不能只轮询 `game_state`、`inspect_player` 或只看最终玩家数量。至少要跟踪加入方的 `AddLocalPlayer`、`RequestHeroTypeFromMaster`、`Player.Start`、`SpawnHero`、`SetPlayerCharacter`，并用房主端的 `RequestJoinGame`、`AddPlayer` 对齐时序。
 - 双端 MCP 都可用时默认同时观测, 只有用户明确要求不观测某一端时才可省略该端。
 - `read_log` 和 `watch_log` 只读取所配置的 UMM 日志时，不能视为已经完成事件观测；还必须通过 MCP 的只读日志访问读取当前会话的诊断 `.log`、`.trace.log`。如使用只读 `execute_code` 定位或读取 `DiagnosticLog.TraceFilePath`，表达式只能解析路径和读取文件。
 - 每轮监控固定持续 40 秒；角色消失、进入观战、场景切换或短暂连接异常都不能作为提前停止条件,结束后再统一分析结果。
+- 当本轮监控、必要的日志读取和分析完成，后续不再需要游戏客户端保持打开时，必须向用户发送“游戏可以关闭了!!!”。
 - 自己根据用户提出的问题来按需诊断需要监控什么事件, 日后开发必定围绕各种事件来开发
 
 ### 加入提示拦截
@@ -97,6 +100,8 @@ Diagnostic session ID: test001
 
 当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查创建方传来的 `RoomInfo.CurrentSceneName` 和 Steam Lobby 阶段。如果创建方处于 Workshop 的 `loading` 或 `ready` 阶段，加入方会主动刷新 Lobby 数据并使用本地 `Workshop ID` 并行加载地图。客户端 Workshop 场景和原生 `SpawnJoinedPlayers` 都就绪后，Mod 等待 250ms 让玩家列表稳定，再使用本机主控制器调用一次原生 `HeroController.AddLocalPlayer(-1, controllerId)`；已有本地槽位或待处理请求时直接复用。
 
+自动加入请求发出后，若 5 秒内没有观察到本地 `Player.Start` 或本地 `SetPlayerCharacter` 确认有效槽位，Mod 会清除挂起请求并重新调用一次 `AddLocalPlayer`；确认本地槽位建立后停止重试。实际成为 Steam Lobby Host 的端也会启用晚加入 `RequestJoinGame` 的保护放行，不再只依赖最初是否通过 `CreateMatch` 创建大厅。
+
 这是实验性分支，依赖创建方和加入方使用相同版本 Mod。创建方处于 `newJoin` 或任务选择界面时，加入方不会启动晚加入地图加载；进入 Workshop 过场后即可触发，最多等待约 120 秒。host 端只在晚加入 Workshop 会话中放宽 `HeroController.RequestJoinGame` 的关卡完成和控制器注册保护，使加入方的 P2 请求能够创建角色。晚加入后仍可能受到玩家状态、英雄同步和地图脚本影响，因此稳定测试仍应优先使用“先加入大厅、创建方后进入地图”的顺序。
 
 ## 当前实现
@@ -129,10 +134,16 @@ Diagnostic session ID: test001
 
 - 保留游戏原本的请求和回复流程。
 - Workshop 场景中的本地玩家等待 18 秒仍无回复时，使用游戏自己的 `GetHeroType` 和 `Player.SpawnHero` 做一次本地备用生成。
+- Workshop 线上玩家发生本地或远程 `Dropout` 后，按玩家槽位保存掉线前的英雄类型；主机重新处理 `RequestHeroTypeFromMasterRPC`、客户端接收英雄回复和本地备用生成时都优先恢复该类型，避免掉线重建后被原生随机换成另一个角色。
+- 本地 `DropoutRPC` 同时保存该槽位的 `playerControllerIDs`；自动重入和原生攻击键重入的 `AddLocalPlayer` 都改用保存的控制器，`Player.Start`/角色登记阶段若发现原生写回了其它控制器，也会恢复 `playerControllerIDs` 和 `Player.controllerNum`。
 - 已有角色、远程玩家和正常收到回复的玩家不进入备用分支。
 - 备用生成后，只有仍处于等待新英雄回复状态时才接受迟到回复，避免旧回复重复替换角色。
 
 主动重试已经删除，因为它会制造迟到回复；备用生成也不是重新发送网络回复，不能保证所有同步问题都被解决。
+
+本轮 MCP 双端日志确认：掉线重建链本身已经恢复了玩家槽位和控制器，但原生主机请求会把 `preferedNextHero` 传为 `None`，导致同一槽位重新选择其它英雄。当前补丁只在明确发生 `Dropout` 的 Workshop 线上槽位启用英雄类型保持；普通死亡、正常换人和普通大厅流程不受影响。
+
+控制器重入修复的验证日志为 `Saved local Workshop controller for dropout rejoin`、`Reusing saved local Workshop controller for dropout rejoin`、`Rewrote local Workshop rejoin controller to saved binding`、`Switched active local Workshop player to the controller that requested join` 和 `Restored saved local Workshop controller binding`。如果重建角色仍有生命但无法操作，应优先比较掉线前后的 `playerControllerIDs`、`Player.controllerNum` 和实际输入控制器，而不是只比较 `character` 是否存在。
 
 ### 主机迁移后重新加入的输入恢复
 
@@ -159,9 +170,9 @@ Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause`
 
 `MainMenu` 的菜单项由 `DelayInitializeMenu` 创建。普通启动仍使用原生约 3 秒等待；Workshop Esc 返回大厅时，Mod 将这次协程的等待临时改为 0 秒，让在线房间浏览器尽快打开。等待期间只隐藏主菜单的 Logo 和菜单视觉，不禁用 `MainMenu` 根对象，因此原生初始化协程可以完整执行。`MainMenu.InitializeMenu` 的 Harmony 后置补丁会在菜单项创建完成的同一帧再次隐藏菜单视觉，清除退出地图遗留的 `ConfirmationPause` 和暂停控制器，再调用 `MainMenu.TryToGoToLobby(MultiplayerPlayMode.Online)`。平台联机状态检查使用原生等待层，成功后只显示在线房间列表，不会渲染中间主菜单。
 
-从在线房间大厅返回主菜单时，Mod 复用原生 `Lobby.GoBackToMainMenu -> MainMenu.Show -> MainMenu.ShowRoutine` 调用链。`MainMenu.Show` 开始前只通过字段恢复高亮索引和普通间距，不调用会提前激活文字的 `ResetHighlightIndex`。由于原生 `MenuActive=true` 会在 `ShowRoutine` 的第一步重新激活菜单项，Mod 仅在这次返回动画期间额外关闭菜单项、菜单高亮和子 Renderer 的可见性；协程完成后再按原始 Renderer 状态恢复，因此文字不会在 Logo 动画结束前出现，也不改变原生布局和缩放动画。
+从在线房间大厅返回主菜单时，Mod 复用原生 `Lobby.GoBackToMainMenu -> MainMenu.Show -> MainMenu.ShowRoutine` 调用链。`MainMenu.Show` 开始前只通过字段恢复高亮索引和普通间距，不调用会立即移动高亮框、扰乱入场前布局的 `ResetHighlightIndex`。由于原生 `MenuActive=true` 会在 `ShowRoutine` 的第一步重新激活菜单项，Mod 仅在这次返回动画期间额外关闭菜单项、菜单高亮和子 Renderer 的可见性；协程完成后再按原始 Renderer 状态恢复，因此文字不会在 Logo 动画结束前出现，也不改变原生布局和缩放动画。
 
-如果在原生初始化前打开大厅，`MainMenu` 被隐藏时会中断初始化协程，之后从大厅返回只会显示高亮框而没有菜单项。当前后置补丁保证大厅返回时 `MainMenu.ShowRoutine` 能基于已经存在的菜单项恢复完整主菜单和输入。如果平台检查失败、等待层意外消失或 30 秒仍未打开大厅，Mod 会恢复完整的主菜单视觉和输入，避免留下隐藏或不可操作的界面。若目标类型、实例或方法不可用，只记录警告并保留原生主菜单流程。
+如果在原生初始化前打开大厅，`MainMenu` 被隐藏时会中断初始化协程，之后从大厅返回只会显示高亮框而没有菜单项。当前后置补丁保证大厅返回时 `MainMenu.ShowRoutine` 能基于已经存在的菜单项恢复完整主菜单和输入。进入 `MainMenu` 后会先等待约 250ms，再尝试打开在线大厅；导航失败时至少保留 1 秒缓冲，若没有正在显示的平台等待层则恢复完整主菜单，最长等待 30 秒后也会执行同样的恢复，避免留下隐藏或不可操作的界面。若目标类型、实例或方法不可用，只记录警告并保留原生主菜单流程。
 
 ### 代码职责
 
