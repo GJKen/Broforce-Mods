@@ -47,6 +47,14 @@
     <Compile Include="src\DiagnosticLog.cs" />
     <Compile Include="src\ReflectionProbe.cs" />
     <Compile Include="src\HarmonyDiagnostics.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Trace.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Reflection.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Patches.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Lifecycle.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopJoin.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopPlayer.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopSpawn.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopLobby.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
   </ItemGroup>
 
