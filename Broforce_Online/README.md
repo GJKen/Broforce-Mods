@@ -13,9 +13,12 @@
 - 已验证双方完全准备后进入，以及创建方先进入、加入方后进入两种流程都不会多生成加入方角色；后者的 P2 角色出现前有短暂等待，原因仍需结合双端日志确认。
 - 已验证 Workshop 线上会话中房主和加入方都不再显示“按开枪键加入游戏”横幅；该处理不改变攻击键加入功能。
 - 已接入 Workshop 线上关卡按 `Esc` 返回后的大厅导航：跳过 `VictoryCustomCampaignSteam` 的通关时间和地图评分界面，直接回到 `MainMenu` 并自动进入在线房间查看界面；普通本地关卡不受影响。
+- 已修复从在线房间大厅返回主菜单时的菜单动画时序：Logo 入场动画完成前不会显示文字或高亮框，不再出现按钮偏上、只剩框框无法操作的问题；普通主菜单流程不受影响。
 - 已支持在 UMM 设置中填写 Workshop ID、可选的战役名和场景名，并使用会话 ID 和可选日志标签关联双端日志。
 - 已接入 `unity-inspector-mcp` 调试桥接，可在游戏运行时读取关卡、玩家槽位、角色对象和截图
-- 已保留官方英雄类型请求；加入方收不到回复时，会在等待 18 秒后使用本地备用生成。
+- 已保留官方英雄类型请求；加入方收不到回复时，会在等待 18 秒后使用本地备用生成；Workshop 线上玩家掉线重建时会保存并恢复原英雄类型，不再因原生重新分配而自动换人。
+- 已修复 Workshop 掉线槽位重入时控制器绑定丢失：自动加入和攻击键触发的 `AddLocalPlayer` 都复用掉线前的本地控制器，并在角色注册阶段再次校正控制器归属。
+- 已增加晚加入请求确认和超时重试：`AddLocalPlayer` 发出后若 5 秒内没有形成有效本地玩家槽位，会释放挂起状态并重新请求；`Player.Start` 或本地 `SetPlayerCharacter` 确认登记后停止重试。
 - 已知部分 Workshop 地图会在 `GeneratePole.Awake` 抛出空引用错误；该地图对象问题与晚加入角色创建问题分开处理。
 
 ## 使用方式
@@ -75,6 +78,8 @@ Diagnostic session ID: test001
 
 当前版本也支持“创建方正在进入或已经进入 Workshop 地图时，另一端再加入”。加入方检测到创建方处于 Workshop 加载阶段后，会主动刷新 Lobby 数据并先加载地图；Workshop 场景和原生 `SpawnJoinedPlayers` 都就绪后，Mod 使用本机主控制器自动发起一次本地玩家加入。已有本地玩家槽位或待处理请求时直接复用，不再要求玩家在加载期间提前按攻击键，也不会追加第二个请求。host 端只在晚加入 Workshop 会话中绕过会让原生 `RequestJoinGame` 提前返回的两个保护条件，并记录即时玩家槽位状态。若发现 `playersPlaying=true` 但对应 `Player` 对象已经为空，会在原生分配前清理该明确失效槽位。启用有效 Workshop 注入配置的线上会话中，每台机器同一时间只允许一个本地加入请求；开始 `SpawnJoinedPlayers` 广播前也会移除额外的本地空槽位。角色出生后，Mod 会在物理状态稳定后向其它客户端重发角色当前的权威坐标，不再把绳索上的固定出生点覆盖回已下落的角色。正常测试仍建议先加入大厅、确认占用独立位置后，再由创建方进入地图。
 
+掉线后重入测试还应确认日志出现 `Saved local Workshop controller for dropout rejoin`、`Reusing saved local Workshop controller for dropout rejoin`、`Rewrote local Workshop rejoin controller to saved binding` 或 `Switched active local Workshop player to the controller that requested join`，并确认重建后的本地 `controllerNum` 与用户实际操作的控制器一致；首次没有掉线记录的晚加入仍会优先使用上次记住的本地控制器。
+
 晚加入测试成功时，host 日志应出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方应依次出现 `Starting late workshop join load`、`Late workshop client scene loaded`、`Late workshop SpawnJoinedPlayers observed`、`Late workshop join requested a local player slot after scene readiness` 和 `Late workshop automatic join completed`，无需再次按攻击键即可创建 P2 角色。正常进入时，两端应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不再重新计算出生点。
 
 房主通过暂停确认框退出后，原房主重新加入已经发生主机迁移的 Workshop 房间时，游戏原生流程可能遗留 `ConfirmationPause` 和原暂停控制器编号。角色即使正常生成为本地角色，`Player.GetInput` 仍会把该控制器的全部输入清零。Mod 现在会在新的有效 Workshop 线上会话开始时清除这组陈旧暂停状态并隐藏遗留暂停界面；命中时日志记录 `Cleared stale pause state before Workshop online session`。该处理不改写玩家槽位或远端控制器编号。
@@ -103,12 +108,14 @@ Mod 默认关闭注入；关闭注入时只记录诊断信息。
 #### MCP 监控约束(修改此条目前需要用户确认)
 
 - 只有收到明确的“开始”指令后才启动 MCP 监控；准备阶段不调用 MCP、不测试端口，也不重复排查连通性。
+- 在每轮监控正式开始、调用 MCP 工具之前，必须先向用户发送“倒计时开始了!!!”；固定 40 秒监控结束后，必须向用户发送“倒计时结束了!!!”。
 - 用户确认游戏和 Unity Inspector Mod 已运行后，开始时只做一次基础状态读取，并记录当前诊断会话日志及读取位置，然后立即进入监控。
 - 重点关注线上房间创建、Steam Lobby、玩家加入、关卡加载和 Workshop 地图相关类与方法。先记录调用关系和关键参数，确认后的最小修改应转化为 Harmony 运行时补丁。
 - 每轮监控必须同时观测运行时状态和现有诊断事件，不能只轮询 `game_state`、`inspect_player` 或只看最终玩家数量。P2 晚出现问题至少要跟踪加入方的 `AddLocalPlayer`、`RequestHeroTypeFromMaster`、`Player.Start`、`SpawnHero`、`SetPlayerCharacter`，并用房主端的 `RequestJoinGame`、`AddPlayer` 对齐时序。
 - 双端 MCP 都可用时默认同时观测。用户要求“重点观测加入方”只改变分析重点，不表示跳过房主；只有用户明确要求不观测某一端时才可省略该端。
 - `read_log` 和 `watch_log` 只读取所配置的 UMM 日志时，不能视为已经完成事件观测；还必须通过 MCP 的只读日志访问读取当前会话的诊断 `.log`、`.trace.log`。如使用只读 `execute_code` 定位或读取 `DiagnosticLog.TraceFilePath`，表达式只能解析路径和读取文件。
 - 每轮监控固定持续 40 秒；角色消失、进入观战、场景切换或短暂连接异常都不能作为提前停止条件,结束后再统一分析结果。
+- 当本轮监控、必要的日志读取和分析完成，后续不再需要游戏客户端保持打开时，必须向用户发送“游戏可以关闭了!!!”。
 - 自己根据用户提出的问题来按需诊断需要监控什么事件, 日后开发必定围绕各种事件来开发
 
 ### 加入提示
