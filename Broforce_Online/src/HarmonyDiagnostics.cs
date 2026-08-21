@@ -143,6 +143,10 @@ namespace BroforceOnlineDiagnostics
         private static int _sequence;
         private static bool _injectedForSession;
         private static bool _workshopCompletionHandledForSession;
+        private static bool _workshopLevelNumberOverridePending;
+        private static int _workshopLevelNumberOverride;
+        private static string _workshopLevelNumberOverrideCustomLevelId;
+        private static string _workshopLevelNumberOverrideScene;
         private static bool _skipDuplicateWorkshopSceneLoad;
         private static DateTime _skipDuplicateWorkshopSceneLoadUntilUtc;
         private static bool _lateJoinPending;
@@ -190,6 +194,7 @@ namespace BroforceOnlineDiagnostics
             _harmony = new Harmony(HarmonyId);
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
+            ClearWorkshopLevelNumberOverride();
             _joinLobbyInProgress = false;
             _sessionIsHost = false;
             _networkSessionActive = false;
@@ -364,6 +369,7 @@ namespace BroforceOnlineDiagnostics
                 _harmony = null;
                 _injectedForSession = false;
                 _workshopCompletionHandledForSession = false;
+                ClearWorkshopLevelNumberOverride();
                 _joinLobbyInProgress = false;
                 _sessionIsHost = false;
                 _networkSessionActive = false;
@@ -440,6 +446,8 @@ namespace BroforceOnlineDiagnostics
                     PrepareLateWorkshopJoinSlot();
                 }
 
+                CaptureAuthoritativeWorkshopLevelNumber(__originalMethod, __args);
+                RestoreAuthoritativeWorkshopLevelNumberBeforeCompletion(__originalMethod);
                 ObserveWorkshopOnlineLobbyReturnBeforeTrace(__originalMethod, __args);
                 ObserveLifecycleBeforeTrace(__originalMethod, __instance, __args);
                 var sequence = Interlocked.Increment(ref _sequence);
@@ -466,6 +474,7 @@ namespace BroforceOnlineDiagnostics
 
         internal static void Update()
         {
+            ObserveOnlineHostRole();
             TryRebroadcastWorkshopSpawns();
             TryReturnToWorkshopOnlineLobby();
             TryRecoverWorkshopOnlineLobbyNavigationFailure();
