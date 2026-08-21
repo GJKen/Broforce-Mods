@@ -105,18 +105,13 @@ Mod 默认关闭注入；关闭注入时只记录诊断信息。
 
 默认的 `unity_inspector` MCP 端点连接当前电脑；如果为内网机器配置独立的 `unity_inspector_remote` 端点，也可以通过局域网读取另一台正在运行的 Broforce。远程客户端退出后，MCP 仍无法读取已经退出的进程状态。`read_log` 和 `watch_log` 默认查找 `Default` profile；使用 `profiles\Broforce` 等自定义 r2modman profile 时，应配置实际的 UMM `Core\Log.txt` 路径或直接收集该文件。
 
-#### MCP 监控约束(修改此条目前需要用户确认)
+#### 联机稳定性目标
 
-- 只有收到明确的“开始”指令后才启动 MCP 监控；准备阶段不调用 MCP、不测试端口，也不重复排查连通性。
-- 在每轮监控正式开始、调用 MCP 工具之前，必须先向用户发送“倒计时开始了!!!”；固定 40 秒监控结束后，必须向用户发送“倒计时结束了!!!”。
-- 用户确认游戏和 Unity Inspector Mod 已运行后，开始时只做一次基础状态读取，并记录当前诊断会话日志及读取位置，然后立即进入监控。
-- 重点关注线上房间创建、Steam Lobby、玩家加入、关卡加载和 Workshop 地图相关类与方法。先记录调用关系和关键参数，确认后的最小修改应转化为 Harmony 运行时补丁。
-- 每轮监控必须同时观测运行时状态和现有诊断事件，不能只轮询 `game_state`、`inspect_player` 或只看最终玩家数量。P2 晚出现问题至少要跟踪加入方的 `AddLocalPlayer`、`RequestHeroTypeFromMaster`、`Player.Start`、`SpawnHero`、`SetPlayerCharacter`，并用房主端的 `RequestJoinGame`、`AddPlayer` 对齐时序。
-- 双端 MCP 都可用时默认同时观测。用户要求“重点观测加入方”只改变分析重点，不表示跳过房主；只有用户明确要求不观测某一端时才可省略该端。
-- `read_log` 和 `watch_log` 只读取所配置的 UMM 日志时，不能视为已经完成事件观测；还必须通过 MCP 的只读日志访问读取当前会话的诊断 `.log`、`.trace.log`。如使用只读 `execute_code` 定位或读取 `DiagnosticLog.TraceFilePath`，表达式只能解析路径和读取文件。
-- 每轮监控固定持续 40 秒；角色消失、进入观战、场景切换或短暂连接异常都不能作为提前停止条件,结束后再统一分析结果。
-- 当本轮监控、必要的日志读取和分析完成，后续不再需要游戏客户端保持打开时，必须向用户发送“游戏可以关闭了!!!”。
-- 自己根据用户提出的问题来按需诊断需要监控什么事件, 日后开发必定围绕各种事件来开发
+双方进入地图、切关或重启后的角色生成、场景一致性、死亡重启和 AFK 处理，统一以 [开发与测试文档](docs/DEVELOPMENT.md#联机稳定性目标与自主调试约定) 中的四项功能目标、已知现象和自主调试规则为准。该文档是联机问题的详细测试和修复规范，README 不重复展开。
+
+#### MCP 详细规则
+
+双端端点、40 秒监控窗口、日志采集、运行时调试授权、用户执行退出/重加入以及客户端崩溃后的恢复流程，统一以 [开发与测试文档](docs/DEVELOPMENT.md#联机稳定性目标与自主调试约定) 中的 MCP 监控约束和快速路径为准。
 
 ### 加入提示
 
@@ -130,8 +125,8 @@ Workshop 线上会话中的“按开枪键加入游戏”横幅已在房主和�
 
 ```text
 <项目根目录>\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
-<本机 UMM>\Mods\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
-\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
+<本机 UMM>\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
+\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
 ```
 
 日常构建和部署以 `BuildAndDeploy.ps1` 为准。工程的构建后目标也指向项目安装包和两处部署目录，但只有在本机 MSBuild 正确读取 `LocalBroforcePath.props` 时才可使用；不要用未验证的 IDE/MSBuild 构建代替脚本。内网路径不可访问或 DLL 被锁定时，构建部署应视为失败，不要继续进行双端测试。

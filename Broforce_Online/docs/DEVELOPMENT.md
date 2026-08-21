@@ -23,32 +23,69 @@
 - 已验证 `Esc` 返回路径会先进入 `VictoryCustomCampaignSteam`，再离开 Steam Lobby 并加载 `MainMenu`；当前实现会在启用 Workshop 注入的线上会话中，于 `MainMenu` 加载后调用官方 `MainMenu.TryToGoToLobby`，直接打开在线房间查看界面。
 - 已验证从在线房间大厅返回主菜单时，Logo 入场动画完成前不会显示菜单文字或高亮框；普通主菜单流程和本地地图返回流程不受影响。
 
+## 双端测试
+
+本节统一记录双端联机的验收目标、MCP 调试规则、官方进房流程、UMM 配置、多轮测试和晚加入验证方式。测试结论必须结合双方运行时状态和双方日志，不得只凭单端画面判断。
+
+### 联机稳定性目标与自主调试约定
+
+本 Mod 的核心目标是让双方通过官方 Steam 大厅稳定游玩同一张第三方 Workshop 地图。后续实现、监控和验收按以下功能目标进行：
+
+1. 进入地图后，双方都能生成角色并正常移动、跳跃、攻击和执行其它角色操作。
+2. 正常过关、跳关或重启关卡后，双方必须进入同一场景，并再次满足第 1 项。
+3. 双方角色全部死亡后，应在数秒内触发任务失败并重启关卡；重启后必须恢复有效生命、角色和一致场景，并再次满足第 1、2 项。
+4. 联机过程中至少保留一方处于非 AFK 状态并拥有可用角色。若双方都进入 AFK、角色均被移除或场上已无可用玩家，应触发任务失败和关卡重启，并验证重启后能够恢复而不是进入循环。
+
+已知或需要继续确认的联机现象：
+
+- 玩家长时间没有输入时，游戏可能将其移入 AFK/观战状态并移除角色；部分情况下个别角色不会触发该流程，原因尚未确认。
+- 双方同时进入 AFK 后，可能出现持续无人并反复重启的情况；在确认原生预期前，将其作为疑似 Bug 记录和观测。
+- 双方角色全部死亡后数秒内没有触发任务失败和关卡重启，明确视为 Bug。
+- 双方死亡后虽然重启关卡，但没有恢复生命或角色，继而反复被判断死亡、任务失败并重启关卡，明确视为 Bug。
+
+针对上述目标，AI 已获得持续的双端日志读取、MCP 监控和运行时调试授权，无需在每次操作前再次征求用户同意。授权范围包括传送角色、修改血量或生命、调整游戏速度、切换或重启关卡、模拟输入、执行安全的运行时代码，以及注入用于验证根因的临时修复。AI 应根据当前症状自行选择诊断和调试操作，记录操作前后状态及具体指令，并明确区分临时运行时修改和已经写入源码的正式修复。该授权不包括删除存档、清理用户文件或修改与本 Mod 调试无关的系统状态。
+
+可以通过退出房间、重新进入房间和重复加载地图来验证场景、玩家槽位及角色恢复是否正确。需要实际操作游戏界面时由用户执行退出和加入，AI 在等待期间保持当前调试会话并持续监控，不结束本轮排查；必要时可先临时注入修复，再让用户重复同一流程验证。如果任一游戏客户端崩溃或 MCP 连接消失，AI 应立即停止对该客户端继续发送运行时指令，告知用户重新启动并给出需要重复的复现步骤；客户端恢复后继续同一轮监控，同时检查诊断日志、UMM `Core\Log.txt` 和游戏 `error.log`。
+
 ### MCP 状态调试
 
 `Broforce_src/unity-inspector-mcp` 可以通过 Unity Inspector Mod 的 TCP 服务读取当前客户端状态。开始采样前确认 MCP 的 `ping` 成功，然后使用 `game_state` 和 `inspect_player` 记录关卡、玩家槽位、`playerNum`、角色对象、生命和位置。每个联机事件完成后立即采样一次，建议至少记录：进入地图、房主退出后的主机迁移、加入方重新加入、加入方按攻击键后。
 
 默认的 MCP 端点连接当前运行它的客户端；为内网机器配置独立的远程端点后，也可以读取另一台仍在运行的 Broforce。远程房主进程退出后仍无法继续读取其状态，因此主机退出后的记录只能说明剩余客户端看到的状态，双端结论仍需要两台机器各自的诊断日志、UMM `Core\Log.txt` 和 `error.log`。
 
-#### MCP 监控约束(修改此条目前需要用户确认)
+#### MCP 监控约束
 
-- 只有收到明确的“开始”指令后才启动 MCP 监控；环境准备阶段不调用 MCP、不测试端口，也不重复排查已确认的连通性。
-- 在每轮监控正式开始、调用 MCP 工具之前，必须先向用户发送“倒计时开始了!!!”；固定 40 秒监控结束后，必须向用户发送“倒计时结束了!!!”。
-- 用户确认游戏和 Unity Inspector Mod 已运行后，开始时只读取一次基础状态，并记录当前诊断会话日志及读取位置，然后立即进入监控。
+- 上述联机稳定性目标处于测试或修复阶段时，视为已经持续授权双端 MCP 读取和运行时调试，不要求用户额外发送固定口令“开始”，也不要求逐项确认。授权持续到目标完成、用户要求停止或客户端不可用；客户端重新启动并恢复连接后可以继续同一轮排查。
+- 快速检查与正式监控必须区分：连通性检查、单次状态读取、截图和指定日志读取属于快速检查，应直接调用已配置端点并立即返回结果，不发送倒计时提示、不等待 40 秒，也不扩展成完整事件监控。
+- 快速检查优先直接调用双端 MCP 的 `ping`；不要先扫描配置文件、枚举工具或额外测试 TCP 端口。只有 MCP 工具未加载或 `ping` 返回连接错误时，才简短报告原因；除非用户要求继续排查，否则不追加配置和端口诊断。
+- 只有需要复现并持续观察联机事件时才进入正式监控。正式监控开始前发送“倒计时开始了!!!”，固定观察 40 秒，结束后发送“倒计时结束了!!!”。
+- 用户确认游戏和 Unity Inspector Mod 已运行后，正式监控开始时只读取一次基础状态，并记录当前诊断会话日志及读取位置，然后立即进入监控。
+- 正式监控的 40 秒内只持续采样和收集数据，不中途停下来分析、总结、判断根因、询问用户、修改代码或发送进度汇报；所有分析和后续操作统一放在“倒计时结束了!!!”之后。
 - 重点关注线上房间创建、Steam Lobby、玩家加入、关卡加载和 Workshop 地图相关类与方法。先记录调用关系和关键参数，确认后的最小修改应转化为 Harmony 运行时补丁。
 - 每轮监控必须同时观测运行时状态和现有诊断事件，不能只轮询 `game_state`、`inspect_player` 或只看最终玩家数量。至少要跟踪加入方的 `AddLocalPlayer`、`RequestHeroTypeFromMaster`、`Player.Start`、`SpawnHero`、`SetPlayerCharacter`，并用房主端的 `RequestJoinGame`、`AddPlayer` 对齐时序。
 - 双端 MCP 都可用时默认同时观测, 只有用户明确要求不观测某一端时才可省略该端。
 - `read_log` 和 `watch_log` 只读取所配置的 UMM 日志时，不能视为已经完成事件观测；还必须通过 MCP 的只读日志访问读取当前会话的诊断 `.log`、`.trace.log`。如使用只读 `execute_code` 定位或读取 `DiagnosticLog.TraceFilePath`，表达式只能解析路径和读取文件。
-- 每轮监控固定持续 40 秒；角色消失、进入观战、场景切换或短暂连接异常都不能作为提前停止条件,结束后再统一分析结果。
-- 当本轮监控、必要的日志读取和分析完成，后续不再需要游戏客户端保持打开时，必须向用户发送“游戏可以关闭了!!!”。
+- 每轮正式监控固定持续 40 秒；角色消失、进入观战、场景切换或短暂连接异常都不能作为提前停止条件，结束后再统一分析结果。快速检查不受此时长约束。
+- 持续调试可以由多个 40 秒纯观测窗口组成；窗口之间允许分析日志、执行已授权的运行时调试或临时修复，然后继续下一窗口，无需重新取得授权。等待用户执行退出房间、重新加入或其它复现步骤时不得结束当前排查。
+- 当正式监控、必要的日志读取和分析完成，后续不再需要游戏客户端保持打开时，必须向用户发送“游戏可以关闭了!!!”。快速检查不强制发送该提示。
 - 自己根据用户提出的问题来按需诊断需要监控什么事件, 日后开发必定围绕各种事件来开发
+
+#### MCP 快速路径
+
+为减少准备时间，AI 按以下固定路径使用 MCP：
+
+- 端点固定为：`unity_inspector` = 本机 Broforce，`unity_inspector_remote` = 内网测试端。用户说“双端”时，默认同时并行调用两个端点。
+- 连通性检查直接并行调用两端 `ping`；不要先读取配置、枚举工具或测试 TCP 端口。工具未加载或 `ping` 报错时，立即报告实际错误。
+- 常用请求直接映射：查看总体状态用 `game_state`，查看玩家用 `inspect_player`，截图用 `take_screenshot`，查看场景对象用 `query_gameobjects`/`inspect_gameobject`，读取诊断日志用 `read_log` 或 MCP 只读日志访问。
+- 正式监控开始时的固定顺序是：双端 `ping` → 双端 `game_state` → 双端 `inspect_player` → 记录当前会话日志位置 → 按问题相关事件持续采样 40 秒。
+- 联机稳定性目标范围内的只读请求和运行时修改均已获得持续授权。AI 可以自行决定执行传送、改血或生命、改速度、切关或重启、模拟输入和安全的临时代码注入，无需逐项确认，但必须记录操作、目标、前后状态和验证结果。
+- MCP 工具不可用时，不要用文档中的工具名反复尝试，也不要自行改用端口探测代替 MCP 结果；直接说明“当前会话未加载该 MCP 工具”或引用实际错误。
 
 ### 加入提示拦截
 
 后续双端验证已确认：启用 Workshop 注入的线上会话中，房主和加入方都不再显示“按开枪键加入游戏”横幅，攻击键加入功能保持可用。
 
 源码确认该横幅来自 `HeroController.Update` 对 `LevelTitle.ShowText` 的调用，使用本地化键 `LOC_HUD_PRESSTOJOIN`。当前 Mod 在 `LevelTitle.ShowText` 前置阶段只拦截这条精确文本，并在命中时立即隐藏已经激活的 `LevelTitle` 对象。它不修改 `AddLocalPlayer`、`RequestJoinGame`、Lobby 状态或地图加载；普通大厅和离线模式也不启用此处理。普通诊断日志命中时会记录 `Suppressed the in-game Press To Join banner for the Workshop client.`，其中 `client` 为历史日志名称，实际覆盖线上会话双方。
-
-## 双端测试
 
 ### 官方流程
 
@@ -256,8 +293,8 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 
 ```text
 <项目根目录>\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
-<本机 UMM_PROFILE_DIR>\Mods\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
-\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
+<本机 UMM_PROFILE_DIR>\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
+\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
 ```
 
 项目安装包还必须包含：
@@ -280,7 +317,7 @@ BroforceOnlineDiagnostics\
   Info.json
 ```
 
-复制到 UMM 时，目录名必须是 `BroforceOnlineDiagnostics`，程序集文件名必须是 `BroforceOnlineDiagnostics.dll`，不能给目录名添加 `.dll`。项目源清单名为 `modinfo.json`，部署到 UMM 目录时使用 `Info.json`。
+复制到 UMM 时，目录名必须是 `GJKen-BroforceOnlineDiagnostics`，程序集文件名必须是 `BroforceOnlineDiagnostics.dll`，不能给目录名添加 `.dll`。项目源清单名为 `modinfo.json`，部署到 UMM 目录时使用 `Info.json`。
 
 构建脚本不会自动更新 r2modman 缓存包。其它玩家使用时，按 README 将项目内的安装包复制到自己的 profile 的 `UMM\Mods` 目录，并让 r2modman 重新读取 Mod。
 

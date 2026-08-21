@@ -212,7 +212,134 @@ namespace BroforceOnlineDiagnostics
             }
 
             _networkSessionActive = false;
+            _sessionIsHost = false;
             DiagnosticLog.EndSession("SteamLayer.LeaveMatch");
+        }
+
+        private static void ObserveOnlineHostRole()
+        {
+            if (!_networkSessionActive)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!IsOnline())
+                {
+                    return;
+                }
+
+                var onlineHost = IsOnlineHost();
+                if (onlineHost == _sessionIsHost)
+                {
+                    return;
+                }
+
+                var previousRole = _sessionIsHost ? "host" : "client";
+                _sessionIsHost = onlineHost;
+                DiagnosticLog.Info(
+                    "Online session role changed from " + previousRole + " to " +
+                    (onlineHost ? "host" : "client") + ".");
+
+                if (onlineHost)
+                {
+                    HandleWorkshopHostPromotion();
+                }
+                else
+                {
+                    ClearLateJoinState();
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Online host-role observation failed: " + exception);
+            }
+        }
+
+        private static void HandleWorkshopHostPromotion()
+        {
+            ClearLateJoinState();
+            _joinLobbyInProgress = false;
+            _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+
+            if (!IsWorkshopOnlineSession())
+            {
+                DiagnosticLog.Info(
+                    "Host promotion did not require Workshop state publication for the current session.");
+                return;
+            }
+
+            var activeScene = SceneManager.GetActiveScene().name ?? string.Empty;
+            var configuredScene = GetConfiguredWorkshopSceneName();
+            var workshopSceneLoaded = !string.IsNullOrEmpty(configuredScene) &&
+                string.Equals(activeScene, configuredScene, StringComparison.OrdinalIgnoreCase);
+            var levelNumber = 0;
+            var campaignName = string.Empty;
+
+            try
+            {
+                var settings = Plugin.Settings;
+                var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+                if (state != null)
+                {
+                    levelNumber = GetIntFieldOrProperty(state, "levelNumber");
+                    campaignName = GetStringFieldOrProperty(state, "campaignName").Trim();
+
+                    if (settings != null)
+                    {
+                        var workshopId = (settings.WorkshopId ?? string.Empty).Trim();
+                        if (!string.IsNullOrEmpty(workshopId))
+                        {
+                            SetFieldOrProperty(state, "customLevelID", workshopId);
+                        }
+
+                        var configuredCampaign =
+                            (settings.WorkshopCampaignName ?? string.Empty).Trim();
+                        if (!string.IsNullOrEmpty(configuredCampaign))
+                        {
+                            campaignName = configuredCampaign;
+                            SetFieldOrProperty(state, "campaignName", configuredCampaign);
+                        }
+                    }
+
+                    SetFieldOrProperty(state, "loadCustomCampaign", true);
+                    if (workshopSceneLoaded)
+                    {
+                        SetFieldOrProperty(state, "sceneToLoad", activeScene);
+                    }
+                }
+
+                var room = GetCurrentRoom();
+                if (room == null)
+                {
+                    DiagnosticLog.Warning(
+                        "Workshop host promotion could not publish RoomInfo because the current room is null.");
+                }
+                else
+                {
+                    room.PushUpdatedInfo(true, false);
+                    DiagnosticLog.Info(
+                        "Workshop host promotion published full RoomInfo: scene=" +
+                        room.CurrentSceneName + "; levelNumber=" + room.levelNumber +
+                        "; campaign=" + (room.campaignName ?? string.Empty) + ".");
+                }
+
+                SetWorkshopLobbyPhase(
+                    workshopSceneLoaded ? WorkshopLobbyPhaseReady : WorkshopLobbyPhaseLoading,
+                    "host migration");
+                SetWorkshopLobbyReady(workshopSceneLoaded, "host migration");
+                DiagnosticLog.Info(
+                    "Workshop host promotion synchronized authoritative state: activeScene=" +
+                    activeScene + "; configuredScene=" + configuredScene +
+                    "; levelNumber=" + levelNumber + "; campaign=" + campaignName +
+                    "; ready=" + workshopSceneLoaded + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop state publication after host promotion failed: " + exception);
+            }
         }
 
         private static void JoinedLobbyPostfix(object[] __args)
@@ -377,7 +504,20 @@ namespace BroforceOnlineDiagnostics
                 if (state != null)
                 {
                     SetFieldOrProperty(state, "loadCustomCampaign", true);
-                    SetFieldOrProperty(state, "levelNumber", 0);
+
+                    // Re-entry can receive the host's authoritative levelNumber
+                    // before the Workshop campaign download completes.  Keep
+                    // that value through the completion callback; resetting to
+                    // zero selects MapData[0] when every campaign level shares
+                    // the same Unity scene name (for example Test Evan2).
+                    var completionLevelNumber = _workshopLevelNumberOverridePending
+                        ? _workshopLevelNumberOverride
+                        : (_lateJoinStarted ? _lateJoinLevelNumber : 0);
+                    SetFieldOrProperty(state, "levelNumber", completionLevelNumber);
+                    DiagnosticLog.Info(
+                        "Workshop level-load completion preserved levelNumber=" +
+                        completionLevelNumber + "; authoritativeOverride=" +
+                        _workshopLevelNumberOverridePending + "; lateJoin=" + _lateJoinStarted + ".");
                 }
 
                 DiagnosticLog.Info("Workshop level-load completed; resuming GameState.LoadLevel.");
@@ -399,6 +539,7 @@ namespace BroforceOnlineDiagnostics
                 _skipDuplicateWorkshopSceneLoadUntilUtc =
                     DateTime.UtcNow.AddSeconds(DuplicateWorkshopLoadSuppressionSeconds);
                 loadLevel.Invoke(null, new object[] { string.Empty });
+                ClearWorkshopLevelNumberOverride();
             }
             catch (Exception exception)
             {
@@ -445,6 +586,114 @@ namespace BroforceOnlineDiagnostics
         {
             _skipDuplicateWorkshopSceneLoad = false;
             _skipDuplicateWorkshopSceneLoadUntilUtc = DateTime.MinValue;
+        }
+
+        private static void ClearWorkshopLevelNumberOverride()
+        {
+            _workshopLevelNumberOverridePending = false;
+            _workshopLevelNumberOverride = 0;
+            _workshopLevelNumberOverrideCustomLevelId = string.Empty;
+            _workshopLevelNumberOverrideScene = string.Empty;
+        }
+
+        private static void CaptureAuthoritativeWorkshopLevelNumber(
+            MethodBase method,
+            object[] arguments)
+        {
+            if (method == null || method.DeclaringType == null ||
+                method.DeclaringType.Name != "GameModeController" ||
+                (method.Name != "LoadNextScene" && method.Name != "LoadSceneCore") ||
+                !IsOnline() || !HasValidWorkshopInjectionConfiguration() ||
+                arguments == null)
+            {
+                return;
+            }
+
+            object state = null;
+            foreach (var argument in arguments)
+            {
+                if (argument != null && argument.GetType().Name == "GameState")
+                {
+                    state = argument;
+                    break;
+                }
+            }
+
+            if (state == null || !GetBoolFieldOrProperty(state, "loadCustomCampaign"))
+            {
+                return;
+            }
+
+            var settings = Plugin.Settings;
+            var configuredWorkshopId = settings == null
+                ? string.Empty
+                : (settings.WorkshopId ?? string.Empty).Trim();
+            var customLevelId = GetStringFieldOrProperty(state, "customLevelID").Trim();
+            if (!string.Equals(customLevelId, configuredWorkshopId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var configuredScene = GetConfiguredWorkshopSceneName();
+            var scene = GetStringFieldOrProperty(state, "_sceneToLoad").Trim();
+            if (string.IsNullOrEmpty(scene))
+            {
+                scene = GetStringFieldOrProperty(state, "sceneToLoad").Trim();
+            }
+            if (!string.IsNullOrEmpty(configuredScene) &&
+                !string.Equals(scene, configuredScene, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var levelNumber = GetIntFieldOrProperty(state, "levelNumber");
+            if (levelNumber < 0)
+            {
+                return;
+            }
+
+            _workshopLevelNumberOverridePending = true;
+            _workshopLevelNumberOverride = levelNumber;
+            _workshopLevelNumberOverrideCustomLevelId = customLevelId;
+            _workshopLevelNumberOverrideScene = scene;
+            DiagnosticLog.Info(
+                "Captured authoritative Workshop levelNumber=" + levelNumber +
+                " from GameModeController." + method.Name +
+                "; customLevelID=" + customLevelId + "; scene=" + scene + ".");
+        }
+
+        private static void RestoreAuthoritativeWorkshopLevelNumberBeforeCompletion(MethodBase method)
+        {
+            if (method == null || method.DeclaringType == null ||
+                method.DeclaringType.Name != "SteamController" ||
+                method.Name != "OnLevelLoadComplete" ||
+                !_workshopLevelNumberOverridePending)
+            {
+                return;
+            }
+
+            try
+            {
+                var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+                if (state == null)
+                {
+                    DiagnosticLog.Warning(
+                        "Could not restore authoritative Workshop levelNumber: GameState.Instance is null.");
+                    return;
+                }
+
+                SetFieldOrProperty(state, "levelNumber", _workshopLevelNumberOverride);
+                DiagnosticLog.Info(
+                    "Restored Workshop levelNumber=" + _workshopLevelNumberOverride +
+                    " before SteamController.OnLevelLoadComplete; customLevelID=" +
+                    _workshopLevelNumberOverrideCustomLevelId + "; scene=" +
+                    _workshopLevelNumberOverrideScene + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Restoring authoritative Workshop levelNumber failed: " + exception);
+            }
         }
 
         private static void ApplyWorkshopState()
@@ -573,6 +822,7 @@ namespace BroforceOnlineDiagnostics
             _workshopSpawnRebroadcastPending = false;
             _workshopSpawnRebroadcastUseCurrentPositions = false;
             ClearDuplicateWorkshopLoadSuppression();
+            ClearWorkshopLevelNumberOverride();
             ClearWorkshopLocalJoinRequests();
             ClearLateJoinState();
             ClearLifecycleState();

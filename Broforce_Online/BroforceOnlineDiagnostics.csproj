@@ -6,8 +6,8 @@
     <AssemblyName>BroforceOnlineDiagnostics</AssemblyName>
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\BroforceOnlineDiagnostics</LocalBroforceModPath>
-    <NetworkBroforceModPath>\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\BroforceOnlineDiagnostics</NetworkBroforceModPath>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceOnlineDiagnostics</LocalBroforceModPath>
+    <NetworkBroforceModPath>\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics</NetworkBroforceModPath>
     <PackageModPath>$(MSBuildProjectDirectory)\BroforceOnlineDiagnostics</PackageModPath>
     <OutputPath>$(PackageModPath)\</OutputPath>
   </PropertyGroup>

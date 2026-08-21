@@ -96,8 +96,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "C# compilation failed with exit code $LASTEXITCODE."
 }
 
-$localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\BroforceOnlineDiagnostics'
-$networkModPath = '\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\BroforceOnlineDiagnostics'
+$localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-BroforceOnlineDiagnostics'
+$networkModPath = '\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics'
 Write-Host "Updated copyable package $outputPath"
 
 $deploymentPaths = @($localModPath, $networkModPath)
