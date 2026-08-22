@@ -1,32 +1,34 @@
 # Unity Inspector MCP Server
 
-An MCP (Model Context Protocol) server that allows Claude to inspect and interact with Unity games running the Unity Inspector Mod.
+> [中文](README.md) | [English](README.en.md)
 
-## Prerequisites
+一个 MCP（模型上下文协议）服务器，允许 AI 客户端检查并与运行 Unity Inspector Mod 的 Unity 游戏进行交互。
 
-1. Unity Inspector Mod installed and running in your Unity game (Broforce)
-2. Node.js 18+ installed
-3. The Unity game must be running with the TCP server started (port 9999)
+## 前置条件
 
-## Installation
+1. Unity Inspector Mod 已安装并在你的 Unity 游戏（Broforce）中运行
+2. Node.js 18+ 已安装
+3. Unity 游戏必须正在运行，且 TCP 服务器已启动（端口 9999）
+
+## 安装
 
 ```bash
 npm install
 ```
 
-## Usage
+## 使用方法
 
-### Testing the connection
+### 测试连接
 
-First, make sure the Unity Inspector Mod's TCP server is running in Broforce. The default port is `9999`.
+首先，确保 Unity Inspector Mod 的 TCP 服务器正在 Broforce 中运行。默认端口为 `9999`。
 
-On Windows, test the TCP port with PowerShell:
+在 Windows 上，使用 PowerShell 测试 TCP 端口：
 
 ```powershell
 Test-NetConnection 127.0.0.1 -Port 9999
 ```
 
-The repository does not include a `test_tcp.py` script. For a manual MCP server start, use:
+本仓库不包含 `test_tcp.py` 脚本。手动启动 MCP 服务器：
 
 ```powershell
 Set-Location 'D:\Study\C#\Broforce-Mods\Broforce_src\unity-inspector-mcp'
@@ -34,11 +36,11 @@ npm install
 npm start
 ```
 
-When Codex or another MCP client is configured with this server, do not start a second copy manually; the client starts the stdio server itself.
+当 Codex 或其他 MCP 客户端已配置此服务器时，请勿手动启动第二个副本；客户端会自动启动 stdio 服务器。
 
-### Remote Windows client
+### 远程 Windows 客户端
 
-The MCP target can be changed with environment variables. This is useful when the Broforce process runs on another trusted LAN machine:
+可通过环境变量更改 MCP 目标。当 Broforce 进程运行在另一台受信任的局域网机器上时很有用：
 
 ```text
 UNITY_INSPECTOR_HOST=192.168.1.181
@@ -46,15 +48,15 @@ UNITY_INSPECTOR_PORT=9999
 UNITY_INSPECTOR_UMM_LOG_PATH=\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Core\Log.txt
 ```
 
-The Unity Inspector Mod must be enabled on the remote machine and its TCP server must listen on the LAN interface. The service has no authentication, so allow TCP 9999 only from the monitoring machine and do not expose it outside the trusted LAN.
+远程机器上必须启用 Unity Inspector Mod，且其 TCP 服务器必须监听局域网接口。该服务没有身份验证，因此仅允许监控机器访问 TCP 9999，不要暴露在受信任的局域网之外。
 
-### Adding to Claude Desktop
+### 添加到 Claude Desktop
 
-Add this to your Claude Desktop configuration file:
+将此配置添加到你的 Claude Desktop 配置文件中：
 
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Linux:** `~/.config/claude/claude_desktop_config.json`
+**Windows：** `%APPDATA%\Claude\claude_desktop_config.json`
+**macOS：** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Linux：** `~/.config/claude/claude_desktop_config.json`
 
 ```json
 {
@@ -68,9 +70,9 @@ Add this to your Claude Desktop configuration file:
 }
 ```
 
-Replace `/path/to/unity-inspector-mcp` with the actual path to this directory.
+将 `/path/to/unity-inspector-mcp` 替换为实际目录路径。
 
-For WSL users, use the Windows path format:
+WSL 用户使用 Windows 路径格式：
 ```json
 {
   "mcpServers": {
@@ -86,9 +88,9 @@ For WSL users, use the Windows path format:
 }
 ```
 
-### Codex configuration
+### Codex 配置
 
-For Codex, add a stdio server entry to `C:\Users\<YourName>\.codex\config.toml` and restart Codex or open a new conversation:
+对于 Codex，在 `C:\Users\<你的用户名>\.codex\config.toml` 中添加 stdio 服务器条目，然后重启 Codex 或打开新对话：
 
 ```toml
 [mcp_servers.unity_inspector]
@@ -99,93 +101,93 @@ startup_timeout_sec = 120
 type = "stdio"
 ```
 
-Then ask the client to use `unity_inspector`, starting with `ping` and `game_state`.
+然后让客户端使用 `unity_inspector`，从 `ping` 和 `game_state` 开始。
 
-For a second remote target, duplicate the entry with a different server name and add the three environment variables above. The tools will then be exposed under the corresponding MCP server name, for example `unity_inspector_remote`.
+对于第二个远程目标，复制条目并修改服务器名称，添加上述三个环境变量。工具将暴露在对应的 MCP 服务器名称下，例如 `unity_inspector_remote`。
 
-## Available Tools
+## 可用工具
 
-### Inspection Tools
-- `ping` - Test connection to Unity Inspector
-- `game_state` - Read scene, level, mode, time scale, and player summary
-- `wait_for_game` - Wait for the TCP server to become responsive
-- `list_gameobjects` - List all GameObjects in the scene
-- `inspect_gameobject` - Inspect a specific GameObject by path
-- `query_gameobjects` - Search for GameObjects by name or component
-- `inspect_player` - Get detailed information about the player(s)
-- `list_enemies` - List all enemies in the scene
-- `inspect_component` - Inspect a specific component on a GameObject
+### 检查工具
+- `ping` - 测试与 Unity Inspector 的连接
+- `game_state` - 读取场景、关卡、模式、时间缩放和玩家摘要
+- `wait_for_game` - 等待 TCP 服务器响应
+- `list_gameobjects` - 列出场景中的所有游戏对象
+- `inspect_gameobject` - 按路径检查特定游戏对象
+- `query_gameobjects` - 按名称或组件搜索游戏对象
+- `inspect_player` - 获取玩家的详细信息
+- `list_enemies` - 列出场景中的所有敌人
+- `inspect_component` - 检查游戏对象上的特定组件
 
-### Modification Tools
-- `modify_component` - Modify properties of a component
-- `teleport_player` - Teleport the player to specific coordinates
-- `set_player_health` - Set the player's health
-- `set_game_speed` - Set the game speed (time scale)
+### 修改工具
+- `modify_component` - 修改组件的属性
+- `teleport_player` - 将玩家传送到指定坐标
+- `set_player_health` - 设置玩家的生命值
+- `set_game_speed` - 设置游戏速度（时间缩放）
 
-### Level Control
-- `list_campaigns` - List all available campaigns
-- `go_to_level` - Go directly to a specific campaign level
+### 关卡控制
+- `list_campaigns` - 列出所有可用的战役
+- `go_to_level` - 直接跳转到特定战役关卡
 
-### Interaction Tools
-- `simulate_input` - Simulate keyboard/controller input
-- `execute_code` - Execute C# expressions in the Unity context
-- `take_screenshot` - Take a screenshot of the game
+### 交互工具
+- `simulate_input` - 模拟键盘/控制器输入
+- `execute_code` - 在 Unity 上下文中执行 C# 表达式
+- `take_screenshot` - 截取游戏截图
 
-### Test Automation
-- `list_test_scripts` - List all available test scripts
-- `run_test_script` - Execute a test script with a sequence of commands
-- `list_scripts` - List the C# runtime script library
-- `compile_script` - Compile a C# runtime script without executing it
-- `execute_script` - Execute a C# runtime script
-- `unload_script` - Unload an active runtime script
-- `read_log` - Read the configured UMM log file
-- `watch_log` - Read new log entries since the previous call
+### 测试自动化
+- `list_test_scripts` - 列出所有可用的测试脚本
+- `run_test_script` - 执行包含一系列命令的测试脚本
+- `list_scripts` - 列出 C# 运行时脚本库
+- `compile_script` - 编译 C# 运行时脚本（不执行）
+- `execute_script` - 执行 C# 运行时脚本
+- `unload_script` - 卸载活动的运行时脚本
+- `read_log` - 读取配置的 UMM 日志文件
+- `watch_log` - 读取自上次调用以来的新日志条目
 
-## Architecture
+## 架构
 
 ```
-[Claude Desktop] <--MCP--> [MCP Server (Node.js)] <--TCP--> [Unity Inspector Mod] <--> [Unity Game]
+[AI 客户端] <--MCP--> [MCP 服务器 (Node.js)] <--TCP--> [Unity Inspector Mod] <--> [Unity 游戏]
 ```
 
-The MCP server acts as a bridge between Claude and the Unity game, translating MCP tool calls into TCP commands that the Unity Inspector Mod can understand.
+MCP 服务器充当 AI 客户端与 Unity 游戏之间的桥梁，将 MCP 工具调用转换为 Unity Inspector Mod 能理解的 TCP 命令。
 
-## Troubleshooting
+## 故障排除
 
-### Connection Issues
+### 连接问题
 
-If running in WSL and can't connect:
-- The server automatically detects WSL and uses the Windows host IP
-- You can manually test with: `ip route show default` to get the Windows IP
+如果在 WSL 中运行且无法连接：
+- 服务器会自动检测 WSL 并使用 Windows 主机 IP
+- 可以手动测试：`ip route show default` 获取 Windows IP
 
-### Server not responding
+### 服务器无响应
 
-1. Check the Unity game is running
-2. Check Unity Inspector Mod is loaded
-3. Click "Start Server" in the mod's UI if not running
-4. Default port is 9999
+1. 检查 Unity 游戏是否正在运行
+2. 检查 Unity Inspector Mod 是否已加载
+3. 如果未运行，在 Mod 的 UI 中点击"Start Server"
+4. 默认端口为 9999
 
-The MCP server currently searches the default r2modman profile paths for `read_log` and `watch_log`. If you use a custom profile such as `profiles\Broforce`, verify the actual UMM log directly at:
+MCP 服务器目前搜索默认的 r2modman 配置文件路径以使用 `read_log` 和 `watch_log`。如果你使用自定义配置文件，例如 `profiles\Broforce`，请直接在以下位置验证实际的 UMM 日志：
 
 ```text
-<r2modman profile>\UMM\Core\Log.txt
+<r2modman 配置文件>\UMM\Core\Log.txt
 ```
 
-The Unity Inspector Mod also writes its own errors to that UMM log. MCP connection messages are written to the MCP process standard error stream and are normally shown by the MCP client rather than saved as a separate game log.
+Unity Inspector Mod 也会将其错误写入该 UMM 日志。MCP 连接消息写入 MCP 进程的标准错误流，通常由 MCP 客户端显示，而不是保存为单独的游戏日志。
 
-By default, MCP connects to the Broforce process on the same machine. A second MCP server instance can target a trusted LAN client with `UNITY_INSPECTOR_HOST`, `UNITY_INSPECTOR_PORT`, and `UNITY_INSPECTOR_UMM_LOG_PATH`. After a remote host exits, MCP cannot inspect that exited client's state.
+默认情况下，MCP 连接同一台机器上的 Broforce 进程。第二个 MCP 服务器实例可以通过 `UNITY_INSPECTOR_HOST`、`UNITY_INSPECTOR_PORT` 和 `UNITY_INSPECTOR_UMM_LOG_PATH` 定位受信任的局域网客户端。远程主机退出后，MCP 无法检查该已退出客户端的游戏状态。
 
-## Test Scripts
+## 测试脚本
 
-Test scripts allow you to automate sequences of commands for repeatable debugging and testing. This is useful when you need to test the same scenario repeatedly after making code changes.
+测试脚本允许你自动化一系列命令，用于可重复的调试和测试。当你需要在代码更改后重复测试同一场景时，这非常有用。
 
-### Creating Test Scripts
+### 创建测试脚本
 
-Test scripts are JSON files stored in the `scripts/` directory:
+测试脚本是存储在 `scripts/` 目录中的 JSON 文件：
 
 ```json
 {
-  "name": "My Test Script",
-  "description": "Description of what this tests",
+  "name": "我的测试脚本",
+  "description": "描述此脚本测试的内容",
   "steps": [
     {
       "command": "go_to_level",
@@ -210,35 +212,37 @@ Test scripts are JSON files stored in the `scripts/` directory:
 }
 ```
 
-### Script Format
+### 脚本格式
 
-- **name**: Human-readable name for the script
-- **description**: What the script tests or demonstrates
-- **steps**: Array of commands to execute in sequence
-  - **command**: Any available MCP tool name
-  - **params**: Parameters for the command (optional)
-  - **wait**: Milliseconds to wait after command completes (optional)
+- **name**：脚本的人类可读名称
+- **description**：脚本测试或演示的内容
+- **steps**：按顺序执行的命令数组
+  - **command**：任何可用的 MCP 工具名称
+  - **params**：命令的参数（可选）
+  - **wait**：命令完成后等待的毫秒数（可选）
 
-### Using Test Scripts
+### 使用测试脚本
 
-1. **List available scripts:**
+1. **列出可用脚本：**
    ```
-   Use the list_test_scripts tool
-   ```
-
-2. **Run a script:**
-   ```
-   Use run_test_script with script name (e.g., "movement-test")
-   or absolute path to a script file
+   使用 list_test_scripts 工具
    ```
 
-3. **View example scripts:**
-   Check `scripts/examples/` for sample test scripts
+2. **运行脚本：**
+   ```
+   使用 run_test_script 并指定脚本名称（例如 "movement-test"）
+   或脚本文件的绝对路径
+   ```
 
-The script executor will run each step in sequence, wait for the specified delays, and report detailed results including success/failure status and execution time for each step.
+3. **查看示例脚本：**
+   查看 `scripts/examples/` 中的示例测试脚本
 
-## Development
+脚本执行器将按顺序运行每个步骤，等待指定的延迟，并报告详细结果，包括每个步骤的成功/失败状态和执行时间。
 
-To modify the available tools, edit:
-- `index.js` - MCP server implementation and test script execution
-- `BroforceMods/Unity Inspector Mod/MessageHandler.cs` - Unity-side message handling
+## 开发
+
+要修改可用工具，请编辑：
+- `index.js` - MCP 服务器实现和测试脚本执行
+- `BroforceMods/Unity Inspector Mod/MessageHandler.cs` - Unity 端的消息处理
+
+面向开发者的指南（架构、热重载、约束、如何添加工具）请参阅 [AGENTS.md](AGENTS.md)（英文版：[AGENTS.en.md](AGENTS.en.md)）。
