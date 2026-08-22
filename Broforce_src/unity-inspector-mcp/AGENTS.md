@@ -22,7 +22,7 @@ AI 客户端 --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity I
 
 - `restart_server` 工具：杀死 `index.js` 子进程、重新拉起、重放 MCP `initialize` 握手，客户端无感知。
 - 修改 `index.js` 后用 `restart_server` 生效，无需重启客户端。
-- `wrapper.js` 本身很薄（约 200 行），修改它需重启客户端。
+- `wrapper.js` 修改需重启客户端。
 
 ## 新增一个 MCP 工具
 

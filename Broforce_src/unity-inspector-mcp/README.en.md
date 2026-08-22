@@ -31,10 +31,12 @@ Test-NetConnection 127.0.0.1 -Port 9999
 The repository does not include a `test_tcp.py` script. For a manual MCP server start, use:
 
 ```powershell
-Set-Location 'D:\Study\C#\Broforce-Mods\Broforce_src\unity-inspector-mcp'
+Set-Location 'C:\path\to\unity-inspector-mcp'
 npm install
-npm start
+node wrapper.js
 ```
+
+`index.js` is the core MCP server. `wrapper.js` is the recommended client entry point: it forwards MCP requests and provides the `restart_server` tool, which restarts the server after `index.js` changes without restarting the client.
 
 When Codex or another MCP client is configured with this server, do not start a second copy manually; the client starts the stdio server itself.
 
@@ -43,9 +45,9 @@ When Codex or another MCP client is configured with this server, do not start a 
 The MCP target can be changed with environment variables. This is useful when the Broforce process runs on another trusted LAN machine:
 
 ```text
-UNITY_INSPECTOR_HOST=192.168.1.181
+UNITY_INSPECTOR_HOST=192.0.2.10
 UNITY_INSPECTOR_PORT=9999
-UNITY_INSPECTOR_UMM_LOG_PATH=\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Core\Log.txt
+UNITY_INSPECTOR_UMM_LOG_PATH=\\192.0.2.10\game-share\Broforce\profiles\Default\UMM\Core\Log.txt
 ```
 
 The Unity Inspector Mod must be enabled on the remote machine and its TCP server must listen on the LAN interface. The service has no authentication, so allow TCP 9999 only from the monitoring machine and do not expose it outside the trusted LAN.
@@ -64,7 +66,7 @@ The Unity Inspector Mod must be enabled on the remote machine and its TCP server
   "mcpServers": {
     "unity-inspector": {
       "command": "node",
-      "args": ["/path/to/unity-inspector-mcp/index.js"],
+      "args": ["/path/to/unity-inspector-mcp/wrapper.js"],
       "cwd": "/path/to/unity-inspector-mcp"
     }
   }
@@ -81,9 +83,9 @@ For WSL users, use the Windows path format:
       "command": "wsl",
       "args": [
         "node",
-        "/mnt/c/Users/YOUR_USERNAME/repos/unity-inspector-mcp/index.js"
+        "/mnt/c/path/to/unity-inspector-mcp/wrapper.js"
       ],
-      "cwd": "C:\\Users\\YOUR_USERNAME\\repos\\unity-inspector-mcp"
+      "cwd": "C:\\path\\to\\unity-inspector-mcp"
     }
   }
 }
@@ -96,13 +98,13 @@ For WSL users, use the Windows path format:
 <details>
 <summary>Click to expand config</summary>
 
-Add a stdio server entry to `C:\Users\<YourName>\.codex\config.toml` and restart Codex or open a new conversation:
+Add a stdio server entry to `%USERPROFILE%\.codex\config.toml` and restart Codex or open a new conversation:
 
 ```toml
 [mcp_servers.unity_inspector]
 command = "node"
-args = ["D:\\Study\\C#\\Broforce-Mods\\Broforce_src\\unity-inspector-mcp\\index.js"]
-cwd = "D:\\Study\\C#\\Broforce-Mods\\Broforce_src\\unity-inspector-mcp"
+args = ["C:\\path\\to\\unity-inspector-mcp\\wrapper.js"]
+cwd = "C:\\path\\to\\unity-inspector-mcp"
 startup_timeout_sec = 120
 type = "stdio"
 ```

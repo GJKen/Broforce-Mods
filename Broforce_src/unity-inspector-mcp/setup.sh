@@ -22,7 +22,7 @@ else
   "mcpServers": {
     "unity-inspector": {
       "command": "nix-shell",
-      "args": ["-p", "nodejs_22", "--run", "node $SCRIPT_DIR/index.js"],
+      "args": ["-p", "nodejs_22", "--run", "node $SCRIPT_DIR/wrapper.js"],
       "cwd": "$SCRIPT_DIR"
     }
   }

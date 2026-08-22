@@ -31,10 +31,12 @@ Test-NetConnection 127.0.0.1 -Port 9999
 本仓库不包含 `test_tcp.py` 脚本。手动启动 MCP 服务器：
 
 ```powershell
-Set-Location 'D:\Study\C#\Broforce-Mods\Broforce_src\unity-inspector-mcp'
+Set-Location 'C:\path\to\unity-inspector-mcp'
 npm install
-npm start
+node wrapper.js
 ```
+
+`index.js` 是核心 MCP 服务器，`wrapper.js` 是推荐的客户端入口。wrapper 会转发 MCP 请求，并提供 `restart_server` 工具，用于在修改 `index.js` 后重启服务器而无需重启客户端。
 
 当 Codex 或其他 MCP 客户端已配置此服务器时，请勿手动启动第二个副本；客户端会自动启动 stdio 服务器。
 
@@ -43,9 +45,9 @@ npm start
 可通过环境变量更改 MCP 目标。当 Broforce 进程运行在另一台受信任的局域网机器上时很有用：
 
 ```text
-UNITY_INSPECTOR_HOST=192.168.1.181
+UNITY_INSPECTOR_HOST=192.0.2.10
 UNITY_INSPECTOR_PORT=9999
-UNITY_INSPECTOR_UMM_LOG_PATH=\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Core\Log.txt
+UNITY_INSPECTOR_UMM_LOG_PATH=\\192.0.2.10\game-share\Broforce\profiles\Default\UMM\Core\Log.txt
 ```
 
 远程机器上必须启用 Unity Inspector Mod，且其 TCP 服务器必须监听局域网接口。该服务没有身份验证，因此仅允许监控机器访问 TCP 9999，不要暴露在受信任的局域网之外。
@@ -64,7 +66,7 @@ UNITY_INSPECTOR_UMM_LOG_PATH=\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\p
   "mcpServers": {
     "unity-inspector": {
       "command": "node",
-      "args": ["/path/to/unity-inspector-mcp/index.js"],
+      "args": ["/path/to/unity-inspector-mcp/wrapper.js"],
       "cwd": "/path/to/unity-inspector-mcp"
     }
   }
@@ -81,9 +83,9 @@ WSL 用户使用 Windows 路径格式：
       "command": "wsl",
       "args": [
         "node",
-        "/mnt/c/Users/YOUR_USERNAME/repos/unity-inspector-mcp/index.js"
+        "/mnt/c/path/to/unity-inspector-mcp/wrapper.js"
       ],
-      "cwd": "C:\\Users\\YOUR_USERNAME\\repos\\unity-inspector-mcp"
+      "cwd": "C:\\path\\to\\unity-inspector-mcp"
     }
   }
 }
@@ -96,13 +98,13 @@ WSL 用户使用 Windows 路径格式：
 <details>
 <summary>点击展开配置</summary>
 
-在 `C:\Users\<你的用户名>\.codex\config.toml` 中添加 stdio 服务器条目，然后重启 Codex 或打开新对话：
+在 `%USERPROFILE%\.codex\config.toml` 中添加 stdio 服务器条目，然后重启 Codex 或打开新对话：
 
 ```toml
 [mcp_servers.unity_inspector]
 command = "node"
-args = ["D:\\Study\\C#\\Broforce-Mods\\Broforce_src\\unity-inspector-mcp\\index.js"]
-cwd = "D:\\Study\\C#\\Broforce-Mods\\Broforce_src\\unity-inspector-mcp"
+args = ["C:\\path\\to\\unity-inspector-mcp\\wrapper.js"]
+cwd = "C:\\path\\to\\unity-inspector-mcp"
 startup_timeout_sec = 120
 type = "stdio"
 ```
