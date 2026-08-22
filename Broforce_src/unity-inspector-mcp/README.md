@@ -1,6 +1,6 @@
 # Unity Inspector MCP Server
 
-> [中文](README.md) | [English](README.en.md)
+> [English](README.en.md)
 
 一个 MCP（模型上下文协议）服务器，允许 AI 客户端检查并与运行 Unity Inspector Mod 的 Unity 游戏进行交互。
 
@@ -52,11 +52,12 @@ UNITY_INSPECTOR_UMM_LOG_PATH=\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\p
 
 ### 添加到 Claude Desktop
 
-将此配置添加到你的 Claude Desktop 配置文件中：
+通过配置文件将服务器添加到 Claude Desktop：
 
-**Windows：** `%APPDATA%\Claude\claude_desktop_config.json`
-**macOS：** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Linux：** `~/.config/claude/claude_desktop_config.json`
+<details>
+<summary>📄 Windows</summary>
+
+文件路径：`%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -72,7 +73,55 @@ UNITY_INSPECTOR_UMM_LOG_PATH=\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\p
 
 将 `/path/to/unity-inspector-mcp` 替换为实际目录路径。
 
-WSL 用户使用 Windows 路径格式：
+</details>
+
+<details>
+<summary>🐧 macOS</summary>
+
+文件路径：`~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "unity-inspector": {
+      "command": "node",
+      "args": ["/path/to/unity-inspector-mcp/index.js"],
+      "cwd": "/path/to/unity-inspector-mcp"
+    }
+  }
+}
+```
+
+将 `/path/to/unity-inspector-mcp` 替换为实际目录路径。
+
+</details>
+
+<details>
+<summary>💻 Linux</summary>
+
+文件路径：`~/.config/claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "unity-inspector": {
+      "command": "node",
+      "args": ["/path/to/unity-inspector-mcp/index.js"],
+      "cwd": "/path/to/unity-inspector-mcp"
+    }
+  }
+}
+```
+
+将 `/path/to/unity-inspector-mcp` 替换为实际目录路径。
+
+</details>
+
+<details>
+<summary>🐧 Windows WSL 用户</summary>
+
+使用 Windows 路径格式：
+
 ```json
 {
   "mcpServers": {
@@ -88,9 +137,14 @@ WSL 用户使用 Windows 路径格式：
 }
 ```
 
+</details>
+
 ### Codex 配置
 
-对于 Codex，在 `C:\Users\<你的用户名>\.codex\config.toml` 中添加 stdio 服务器条目，然后重启 Codex 或打开新对话：
+<details>
+<summary>📄 Windows</summary>
+
+在 `C:\Users\<你的用户名>\.codex\config.toml` 中添加 stdio 服务器条目，然后重启 Codex 或打开新对话：
 
 ```toml
 [mcp_servers.unity_inspector]
@@ -103,7 +157,9 @@ type = "stdio"
 
 然后让客户端使用 `unity_inspector`，从 `ping` 和 `game_state` 开始。
 
-对于第二个远程目标，复制条目并修改服务器名称，添加上述三个环境变量。工具将暴露在对应的 MCP 服务器名称下，例如 `unity_inspector_remote`。
+对于第二个远程目标，复制条目并修改服务器名称，添加三个环境变量。工具将暴露在对应的 MCP 服务器名称下，例如 `unity_inspector_remote`。
+
+</details>
 
 ## 可用工具
 
