@@ -77,7 +77,7 @@ UNITY_INSPECTOR_UMM_LOG_PATH=\\192.0.2.10\game-share\Broforce\profiles\Default\U
 
 将 `/path/to/unity-inspector-mcp` 替换为实际目录路径。
 
-WSL 用户使用 Windows 路径格式：
+**WSL 用户使用 Windows 路径格式：**
 ```json
 {
   "mcpServers": {
