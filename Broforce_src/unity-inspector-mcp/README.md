@@ -58,7 +58,9 @@ UNITY_INSPECTOR_UMM_LOG_PATH=\\192.0.2.10\game-share\Broforce\profiles\Default\U
 <summary>点击展开配置</summary>
 
 **Windows：** `%APPDATA%\Claude\claude_desktop_config.json`
+
 **macOS：** `~/Library/Application Support/Claude/claude_desktop_config.json`
+
 **Linux：** `~/.config/claude/claude_desktop_config.json`
 
 ```json
