@@ -52,12 +52,12 @@ The Unity Inspector Mod must be enabled on the remote machine and its TCP server
 
 ### Adding to Claude Desktop
 
-Add this to your Claude Desktop configuration file:
-
 <details>
-<summary>📄 Windows</summary>
+<summary>Click to expand config</summary>
 
-Path: `%APPDATA%\Claude\claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Linux:** `~/.config/claude/claude_desktop_config.json`
 
 ```json
 {
@@ -73,55 +73,7 @@ Path: `%APPDATA%\Claude\claude_desktop_config.json`
 
 Replace `/path/to/unity-inspector-mcp` with the actual path to this directory.
 
-</details>
-
-<details>
-<summary>🐧 macOS</summary>
-
-Path: `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "unity-inspector": {
-      "command": "node",
-      "args": ["/path/to/unity-inspector-mcp/index.js"],
-      "cwd": "/path/to/unity-inspector-mcp"
-    }
-  }
-}
-```
-
-Replace `/path/to/unity-inspector-mcp` with the actual path to this directory.
-
-</details>
-
-<details>
-<summary>💻 Linux</summary>
-
-Path: `~/.config/claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "unity-inspector": {
-      "command": "node",
-      "args": ["/path/to/unity-inspector-mcp/index.js"],
-      "cwd": "/path/to/unity-inspector-mcp"
-    }
-  }
-}
-```
-
-Replace `/path/to/unity-inspector-mcp` with the actual path to this directory.
-
-</details>
-
-<details>
-<summary>🐧 WSL Users</summary>
-
-Use the Windows path format:
-
+For WSL users, use the Windows path format:
 ```json
 {
   "mcpServers": {
@@ -142,7 +94,7 @@ Use the Windows path format:
 ### Codex configuration
 
 <details>
-<summary>📄 Windows</summary>
+<summary>Click to expand config</summary>
 
 Add a stdio server entry to `C:\Users\<YourName>\.codex\config.toml` and restart Codex or open a new conversation:
 
@@ -157,7 +109,7 @@ type = "stdio"
 
 Then ask the client to use `unity_inspector`, starting with `ping` and `game_state`.
 
-For a second remote target, duplicate the entry with a different server name and add the three environment variables. The tools will then be exposed under the corresponding MCP server name, for example `unity_inspector_remote`.
+For a second remote target, duplicate the entry with a different server name and add the three environment variables above. The tools will then be exposed under the corresponding MCP server name, for example `unity_inspector_remote`.
 
 </details>
 
