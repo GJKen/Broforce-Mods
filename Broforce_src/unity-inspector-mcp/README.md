@@ -28,7 +28,7 @@ npm install
 Test-NetConnection 127.0.0.1 -Port 9999
 ```
 
-本仓库不包含 `test_tcp.py` 脚本。手动启动 MCP 服务器：
+手动启动 MCP 服务器：
 
 ```powershell
 Set-Location 'C:\path\to\unity-inspector-mcp'

@@ -28,7 +28,7 @@ On Windows, test the TCP port with PowerShell:
 Test-NetConnection 127.0.0.1 -Port 9999
 ```
 
-The repository does not include a `test_tcp.py` script. For a manual MCP server start, use:
+For a manual MCP server start, use:
 
 ```powershell
 Set-Location 'C:\path\to\unity-inspector-mcp'
@@ -58,7 +58,9 @@ The Unity Inspector Mod must be enabled on the remote machine and its TCP server
 <summary>Click to expand config</summary>
 
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+
 **Linux:** `~/.config/claude/claude_desktop_config.json`
 
 ```json
@@ -75,7 +77,7 @@ The Unity Inspector Mod must be enabled on the remote machine and its TCP server
 
 Replace `/path/to/unity-inspector-mcp` with the actual path to this directory.
 
-For WSL users, use the Windows path format:
+**For WSL users, use the Windows path format:**
 ```json
 {
   "mcpServers": {
