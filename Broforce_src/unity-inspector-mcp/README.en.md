@@ -1,5 +1,7 @@
 # Unity Inspector MCP Server
 
+> [中文](README.md) | [English](README.en.md)
+
 An MCP (Model Context Protocol) server that allows AI clients to inspect and interact with Unity games running the Unity Inspector Mod.
 
 ## Prerequisites
