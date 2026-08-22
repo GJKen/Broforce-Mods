@@ -22,7 +22,7 @@ AI Client --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity Insp
 
 - `restart_server` tool: kills the `index.js` child process, restarts it, replays the MCP `initialize` handshake — the client never notices the swap.
 - After modifying `index.js`, call `restart_server` to apply changes without restarting the client.
-- `wrapper.js` itself is thin (~200 lines); modifying it requires a client restart.
+- `wrapper.js` modifying it requires a client restart.
 
 ## Adding a New MCP Tool
 
