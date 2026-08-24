@@ -58,6 +58,9 @@ namespace BroforceOnlineDiagnostics
             }
 
             WorkshopLocalJoinRequests[controllerNum] = DateTime.UtcNow;
+            WorkshopLocalJoinSlots[controllerNum] = playerNum >= 0
+                ? playerNum
+                : GetImmediateNextUnusedPlayerNumber();
             return false;
         }
 
@@ -201,7 +204,107 @@ namespace BroforceOnlineDiagnostics
             foreach (var controllerNum in expiredControllers)
             {
                 WorkshopLocalJoinRequests.Remove(controllerNum);
+                WorkshopLocalJoinSlots.Remove(controllerNum);
             }
+        }
+
+        private static void RepairPendingLocalWorkshopPlayerOwnership(Player player)
+        {
+            if (player == null || !IsWorkshopOnlineClientSession() ||
+                !IsWorkshopJoinProtectionActive() || HeroController.PIDS == null ||
+                HeroController.playerControllerIDs == null || player.playerNum < 0 ||
+                player.playerNum >= HeroController.PIDS.Length)
+            {
+                return;
+            }
+
+            RemoveExpiredWorkshopLocalJoinRequests();
+            var requestedController = player.controllerNum;
+            if (requestedController < 0 || requestedController >= 4)
+            {
+                requestedController = FindPendingWorkshopJoinController();
+            }
+            var expectedPlayerNum = -1;
+            var hasMatchingRequest = requestedController >= 0 &&
+                WorkshopLocalJoinSlots.TryGetValue(requestedController, out expectedPlayerNum) &&
+                expectedPlayerNum == player.playerNum;
+            var reassignedFromExpectedSlot = false;
+            if (!hasMatchingRequest)
+            {
+                if (requestedController >= 0 &&
+                    WorkshopLocalJoinRequests.ContainsKey(requestedController))
+                {
+                    hasMatchingRequest = true;
+                    reassignedFromExpectedSlot = WorkshopLocalJoinSlots.TryGetValue(
+                        requestedController, out expectedPlayerNum) &&
+                        expectedPlayerNum != player.playerNum;
+                }
+                else
+                {
+                    foreach (var request in WorkshopLocalJoinSlots)
+                    {
+                        if (request.Value == player.playerNum &&
+                            WorkshopLocalJoinRequests.ContainsKey(request.Key))
+                        {
+                            requestedController = request.Key;
+                            hasMatchingRequest = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!hasMatchingRequest || !PID.MyIdHasBeenSet || PID.MyID == null)
+            {
+                return;
+            }
+
+            var currentPid = HeroController.PIDS[player.playerNum];
+            if (currentPid != null && currentPid.IsMine && player.IsMine)
+            {
+                return;
+            }
+
+            var previousPidMine = currentPid != null && currentPid.IsMine;
+            var previousOwner = player.Owner;
+            try
+            {
+                HeroController.PIDS[player.playerNum] = PID.MyID;
+                HeroController.playerControllerIDs[player.playerNum] = requestedController;
+                SetFieldOrProperty(player, "controllerNum", requestedController);
+                player.SetOwner(PID.MyID);
+                DiagnosticLog.Warning(
+                    "Repaired pending local Workshop player ownership: player=" +
+                    player.playerNum + "; controller=" + requestedController +
+                    "; expectedPlayer=" + (expectedPlayerNum < 0 ? "unknown" : expectedPlayerNum.ToString()) +
+                    "; reassignedFromExpectedSlot=" + reassignedFromExpectedSlot +
+                    "; previousPidMine=" + previousPidMine +
+                    "; previousOwner=" + FormatPidForOwnershipRepair(previousOwner) +
+                    "; ownerRewritten=true.");
+                ClearWorkshopLocalJoinRequests();
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Pending local Workshop player ownership repair failed: player=" +
+                    player.playerNum + "; controller=" + requestedController +
+                    "; error=" + exception);
+            }
+        }
+
+        private static string FormatPidForOwnershipRepair(PID pid)
+        {
+            return pid == null ? "null" : "PID{IsMine=" + pid.IsMine + ";byte=" + pid.AsByte + "}";
+        }
+
+        private static int FindPendingWorkshopJoinController()
+        {
+            foreach (var request in WorkshopLocalJoinRequests)
+            {
+                return request.Key;
+            }
+
+            return -1;
         }
 
         private static bool IsWorkshopJoinProtectionActive()
@@ -414,6 +517,7 @@ namespace BroforceOnlineDiagnostics
         private static void ClearWorkshopLocalJoinRequests()
         {
             WorkshopLocalJoinRequests.Clear();
+            WorkshopLocalJoinSlots.Clear();
             WorkshopLocalJoinSuppressionWarnings.Clear();
         }
 

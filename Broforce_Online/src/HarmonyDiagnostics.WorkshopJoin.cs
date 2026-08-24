@@ -353,8 +353,19 @@ namespace BroforceOnlineDiagnostics
         {
             if (IsLateWorkshopHostSession())
             {
+                var requesteePid = requesteeID as PID;
+                var existingPlayerNumber = FindPlayerNumberForPid(requesteePid);
+                if (existingPlayerNumber >= 0)
+                {
+                    DiagnosticLog.Warning(
+                        "Suppressed duplicate late Workshop RequestJoinGame for an existing player slot: " +
+                        "controller=" + controllerNum +
+                        "; player=" + existingPlayerNumber + ".");
+                    return true;
+                }
+
                 DiagnosticLog.Trace(
-                    "Late workshop host bypassed the RequestJoinGame controller-registration return: " +
+                    "Late workshop host bypassed the controller-registration guard for the first player-slot request: " +
                     "controller=" + controllerNum + ".");
                 return false;
             }
@@ -412,10 +423,22 @@ namespace BroforceOnlineDiagnostics
                 string.Equals(phase, WorkshopLobbyPhaseReady, StringComparison.Ordinal);
         }
 
-        private static void PrepareLateWorkshopJoinSlot()
+        private static void PrepareLateWorkshopJoinSlot(object[] arguments)
         {
             if (!IsLateWorkshopHostSession())
             {
+                return;
+            }
+
+            var requesteePid = arguments != null && arguments.Length > 1
+                ? arguments[1] as PID
+                : null;
+            var existingPlayerNumber = FindPlayerNumberForPid(requesteePid);
+            if (existingPlayerNumber >= 0)
+            {
+                DiagnosticLog.Info(
+                    "Late workshop RequestJoinGame reused an existing PID slot; " +
+                    "skipping stale-slot cleanup: player=" + existingPlayerNumber + ".");
                 return;
             }
 

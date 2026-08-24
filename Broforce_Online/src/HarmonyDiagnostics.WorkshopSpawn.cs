@@ -13,7 +13,7 @@ namespace BroforceOnlineDiagnostics
     // 角色生成与出生点同步：延迟出生点捕获、应用与重广播。
     internal static partial class HarmonyDiagnostics
     {
-                private static void PrepareWorkshopSpawnJoinedPlayers()
+        private static void PrepareWorkshopSpawnJoinedPlayers()
         {
             if (_lateJoinStarted && !_sessionIsHost)
             {
@@ -72,6 +72,43 @@ namespace BroforceOnlineDiagnostics
                 DiagnosticLog.Warning(
                     "Removed duplicate local Workshop player slot before SpawnJoinedPlayers: " +
                     "player=" + index + "; keptPlayer=" + keptLocalPlayer + ".");
+            }
+        }
+
+        private static void SpawnJoinedPlayersPostfix()
+        {
+            if (!IsWorkshopOnlineClientSession() || HeroController.players == null)
+            {
+                return;
+            }
+
+            var repaired = 0;
+            for (var index = 0; index < HeroController.players.Length; index++)
+            {
+                var player = HeroController.players[index];
+                if (player == null)
+                {
+                    continue;
+                }
+
+                var before = HeroController.PIDS == null || index >= HeroController.PIDS.Length
+                    ? null
+                    : HeroController.PIDS[index];
+                RepairPendingLocalWorkshopPlayerOwnership(player);
+                var after = HeroController.PIDS == null || index >= HeroController.PIDS.Length
+                    ? null
+                    : HeroController.PIDS[index];
+                if (before != after && after != null && after.IsMine)
+                {
+                    repaired++;
+                }
+            }
+
+            if (repaired > 0)
+            {
+                DiagnosticLog.Info(
+                    "Workshop SpawnJoinedPlayers ownership reconciliation completed: repaired=" +
+                    repaired + ".");
             }
         }
 

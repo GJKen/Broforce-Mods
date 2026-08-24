@@ -5,6 +5,7 @@ namespace BroforceOnlineDiagnostics
         public const string DefaultWorkshopSceneName = "Test Evan2";
 
         public bool EnableOnlineWorkshopInjection;
+        public bool DisableOnlineAfkSpectatorMode;
         public string WorkshopId;
         public string WorkshopCampaignName;
         public string WorkshopSceneName;
@@ -15,6 +16,7 @@ namespace BroforceOnlineDiagnostics
         public DiagnosticSettings()
         {
             EnableOnlineWorkshopInjection = false;
+            DisableOnlineAfkSpectatorMode = false;
             WorkshopId = string.Empty;
             WorkshopCampaignName = string.Empty;
             WorkshopSceneName = DefaultWorkshopSceneName;

@@ -56,6 +56,7 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopSpawn.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopLobby.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
+    <Compile Include="src\BuildMetadata.cs" />
   </ItemGroup>
 
   <Target Name="DeployBroforceOnlineDiagnostics" AfterTargets="Build" Condition="'$(TargetPath)' != ''">

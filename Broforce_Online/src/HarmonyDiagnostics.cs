@@ -18,7 +18,7 @@ namespace BroforceOnlineDiagnostics
         private const int DuplicateWindowSeconds = 5;
         private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
         private const int WorkshopLocalJoinRequestRetrySeconds = 10;
-        private const int LateJoinPlayerRequestTimeoutSeconds = 5;
+        private const int LateJoinPlayerRequestTimeoutSeconds = 45;
         private const int DefaultLateJoinControllerId = 0;
         private const int LateJoinAutoJoinDelayMilliseconds = 250;
         private const int LateJoinTimeoutSeconds = 120;
@@ -130,6 +130,8 @@ namespace BroforceOnlineDiagnostics
             new HashSet<int>();
         private static readonly Dictionary<int, DateTime> WorkshopLocalJoinRequests =
             new Dictionary<int, DateTime>();
+        private static readonly Dictionary<int, int> WorkshopLocalJoinSlots =
+            new Dictionary<int, int>();
         private static readonly Dictionary<string, DateTime> WorkshopLocalJoinSuppressionWarnings =
             new Dictionary<string, DateTime>();
         private static readonly Dictionary<int, HeroType> WorkshopKnownHeroTypes =
@@ -242,6 +244,10 @@ namespace BroforceOnlineDiagnostics
                 "PlayerStartPostfix",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var playerStartPostfix = new HarmonyMethod(playerStartPostfixMethod);
+            var spawnJoinedPlayersPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "SpawnJoinedPlayersPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var spawnJoinedPlayersPostfix = new HarmonyMethod(spawnJoinedPlayersPostfixMethod);
             var assignCharacterPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
                 "AssignCharacterPostfix",
                 BindingFlags.NonPublic | BindingFlags.Static);
@@ -289,29 +295,17 @@ namespace BroforceOnlineDiagnostics
                     matched = true;
                     try
                     {
-                        var postfix = target.TypeName == "SteamLayer" && target.MethodName == "JoinLobby"
-                            ? joinLobbyPostfix
-                            : (target.TypeName == "SteamLayer" && target.MethodName == "LobbyCreated_Callback"
-                                ? lobbyCreatedPostfix
-                                : (target.TypeName == "ConnectionLayer" && target.MethodName == "PlayerHasJoinedMatch"
-                                    ? playerHasJoinedMatchPostfix
-                                    : (target.TypeName == "ConnectionLayer" && target.MethodName == "OnJoinedLobby"
-                                    ? joinedLobbyPostfix
-                                    : (target.TypeName == "SteamLayer" && target.MethodName == "LeaveMatch"
-                                        ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                                            "LeaveMatchPostfix",
-                                            BindingFlags.NonPublic | BindingFlags.Static))
-                                        : (target.TypeName == "Player" && target.MethodName == "Start"
-                                            ? playerStartPostfix
-                                            : (target.TypeName == "Player" && target.MethodName == "AssignCharacter"
-                                                ? assignCharacterPostfix
-                                                 : (target.TypeName == "HeroController" &&
-                                                    target.MethodName == "SetPlayerCharacter"
-                                                     ? setPlayerCharacterPostfix
-                                                     : (target.TypeName == "HeroController" &&
-                                                        target.MethodName == "RequestJoinGame"
-                                                         ? requestJoinGamePostfix
-                                                         : null))))))));
+                        var postfix = GetPostfixForTarget(
+                            target,
+                            joinLobbyPostfix,
+                            lobbyCreatedPostfix,
+                            playerHasJoinedMatchPostfix,
+                            joinedLobbyPostfix,
+                            playerStartPostfix,
+                            assignCharacterPostfix,
+                            setPlayerCharacterPostfix,
+                            requestJoinGamePostfix,
+                            spawnJoinedPlayersPostfix);
                         var transpiler = target.TypeName == "HeroController" &&
                                          target.MethodName == "RequestJoinGame"
                             ? requestJoinGameTranspiler
@@ -337,6 +331,7 @@ namespace BroforceOnlineDiagnostics
             PatchLateHeroResponseGuard();
             PatchWorkshopHeroTypePreservation();
             PatchWorkshopJoinPromptSuppression();
+            PatchOnlineAfkPrevention();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
             PatchLobbyMainMenuReturnPostfix();
@@ -392,6 +387,63 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
+        private static HarmonyMethod GetPostfixForTarget(
+            TraceTarget target,
+            HarmonyMethod joinLobbyPostfix,
+            HarmonyMethod lobbyCreatedPostfix,
+            HarmonyMethod playerHasJoinedMatchPostfix,
+            HarmonyMethod joinedLobbyPostfix,
+            HarmonyMethod playerStartPostfix,
+            HarmonyMethod assignCharacterPostfix,
+            HarmonyMethod setPlayerCharacterPostfix,
+            HarmonyMethod requestJoinGamePostfix,
+            HarmonyMethod spawnJoinedPlayersPostfix)
+        {
+            if (target.TypeName == "SteamLayer" && target.MethodName == "JoinLobby")
+            {
+                return joinLobbyPostfix;
+            }
+            if (target.TypeName == "SteamLayer" && target.MethodName == "LobbyCreated_Callback")
+            {
+                return lobbyCreatedPostfix;
+            }
+            if (target.TypeName == "ConnectionLayer" && target.MethodName == "PlayerHasJoinedMatch")
+            {
+                return playerHasJoinedMatchPostfix;
+            }
+            if (target.TypeName == "ConnectionLayer" && target.MethodName == "OnJoinedLobby")
+            {
+                return joinedLobbyPostfix;
+            }
+            if (target.TypeName == "SteamLayer" && target.MethodName == "LeaveMatch")
+            {
+                return new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
+                    "LeaveMatchPostfix", BindingFlags.NonPublic | BindingFlags.Static));
+            }
+            if (target.TypeName == "Player" && target.MethodName == "Start")
+            {
+                return playerStartPostfix;
+            }
+            if (target.TypeName == "Player" && target.MethodName == "AssignCharacter")
+            {
+                return assignCharacterPostfix;
+            }
+            if (target.TypeName == "HeroController" && target.MethodName == "SetPlayerCharacter")
+            {
+                return setPlayerCharacterPostfix;
+            }
+            if (target.TypeName == "HeroController" && target.MethodName == "RequestJoinGame")
+            {
+                return requestJoinGamePostfix;
+            }
+            if (target.TypeName == "HeroController" && target.MethodName == "SpawnJoinedPlayers")
+            {
+                return spawnJoinedPlayersPostfix;
+            }
+
+            return null;
+        }
+
         private static bool TracePrefix(MethodBase __originalMethod, object __instance, object[] __args)
         {
             try
@@ -414,6 +466,14 @@ namespace BroforceOnlineDiagnostics
                     __originalMethod.Name == "SpawnJoinedPlayers")
                 {
                     PrepareWorkshopSpawnJoinedPlayers();
+                }
+
+                if (__originalMethod != null &&
+                    __originalMethod.DeclaringType != null &&
+                    __originalMethod.DeclaringType.Name == "Player" &&
+                    __originalMethod.Name == "Start")
+                {
+                    RepairPendingLocalWorkshopPlayerOwnership(__instance as Player);
                 }
 
                 if (__originalMethod.DeclaringType != null &&
@@ -443,7 +503,7 @@ namespace BroforceOnlineDiagnostics
                     __originalMethod.DeclaringType.Name == "HeroController" &&
                     __originalMethod.Name == "RequestJoinGame")
                 {
-                    PrepareLateWorkshopJoinSlot();
+                    PrepareLateWorkshopJoinSlot(__args);
                 }
 
                 CaptureAuthoritativeWorkshopLevelNumber(__originalMethod, __args);

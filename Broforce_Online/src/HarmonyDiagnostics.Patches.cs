@@ -13,7 +13,7 @@ namespace BroforceOnlineDiagnostics
     // Harmony 补丁安装与 IL 织入：各目标方法的 Patch 注册和 transpiler。
     internal static partial class HarmonyDiagnostics
     {
-                private static bool HasValidWorkshopInjectionConfiguration()
+        private static bool HasValidWorkshopInjectionConfiguration()
         {
             var settings = Plugin.Settings;
             if (settings == null || !settings.EnableOnlineWorkshopInjection)
@@ -24,6 +24,52 @@ namespace BroforceOnlineDiagnostics
             ulong workshopId;
             return UInt64.TryParse((settings.WorkshopId ?? string.Empty).Trim(), out workshopId) &&
                    workshopId != 0;
+        }
+
+        private static void PatchOnlineAfkPrevention()
+        {
+            var updateMethod = typeof(Player).GetMethod(
+                "Update",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                Type.EmptyTypes,
+                null);
+            var idleTimerField = typeof(Player).GetField(
+                "idleTimer",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "PlayerUpdateAfkPreventionPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (updateMethod == null || idleTimerField == null || prefixMethod == null)
+            {
+                DiagnosticLog.Warning(
+                    "Online AFK prevention patch could not resolve Player.Update or Player.idleTimer.");
+                return;
+            }
+
+            try
+            {
+                _harmony.Patch(updateMethod, new HarmonyMethod(prefixMethod), null, null, null);
+                DiagnosticLog.Info(
+                    "Online AFK prevention patch enabled; behavior is controlled by the UMM setting.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Online AFK prevention patch failed: " + exception);
+            }
+        }
+
+        private static void PlayerUpdateAfkPreventionPrefix(Player __instance)
+        {
+            var settings = Plugin.Settings;
+            if (__instance == null || settings == null ||
+                !settings.DisableOnlineAfkSpectatorMode || !IsOnline() || !__instance.IsMine)
+            {
+                return;
+            }
+
+            SetFieldOrProperty(__instance, "idleTimer", 0f);
         }
 
         private static IEnumerable<CodeInstruction> RequestJoinGameTranspiler(
