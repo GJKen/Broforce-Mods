@@ -68,7 +68,6 @@ $outputPath = Join-Path $packageModPath 'BroforceOnlineDiagnostics.dll'
 $sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src') -Filter '*.cs' -File |
     Sort-Object Name |
     Select-Object -ExpandProperty FullName)
-
 $references = @(
     $mscorlib,
     $system,
@@ -80,6 +79,55 @@ $references = @(
     (Join-Path $unityModManagerPath '0Harmony.dll'),
     (Join-Path $broforceManagedPath 'Assembly-CSharp.dll')
 )
+
+function Get-Sha256Hex([string]$path) {
+    return (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToUpperInvariant()
+}
+
+$manifestLines = New-Object System.Collections.Generic.List[string]
+foreach ($sourceFile in $sourceFiles) {
+    $sourceItem = Get-Item -LiteralPath $sourceFile
+    $manifestLines.Add(
+        ('source|{0}|{1}|{2}' -f $sourceItem.Name, $sourceItem.Length, (Get-Sha256Hex $sourceFile)))
+}
+
+$buildMetadataPath = Join-Path ([IO.Path]::GetTempPath()) (
+    'BroforceOnlineDiagnostics.BuildMetadata.' + [Guid]::NewGuid().ToString('N') + '.cs')
+
+try {
+    $referencePaths = @($references)
+    foreach ($referencePath in $referencePaths) {
+        $referenceItem = Get-Item -LiteralPath $referencePath
+        $manifestLines.Add(
+            ('reference|{0}|{1}|{2}' -f $referenceItem.Name, $referenceItem.Length, (Get-Sha256Hex $referencePath)))
+    }
+
+    $manifestLines.Add('compiler|.NET Framework 3.5 csc|')
+    $manifestLines.Add('configuration|' + $Configuration + '|')
+    $manifest = $manifestLines -join "`n"
+    $buildHashBytes = [Text.Encoding]::UTF8.GetBytes($manifest)
+    $buildHash = -join ([Security.Cryptography.SHA256]::Create().ComputeHash($buildHashBytes) |
+        ForEach-Object { $_.ToString('x2') })
+    Write-Host "Build hash: $buildHash"
+
+    $metadataSource = @"
+namespace BroforceOnlineDiagnostics
+{
+    internal static partial class BuildMetadata
+    {
+        static partial void SetBuildHash(ref string value)
+        {
+            value = "$buildHash";
+        }
+    }
+}
+"@
+    [IO.File]::WriteAllText(
+        $buildMetadataPath,
+        $metadataSource,
+        (New-Object System.Text.UTF8Encoding($false)))
+    $sourceFiles += $buildMetadataPath
+
 $compilerArguments = @(
     '/noconfig',
     '/nostdlib+',
@@ -115,3 +163,9 @@ foreach ($deploymentPath in $deploymentPaths) {
 }
 
 Write-Host 'Build and deployment completed.'
+}
+finally {
+    if (Test-Path -LiteralPath $buildMetadataPath) {
+        Remove-Item -LiteralPath $buildMetadataPath -Force -ErrorAction SilentlyContinue
+    }
+}

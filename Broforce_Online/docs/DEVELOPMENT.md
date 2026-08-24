@@ -39,6 +39,7 @@
 已知或需要继续确认的联机现象：
 
 - 玩家长时间没有输入时，游戏可能将其移入 AFK/观战状态并移除角色；部分情况下个别角色不会触发该流程，原因尚未确认。
+- UMM 选项 `Disable automatic AFK spectator mode in online games` 可禁用本机联机角色的原生 AFK 计时；该选项默认关闭，只影响本机拥有的联机角色，不拦截手动退出、断线或正常死亡。
 - 双方同时进入 AFK 后，可能出现持续无人并反复重启的情况；在确认原生预期前，将其作为疑似 Bug 记录和观测。
 - 双方角色全部死亡后数秒内没有触发任务失败和关卡重启，明确视为 Bug。
 - 双方死亡后虽然重启关卡，但没有恢复生命或角色，继而反复被判断死亡、任务失败并重启关卡，明确视为 Bug。
@@ -245,6 +246,8 @@ diagnostics-host-<session>-<utc-time>.trace.log
 
 `SteamLayer.JoinLobby` 内部可能先调用一次 `LeaveMatch` 清理旧大厅；该调用不再被诊断系统当成正式离开，因此不会提前关闭客户端的加入会话日志。
 
+每次通过标准 `BuildAndDeploy.ps1` 构建时，脚本会把本次源码、引用程序集、编译器目标和配置组成清单并计算 SHA-256 `buildHash`，再将该值作为编译期常量嵌入 DLL。启动日志、普通会话日志和 `.trace.log` 都会写入 `BUILD_INFO algorithm=SHA-256; buildHash=...`，`SESSION_BEGIN` 也会带上同一值。双端分析必须先比较该值；对面只有日志时也可据此确认是否使用同一构建。未经过标准脚本的源码/IDE 构建使用 `UNBUILT` 标记。
+
 ### 日志约束
 
 - 不直接追踪 `Update`、`RunHeroRespawnLogic` 等每帧方法；需要观察时改为追踪低频下游事件。
@@ -296,6 +299,8 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 <本机 UMM_PROFILE_DIR>\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
 \\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
 ```
+
+脚本还会输出本次 `Build hash: ...`。该值已经嵌入生成的 DLL，并会在运行时日志中按“诊断日志”章节记录；不要用 DLL 文件名、修改时间或文件大小代替 `buildHash` 判断双端版本。
 
 项目安装包还必须包含：
 

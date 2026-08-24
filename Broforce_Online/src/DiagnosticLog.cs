@@ -34,7 +34,10 @@ namespace BroforceOnlineDiagnostics
                 lock (Sync)
                 {
                     OpenSessionLocked("startup", "startup");
-                    WriteLineLocked("INFO", "SESSION_BEGIN trigger=plugin-load", false);
+                    WriteLineLocked(
+                        "INFO",
+                        "SESSION_BEGIN trigger=plugin-load; buildHash=" + BuildMetadata.BuildHash,
+                        false);
                 }
             }
             catch (Exception exception)
@@ -62,7 +65,8 @@ namespace BroforceOnlineDiagnostics
                         "SESSION_BEGIN trigger=" + SanitizeToken(trigger) +
                         "; sessionId=" + SanitizeToken(SessionId) +
                         "; role=" + SanitizeToken(Role) +
-                        "; networkRole=" + SanitizeToken(inferredRole),
+                        "; networkRole=" + SanitizeToken(inferredRole) +
+                        "; buildHash=" + BuildMetadata.BuildHash,
                         false);
                 }
                 catch (Exception exception)
@@ -215,6 +219,12 @@ namespace BroforceOnlineDiagnostics
             _sessionStartedUtc = now;
             _nextFlushAtUtc = now.AddMilliseconds(FlushIntervalMilliseconds);
             _sessionActive = !string.Equals(trigger, "startup", StringComparison.Ordinal);
+
+            var buildInfo =
+                "BUILD_INFO algorithm=SHA-256; buildHash=" + BuildMetadata.BuildHash +
+                "; scope=source-and-build-inputs";
+            WriteLineLocked("INFO", buildInfo, false);
+            WriteLineLocked("TRACE", buildInfo, true);
         }
 
         private static string GetConfiguredValue(string kind)

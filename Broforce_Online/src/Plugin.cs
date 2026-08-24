@@ -44,7 +44,9 @@ namespace BroforceOnlineDiagnostics
                 MigrateDiagnosticSettings(Settings);
 
                 DiagnosticLog.Initialize(modEntry);
-                DiagnosticLog.Info("Plugin loaded. Observation-only mode is active.");
+                DiagnosticLog.Info(
+                    "Plugin loaded. Observation-only mode is active; buildHash=" +
+                    BuildMetadata.BuildHash + ".");
                 return true;
             }
             catch (Exception exception)
@@ -93,6 +95,9 @@ namespace BroforceOnlineDiagnostics
             Settings.EnableOnlineWorkshopInjection = GUILayout.Toggle(
                 Settings.EnableOnlineWorkshopInjection,
                 "Inject configured workshop map into online level switching");
+            Settings.DisableOnlineAfkSpectatorMode = GUILayout.Toggle(
+                Settings.DisableOnlineAfkSpectatorMode,
+                "Disable automatic AFK spectator mode in online games");
             GUILayout.Label("Workshop ID");
             Settings.WorkshopId = GUILayout.TextField(
                 Settings.WorkshopId ?? string.Empty,

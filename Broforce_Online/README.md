@@ -117,6 +117,10 @@ Mod 默认关闭注入；关闭注入时只记录诊断信息。
 
 Workshop 线上会话中的“按开枪键加入游戏”横幅已在房主和加入方两端验证屏蔽。游戏原始提示由 `HeroController.Update` 调用 `LevelTitle.ShowText` 显示；Mod 只匹配本地化键 `LOC_HUD_PRESSTOJOIN` 对应的文本，并在命中时隐藏现有横幅。普通大厅、离线模式和攻击键加入功能不受影响。
 
+### 联机 AFK 开关
+
+UMM 设置中的 `Disable automatic AFK spectator mode in online games` 默认关闭。开启后，Mod 仅在联机游戏中重置本机角色的原生 AFK 计时器，防止角色因长时间没有输入而被自动移除并进入观战；手动退出、网络断开、正常死亡和离线游戏不受影响。需要保护双方角色时，双方都应开启该选项。
+
 ## 构建
 
 项目面向 .NET Framework 3.5，使用 Broforce 和 Unity Mod Manager 的程序集引用。先根据 `LocalBroforcePath.props.example` 创建本机的 `LocalBroforcePath.props`，然后运行 `BuildAndDeploy.ps1`。
@@ -130,6 +134,8 @@ Workshop 线上会话中的“按开枪键加入游戏”横幅已在房主和�
 ```
 
 日常构建和部署以 `BuildAndDeploy.ps1` 为准。工程的构建后目标也指向项目安装包和两处部署目录，但只有在本机 MSBuild 正确读取 `LocalBroforcePath.props` 时才可使用；不要用未验证的 IDE/MSBuild 构建代替脚本。内网路径不可访问或 DLL 被锁定时，构建部署应视为失败，不要继续进行双端测试。
+
+标准构建脚本会根据本次参与编译的源码、引用程序集、编译器目标和配置生成 SHA-256 `buildHash`，并在编译时嵌入 DLL。插件启动日志、普通会话 `.log` 和 Harmony `.trace.log` 都会记录 `BUILD_INFO ... buildHash=...`；双端排查时优先比较两端日志中的该值。直接使用未经过标准脚本的 IDE/手工构建会记录 `UNBUILT`，不能作为可比的正式测试构建。
 
 当前标准程序集文件名始终为 `BroforceOnlineDiagnostics.dll`。自动部署始终覆盖 DLL；项目内安装包的 `Info.json` 是固定清单，目标目录缺少 `Info.json` 时才会从 `modinfo.json` 初始化，不覆盖已有的 `Info.json` 或其它文件。
 
