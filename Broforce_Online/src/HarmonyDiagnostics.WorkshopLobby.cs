@@ -247,6 +247,10 @@ namespace BroforceOnlineDiagnostics
             {
                 return;
             }
+            if (Connect.Layer is FrpDirectLayer)
+            {
+                return;
+            }
 
             _lateJoinLobbyRefreshAtUtc = DateTime.UtcNow.AddMilliseconds(
                 WorkshopLobbyDataRefreshMilliseconds);
@@ -317,6 +321,12 @@ namespace BroforceOnlineDiagnostics
         {
             try
             {
+                var frpLayer = Connect.Layer as FrpDirectLayer;
+                if (frpLayer != null)
+                {
+                    return frpLayer.GetRoomMetadata(key);
+                }
+
                 var lobbyId = GetLobbySteamId();
                 if (lobbyId == null)
                 {
@@ -345,6 +355,19 @@ namespace BroforceOnlineDiagnostics
                 if (!_sessionIsHost)
                 {
                     return false;
+                }
+
+                var frpLayer = Connect.Layer as FrpDirectLayer;
+                if (frpLayer != null)
+                {
+                    var frpResult = frpLayer.SetRoomMetadata(key, value ?? string.Empty);
+                    if (frpResult)
+                    {
+                        DiagnosticLog.Info(
+                            "Workshop FRP room data " + key + "=" + (value ?? string.Empty) +
+                            "; context=" + context + ".");
+                    }
+                    return frpResult;
                 }
 
                 var lobbyId = GetLobbySteamId();

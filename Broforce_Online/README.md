@@ -22,7 +22,9 @@
 - 已验证联机 AFK 禁用开关：双方按需开启后，长时间没有输入的本机角色不会被原生逻辑自动移入观战。
 - 已知部分 Workshop 地图会在 `GeneratePole.Awake` 抛出空引用错误；该地图对象问题与晚加入角色创建问题分开处理。
 - 重复退出/重入多轮后的稳定性和特定地图第 4 关通关黑屏仍未完成定位，不能视为稳定发布版本。
-- 当前 DLL 仍只使用 Steam Lobby/Steam P2P。`FRP Direct` 仅完成可行性调查和方案设计，尚未实现；只运行 `frpc` 或开放 UDP 端口不会改变当前联机路径。
+- `FRP Direct` 已接入房间列表、PID/ServerID、P1-P4、游戏 RPC 和 Steam Workshop 内容加载。2026-08-25 用户已确认修复构建 `buildHash=a53f0dc3a627d57efac53d36f34a84363aa16aa500754282b0305ea36cc11ec7` 能让房主与加入方通过公共 FRP UDP 端点进入同一张第三方地图并正常联机游玩。该路径仍是默认关闭的实验功能，尚未完成断线重入、多地图、高延迟和长期稳定性验证，不能视为稳定发布版本。
+- 已修复 FRP 联机时 `Esc` 在线玩家列表为空的问题：FRP 层现在从原生 PID 名字同步结果中显示本机和仍在线的远端玩家，不显示内部机器 ID 或公网端点。用户已在双端实测确认双方游戏名能够正常显示。
+- 名单修复构建 `buildHash=683227dab9d54673e85a8fbc3a39354778faea5e0d7290e7381ba7b54bdfe518` 已通过双端玩家名显示验收；`a53f...` 的正常双端游玩结论保持有效。
 
 ## 安装与使用
 
@@ -123,6 +125,44 @@ Workshop 线上会话中的“按开枪键加入游戏”横幅已在房主和�
 ### 联机 AFK 开关
 
 UMM 设置中的 `Disable automatic AFK spectator mode in online games` 默认关闭。开启后，Mod 仅在联机游戏中重置本机角色的原生 AFK 计时器，防止角色因长时间没有输入而被自动移除并进入观战；手动退出、网络断开、正常死亡和离线游戏不受影响。需要保护双方角色时，双方都应开启该选项。
+
+### FRP Direct 实验联机
+
+FRP Direct 已从独立握手原型推进到第一轮游戏层测试版。开启游戏层开关后，Mod 会用 FRP 连接接管 Broforce 房间查询、PID 分配和 RPC 字节传输；不开启游戏层开关时，独立 UDP peer 仍只做握手/心跳验证，Steam 联机保持默认。
+
+房主设置：
+
+```text
+Enable FRP Direct transport prototype: 开启
+Route Broforce rooms and RPC through FRP Direct (experimental): 开启
+FRP Direct role: Host
+Local UDP listen port: 27045
+FRP room password: 双方约定的临时密码，或留空
+```
+
+房主点击 `Apply / restart FRP Direct` 后，状态应显示 `Listening on UDP 27045`。`frpc` 的 UDP 代理应将服务商分配的公网端口转发到 `127.0.0.1:27045`。
+
+加入方设置：
+
+```text
+Enable FRP Direct transport prototype: 开启
+Route Broforce rooms and RPC through FRP Direct (experimental): 开启
+FRP Direct role: Client
+FRP server endpoint: 服务商提供的公网地址和 UDP 端口，例如 frp-use.com:27045
+FRP room password: 与房主一致
+```
+
+加入方只需在一个输入框中填写完整的 `host:port`，不再分别填写地址和端口；IPv6 使用 `[地址]:端口`。旧版本保存的两个字段会在升级时自动合并。
+
+双方使用同一标准构建且密码一致时，状态会进入 `Handshake complete; heartbeat active`，之后客户端状态中的心跳序号会持续增加。协议版本、`buildHash` 或密码不一致时会拒绝握手，不会自动降级。房间密码在界面中遮蔽并且不会写入诊断日志、房间状态或通过网络明文发送，但会由 UMM 保存在本机设置文件中，因此应使用独立的临时密码，不要复用其它账号密码。FRP token 只属于 `frpc`，不得填入 Mod。
+
+完成握手后按原有 Broforce 流程操作：房主打开线上建房界面并创建大厅；加入方打开线上大厅列表，等待唯一的 FRP 房间出现后选择加入。第一轮验收依次确认大厅条目出现、双方 PID/ServerID 建立、进入 P1-P4 选择界面、双方角色生成和输入同步，再测试普通地图与 Workshop。无需额外输入房间码，也无需在游戏大厅里再次填写 FRP 地址。
+
+2026-08-25 首轮公网 FRP 游戏层实测确认：加入方能看到唯一房间、进入 P1-P4，并占用 P2；首次地图切换随后失败。房主日志表明 `Test Evan2` 是承载 Workshop campaign 的 Unity 场景名，不能单凭该名称判定加载了官方测试地图；实际故障是 FRP 层被标记成旧 `Badumna` 内容来源，Broforce 因此走了废弃的 Playtomic 自定义地图加载分支，并在场景加载停顿后误触发心跳超时。后续构建改为“游戏房间/RPC 仍走 FRP，Workshop 内容走 Steam 下载”，同时加入加载停顿后的心跳宽限和离房状态清理。用户已使用 `buildHash=a53f0dc3a627d57efac53d36f34a84363aa16aa500754282b0305ea36cc11ec7` 完成双端复测，确认双方能够进入同一张第三方地图并正常联机游玩。
+
+当前实验层只支持房主和一台远端机器之间的连接；每台机器仍可使用 Broforce 原生本地玩家槽位。重复加入请求会复用现有身份，远端离开时房主大厅继续保留。第一版尚未实现 FRP 主机迁移，房主离开会结束房间；断线重入、长时间游玩、不同 Workshop 地图和高延迟环境仍需实机验收。
+
+关闭游戏层开关并应用设置会恢复默认 Steam 网络层；关闭原型开关、Mod 或游戏会同时停止 Lidgren UDP peer。切换网络层或角色设置前应先退出当前房间。
 
 ## 构建
 
