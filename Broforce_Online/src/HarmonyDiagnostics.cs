@@ -334,6 +334,7 @@ namespace BroforceOnlineDiagnostics
             PatchLateHeroResponseGuard();
             PatchWorkshopHeroTypePreservation();
             PatchWorkshopJoinPromptSuppression();
+            PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();

@@ -109,6 +109,7 @@ namespace BroforceOnlineDiagnostics
 
         private static void ClearLifecycleState()
         {
+            ClearWorkshopPickupSynchronizationState();
             PendingSpawnPositions.Clear();
             LocalWorkshopSpawnPositions.Clear();
             SnappedRemoteWorkshopCharacters.Clear();

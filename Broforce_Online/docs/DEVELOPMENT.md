@@ -8,7 +8,7 @@
 
 当前版本为实验性的 `0.5.0`，尚未达到稳定发布状态。
 
-当前分发构建为 `buildHash=b60d0226e596f1f958e0577bce344805907d3792c8e330f724bcc95216286792`，DLL SHA-256 为 `09495A5E98759B4D4FE849B08E36FCD8CFC7EF8BF675439EEBA95834CC75F6C9`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。更早的构建与失败修复时间线只保留在对应 issue 中。
+当前分发构建为 `buildHash=3e456a6c6f077b5e466fd6bc191b649b42dd70364f23bc5b8b3a1c1b4d8fba62`，DLL SHA-256 为 `171B879B0934E260DC81C83C6668E01A989091E887C7BAE0F54A91DD910E9E8C`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。更早的构建与失败修复时间线只保留在对应 issue 中。
 
 所有玩家必须：
 
@@ -28,6 +28,7 @@
 - 重复退出/重入多轮后的稳定性、第 4 关通关黑屏和不同 Workshop 地图兼容性仍未全部定位。
 - 默认关闭的 `FRP Direct` 已通过公共 FRP UDP 端点完成双端正常游玩实测；FRP 负责房间、PID 和游戏 RPC，Steam 仅负责 Workshop 内容下载。
 - 当前分发构建已通过 FRP 双方游戏名显示验收；`Esc` 在线玩家列表会显示本机和仍在线的远端玩家。
+- 当前分发构建已实现 Workshop 联机道具确定性和重复拾取防护，`test003` 已通过 FRP Direct 双端实测验收；官方 Steam 大厅中的 Workshop 路径使用同一补丁判定，但尚待独立复测。
 
 ## 双端测试
 
@@ -204,6 +205,23 @@ Diagnostic session ID: test001
 
 晚加入测试成功判据：host 日志出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方日志按顺序出现 `Starting late workshop join load`、`Late workshop client scene loaded`、`Late workshop SpawnJoinedPlayers observed`、`Late workshop join requested a local player slot after scene readiness` 和 `Late workshop automatic join completed`；无需再次按攻击键即可创建 P2 角色。普通进入时，双方都应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不会重新计算远程角色出生点。
 
+### Workshop 道具同步与重复拾取防护
+
+双端 MCP 观测确认，同一地图位置的普通箱会在各机器的 `CrateBlock.CreatePickupable` 中依据本机 `UnityEngine.Random` 和解锁进度随机转换，造成两端生成的道具数量、类型和网络对象顺序分叉。远程角色镜像也会执行本机 `PickupPickupables` 扫描；当弹药已满导致 `Pickupable.Collect` 不消费道具时，原生逻辑会逐帧重新发送 `TargetAll Collect`，从而重复播放动画和音效。
+
+当前补丁只在有效 Workshop 线上会话中启用：
+
+- 普通 `Standard` 箱保持标准弹药内容，避免各端本地随机选择不同特殊道具；地图明确配置的特殊箱保持原类型。
+- 只有本机拥有的角色扫描本机道具，远程角色镜像不代替其它玩家发起拾取。
+- 已收集或已停用道具再次收到 `Collect` 时直接忽略，避免队列中重复 RPC 重播动画和音效。
+- 弹药已满时每次连续接触只在当前玩家本机调用一次原生 `Collect` 反馈，不发送无法消费道具的 `TargetAll` RPC；离开道具后才允许再次反馈，未消费道具另有 0.5 秒退避保护，消耗弹药后仍可正常拾取。
+
+离线游戏、未启用有效 Workshop 注入的普通线上大厅和显式特殊道具箱继续使用原生行为。补丁依据 `IsWorkshopOnlineSession()` 启用，不依赖 `SteamLayer` 或 `FrpDirectLayer`，因此官方 Steam 大厅和 FRP Direct 进入配置的 Workshop 地图时都会覆盖；官方大厅中的原版关卡仍使用原生行为。
+
+`test003` 使用 `buildHash=3e456a6c6f077b5e466fd6bc191b649b42dd70364f23bc5b8b3a1c1b4d8fba62` 完成约 301 秒 FRP Direct 双端实测并推进到第 9 关。现场未再观察到不可见道具、重复动画或重复音效；日志记录一次 `Workshop online standard ammo crates now keep deterministic standard contents` 和一次 `Suppressed Workshop ammo-full pickup RPC retries`，没有形成重复 `Collect` 或拾取 RPC 洪泛，最后以 `SteamLayer_LeaveMatch` 正常结束。该轮同时出现与道具无关的 `EffectsController.CreateExplosion`、`BroBase.Start` 和 `BroBase.TrySpawnDrone` 空引用，未阻断进入后续关卡。
+
+后续在官方 Steam 大厅独立复测时，双方必须完全退出并重启游戏，先核对日志中的 `BUILD_INFO buildHash`；然后确认同一位置的道具数量和类型一致，弹药已满站在箱子上不会持续播放动画或音效，消耗弹药后能正常拾取一次，并检查 MechDrop、RCCar 等显式特殊箱仍保持原类型。
+
 ### 英雄回复策略
 
 部分加入方客户端可能收不到官方 `RequestHeroTypeFromMaster` 回复。当前策略是：
@@ -257,6 +275,7 @@ Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause`
 - `src/DiagnosticLog.cs`：会话日志和 Harmony 追踪日志的创建、写入、刷新和清理。
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：线上房间、Steam Lobby、关卡切换、Workshop 加载和英雄请求追踪/注入。
+- `src/HarmonyDiagnostics.WorkshopPickup.cs`：Workshop 道具生成确定性、拾取所有权、重复调用幂等和弹药已满退避。
 - `src/ReflectionProbe.cs`：只读扫描 `Assembly-CSharp` 中可能相关的类型。
 - `src/FrpDirectTransport.cs`：Lidgren UDP 监听/直连、握手认证、版本校验、心跳、重连、房间控制消息和可靠 RPC 字节通道。
 - `src/FrpDirectRoomInfo.cs`：FRP 房间信息编码，以及 Workshop ready/phase 元数据同步。
@@ -312,6 +331,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - 特定 Workshop 地图第 4 关通关后曾出现黑屏；需要在现场保留双方场景、`levelFinished`、目标场景和 Lobby phase/ready 后独立分析。
 - 2026-08-21 关于跳关死亡、重入回到第一关和 `BroBase.Start` NRE 的实验性修改已经全部撤销；该 issue 只作为历史分析参考，不代表当前 DLL 包含那些修复。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证。
+- Workshop 道具同步和重复拾取防护已通过 `test003` FRP Direct 双端实机验收；官方 Steam 大厅 Workshop 会话和更多地图仍需独立覆盖。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
 - `FRP Direct` 游戏层已完成公共 FRP UDP 双端正常游玩验收，但仍是默认关闭的实验功能，不能视为稳定发布版本。
 - FRP 第一版不支持主机迁移；房主退出即结束房间。断线重入、多地图、高延迟和长期稳定性仍需继续验证。
