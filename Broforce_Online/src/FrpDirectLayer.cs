@@ -316,6 +316,13 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
+            // Hosts also push RoomState when room metadata changes. Broforce's Lobby UI
+            // appends entries for every listing callback, so only finish an explicit query.
+            if (!_roomQueryPending)
+            {
+                return;
+            }
+
             LobbyList.Clear();
             if (hasRoom)
             {
