@@ -4,17 +4,17 @@
 
 ## 项目范围
 
-这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。它复用官方 Steam 多人大厅，让已经安装相同 Mod、并订阅相同 Workshop 地图的玩家尝试共同进入第三方地图。
+这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。默认网络路径复用官方 Steam Lobby/Steam P2P；可选的 `FRP Direct` 路径使用独立房间、PID 和游戏 RPC，并继续使用 Steam Workshop 内容下载。
 
 当前版本为实验性的 `0.5.0`，尚未达到稳定发布状态。
 
-当前默认传输仍是 `SteamLayer` 和官方 Steam Lobby。最近一次经过用户验收的 Steam 构建为 `buildHash=373c58897c8981e349a32b3c3f7ddb9c464ac17308c888c732f5064881905c6e`；该值只标识最近一次已验收 DLL，不代表后续工作区源码仍对应同一构建。默认关闭的 `FRP Direct` 已接入房间查询、原生 PID/ServerID、RPC 字节传输和 Steam Workshop 内容加载；2026-08-25 用户确认 `buildHash=a53f0dc3a627d57efac53d36f34a84363aa16aa500754282b0305ea36cc11ec7` 已能通过公共 FRP UDP 端点完成正常双端联机游玩。该结果确认 FRP 游戏路径可用，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。
+当前分发构建为 `buildHash=b60d0226e596f1f958e0577bce344805907d3792c8e330f724bcc95216286792`，DLL SHA-256 为 `09495A5E98759B4D4FE849B08E36FCD8CFC7EF8BF675439EEBA95834CC75F6C9`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。更早的构建与失败修复时间线只保留在对应 issue 中。
 
 所有玩家必须：
 
 - 安装相同构建的 Mod，并优先通过日志 `BUILD_INFO buildHash` 核对。
 - 订阅并下载相同的 Workshop 地图。
-- 使用官方线上主持流程创建或加入大厅。
+- 使用 Broforce 原有线上主持/大厅界面创建或加入房间；FRP 模式还必须在双方 UMM 设置中显式开启传输原型和游戏层。
 
 ## 当前状态(更改此条目需要用户确认)
 
@@ -27,8 +27,7 @@
 - 最新异地高延迟测试未再出现同一加入方生成 P2-P4 多个角色；重复 `RequestJoinGame` 防护和联机 AFK 禁用开关已通过用户实测，但该轮未附新的双方运行日志。
 - 重复退出/重入多轮后的稳定性、第 4 关通关黑屏和不同 Workshop 地图兼容性仍未全部定位。
 - 默认关闭的 `FRP Direct` 已通过公共 FRP UDP 端点完成双端正常游玩实测；FRP 负责房间、PID 和游戏 RPC，Steam 仅负责 Workshop 内容下载。
-- FRP 联机的 `Esc` 在线玩家列表现已复用原生 PID 名字同步，显示本机和仍在线的远端玩家；用户已完成双端实测，确认双方游戏名正常显示。
-- 名单修复构建 `buildHash=683227dab9d54673e85a8fbc3a39354778faea5e0d7290e7381ba7b54bdfe518` 已通过双端玩家名显示验收；它只在已经通过正常双端游玩验收的 `a53f...` 基础上补充 FRP 成员名枚举。
+- 当前分发构建已通过 FRP 双方游戏名显示验收；`Esc` 在线玩家列表会显示本机和仍在线的远端玩家。
 
 ## 双端测试
 
@@ -36,12 +35,12 @@
 
 ### 联机稳定性目标与自主调试约定
 
-本 Mod 的核心目标是让双方通过官方 Steam 大厅稳定游玩同一张第三方 Workshop 地图。后续实现、监控和验收按以下功能目标进行：
+本 Mod 的核心目标是让双方通过受支持的 Steam 或 FRP Direct 路径稳定游玩同一张第三方 Workshop 地图。后续实现、监控和验收按以下功能目标进行：
 
 1. 进入地图后，双方都能生成角色并正常移动、跳跃、攻击和执行其它角色操作。
 2. 正常过关、跳关或重启关卡后，双方必须进入同一场景，并再次满足第 1 项。
-3. 双方角色全部死亡后，应在数秒内触发任务失败并重启关卡；重启后必须恢复有效生命、角色和一致场景，并再次满足第 1、2 项。
-4. 联机过程中至少保留一方处于非 AFK 状态并拥有可用角色。若双方都进入 AFK、角色均被移除或场上已无可用玩家，应触发任务失败和关卡重启，并验证重启后能够恢复而不是进入循环。
+3. 双方角色全部死亡后，应在数秒内触发任务失败, 继续后必须恢复有效生命，并再次满足第 1、2 项。
+4. 联机过程中至少保留一方处于非 AFK 状态并拥有可用角色。若双方都进入 AFK、角色均被移除或场上已无可用玩家，应触发关卡重启，并验证重启后能够满足3, 而不是进入无可用玩家重启循环。
 
 已知或需要继续确认的联机现象：
 
@@ -54,6 +53,14 @@
 针对上述目标，AI 已获得持续的双端日志读取、MCP 监控和运行时调试授权，无需在每次操作前再次征求用户同意。授权范围包括传送角色、修改血量或生命、调整游戏速度、切换或重启关卡、模拟输入、执行安全的运行时代码，以及注入用于验证根因的临时修复。AI 应根据当前症状自行选择诊断和调试操作，记录操作前后状态及具体指令，并明确区分临时运行时修改和已经写入源码的正式修复。该授权不包括删除存档、清理用户文件或修改与本 Mod 调试无关的系统状态。
 
 可以通过退出房间、重新进入房间和重复加载地图来验证场景、玩家槽位及角色恢复是否正确。需要实际操作游戏界面时由用户执行退出和加入，AI 在等待期间保持当前调试会话并持续监控，不结束本轮排查；必要时可先临时注入修复，再让用户重复同一流程验证。如果任一游戏客户端崩溃或 MCP 连接消失，AI 应立即停止对该客户端继续发送运行时指令，告知用户重新启动并给出需要重复的复现步骤；客户端恢复后继续同一轮监控，同时检查诊断日志、UMM `Core\Log.txt` 和游戏 `error.log`。
+
+#### AFK 开关与原生保底行为
+
+UMM 选项 `Disable automatic AFK spectator mode in online games` 由每台客户端独立控制。开启后只重置本机拥有角色的原生 AFK 计时，不会由房主同步给加入方，也不会处理房主进程中的远程角色；它不拦截手动退出、断线或正常死亡。
+
+2026-08-25 双端实测确认：房主开启、加入方关闭时，加入方角色仍按原生超时进入 AFK，房主角色保持在线。需要保护双方角色时，双方必须分别开启该选项。双方都关闭时，一名玩家先进入 AFK 后，剩余端通常变成“存活玩家数等于本机玩家数”，原生逻辑会把最后一名角色的 `idleTimer` 清零。
+
+对应原生条件位于 `Player.Update`：只有 `HeroController.GetPlayersAliveCount() > HeroController.GetLocalPlayerCount()` 时才累计本地角色的 `idleTimer`，达到 35 秒后调用 `HeroController.Dropout`。因此，单靠原生 AFK 超时通常会保留最后一个角色，不会让双方角色全部进入 AFK；若其它退出、断线或角色移除路径造成场上无人，仍需按独立问题观察重启行为。
 
 ### MCP 状态调试
 
@@ -95,14 +102,14 @@
 
 源码确认该横幅来自 `HeroController.Update` 对 `LevelTitle.ShowText` 的调用，使用本地化键 `LOC_HUD_PRESSTOJOIN`。当前 Mod 在 `LevelTitle.ShowText` 前置阶段只拦截这条精确文本，并在命中时立即隐藏已经激活的 `LevelTitle` 对象。它不修改 `AddLocalPlayer`、`RequestJoinGame`、Lobby 状态或地图加载；普通大厅和离线模式也不启用此处理。普通诊断日志命中时会记录 `Suppressed the in-game Press To Join banner for the Workshop client.`，其中 `client` 为历史日志名称，实际覆盖线上会话双方。
 
-### 官方流程
+### 游戏大厅流程
 
 游戏没有单独的“创建第三方地图大厅”入口。当前测试流程是：
 
 1. 启动游戏，进入“开始” -> “街机模式”。
 2. 选择困难度和“线上主持游戏”，设置房间名、密码及玩家数量限制。
 3. 创建方进入 `p1-p4` 等待玩家进入。加入方必须按一次攻击键占用自己的位置；创建方确认双方处于不同的玩家位置后，再按攻击键选择任务并进入地图。不要进入地图后才选择角色。
-4. 如有需要，使用 `Esc` 打开 Steam 好友邀请界面。
+4. Steam 模式如有需要，可使用 `Esc` 打开 Steam 好友邀请界面；FRP 模式由加入方通过线上大厅列表进入唯一的 FRP 房间。
 
 ### UMM 设置
 
@@ -115,6 +122,7 @@
 | `Diagnostic label (optional)` | 只作为日志文件名和关联信息的标签，可留空；不参与联机行为。 |
 | `Inject configured workshop map into online level switching` | 默认关闭。确认配置和地图一致后再开启。 |
 | `Enable FRP Direct transport prototype` | 默认关闭。只启用独立 UDP 握手原型，不改变 Steam 游戏传输。 |
+| `Route Broforce rooms and RPC through FRP Direct (experimental)` | 默认关闭。必须与传输原型开关同时开启，才会让 FRP Direct 接管房间、PID 和游戏 RPC。 |
 | `FRP Direct role` | 房主选择 `Host`；加入方选择 `Client`。 |
 | `Local UDP listen port` | 房主的固定 Lidgren UDP 监听端口，默认 `27045`。 |
 | `FRP server endpoint (host:port)` | 加入方在一个输入框填写公共 FRP 服务地址和公网 UDP 端口，例如 `frp-use.com:27045`；IPv6 使用 `[地址]:端口`。 |
@@ -148,7 +156,7 @@ Diagnostic session ID: test001
 
 ### 晚加入支持
 
-当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查创建方传来的 `RoomInfo.CurrentSceneName` 和 Steam Lobby 阶段。如果创建方处于 Workshop 的 `loading` 或 `ready` 阶段，加入方会主动刷新 Lobby 数据并使用本地 `Workshop ID` 并行加载地图。客户端 Workshop 场景和原生 `SpawnJoinedPlayers` 都就绪后，Mod 等待 250ms 让玩家列表稳定，再使用本机主控制器调用一次原生 `HeroController.AddLocalPlayer(-1, controllerId)`；已有本地槽位或待处理请求时直接复用。
+当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查创建方传来的 `RoomInfo.CurrentSceneName` 和房间的 Workshop 阶段元数据。Steam 模式从 Lobby 数据读取，FRP 模式由 `FrpDirectRoomInfo` 同步相同的 `loading`/`ready` 阶段。创建方进入加载阶段后，加入方会主动刷新房间数据并使用本地 `Workshop ID` 并行加载地图。客户端 Workshop 场景和原生 `SpawnJoinedPlayers` 都就绪后，Mod 等待 250ms 让玩家列表稳定，再使用本机主控制器调用一次原生 `HeroController.AddLocalPlayer(-1, controllerId)`；已有本地槽位或待处理请求时直接复用。
 
 自动加入请求发出后，若 45 秒内没有观察到本地 `Player.Start` 或本地 `SetPlayerCharacter` 确认有效槽位，Mod 会清除挂起请求并重新调用一次 `AddLocalPlayer`；确认本地槽位建立后停止重试。普通重复加入保护使用 10 秒限频窗口，不等于晚加入请求的 45 秒总超时。实际成为 Steam Lobby Host 的端也会启用晚加入 `RequestJoinGame` 的保护放行，不再只依赖最初是否通过 `CreateMatch` 创建大厅。
 
@@ -172,9 +180,7 @@ Diagnostic session ID: test001
 
 房间密码只保护握手，不为后续 UDP 内容提供加密。UMM 会将该字段保存在本机 Mod 设置文件中，测试应使用独立的临时密码。FRP token 不属于 Mod 设置，也不会参与协议。
 
-2026-08-25 已由用户通过公共端点 `frp-use.com:27045/UDP` 完成真实双端验收：双方状态和持续心跳符合预期，确认公网 UDP 转发、Lidgren 连接、密码挑战、协议及 `buildHash` 校验链路可用。该验收只覆盖传输原型，不代表玩家槽位或游戏 RPC 已接入。
-
-同日首轮游戏层实测使用 `buildHash=867a32fd986fcf0d75e292da196f1cda2eab7c390fb4a04e6f36a4428f2b4df2`：加入方能看到唯一房间、进入 P1-P4 并占用 P2。房主在进入 Workshop 时反复加载 `Test Evan2`，加入方黑屏；房主日志随后因主线程加载停顿出现心跳超时，退出时旧 `switchingLevel/nextScene` 又重新加载该场景。源码与日志共同确认旧构建把 FRP 层标记为 `Badumna`，令 `GameState.LoadLevel` 进入 Playtomic 分支，而 Mod 监听的是 `SteamController.LevelLoadCompleteEvent`。修复这些问题的 `buildHash=a53f0dc3a627d57efac53d36f34a84363aa16aa500754282b0305ea36cc11ec7` 已由用户按相同双端流程复测，确认双方能够进入第三方地图并正常联机游玩。
+2026-08-25 用户已通过公共端点 `frp-use.com:27045/UDP` 完成真实双端验收：公网 UDP 转发、Lidgren 连接、密码挑战、协议、`buildHash`、房间查询、PID/ServerID、P1-P4、Workshop 内容加载和游戏 RPC 均已推进到正常双端游玩；当前分发构建又通过了双方 `Esc` 玩家名显示验收。FRP 第一版仍只支持房主和一台远端机器，不支持主机迁移。首轮失败根因与各轮构建证据见 [FRP Direct 实施与验收记录](../issues/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
 
 ### Workshop 地图注入
 
