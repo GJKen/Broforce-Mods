@@ -2,32 +2,35 @@
 
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。它复用游戏原有的 Steam 多人大厅，让已经订阅同一张 Workshop 地图的玩家尝试共同进入第三方地图。
 
-所有玩家必须安装相同版本的 Mod，并提前订阅、下载相同的 Workshop 地图。
+所有玩家必须安装相同构建的 Mod，并提前订阅、下载相同的 Workshop 地图。排查版本时以双方日志中的 `BUILD_INFO buildHash` 为准。
 
-## 当前状态(更改此条目需要用户确认)
+## 当前状态
 
-当前版本为实验性 `0.4.0`：
+当前版本为实验性 `0.5.0`：
 
 - 已验证房主和加入方可以通过官方大厅流程进入同一张 Workshop 地图。
 - 已支持实验性的晚加入处理：创建方正在进入或已经进入配置中的 Workshop 场景时，加入方会尝试自动加载同一张地图。
-- 已验证双方完全准备后进入，以及创建方先进入、加入方后进入两种流程都不会多生成加入方角色；后者的 P2 角色出现前有短暂等待，原因仍需结合双端日志确认。
+- 已验证双方完全准备后进入，以及创建方先进入、加入方后进入两种流程都不会多生成加入方角色。最新异地高延迟测试也未再出现同一加入方生成 P2-P4 多个角色。
 - 已验证 Workshop 线上会话中房主和加入方都不再显示“按开枪键加入游戏”横幅；该处理不改变攻击键加入功能。
 - 已接入 Workshop 线上关卡按 `Esc` 返回后的大厅导航：跳过 `VictoryCustomCampaignSteam` 的通关时间和地图评分界面，直接回到 `MainMenu` 并自动进入在线房间查看界面；普通本地关卡不受影响。
 - 已修复从在线房间大厅返回主菜单时的菜单动画时序：Logo 入场动画完成前不会显示文字或高亮框，不再出现按钮偏上、只剩框框无法操作的问题；普通主菜单流程不受影响。
 - 已支持在 UMM 设置中填写 Workshop ID、可选的战役名和场景名，并使用会话 ID 和可选日志标签关联双端日志。
-- 已接入 `unity-inspector-mcp` 调试桥接，可在游戏运行时读取关卡、玩家槽位、角色对象和截图
+- 已接入 `unity-inspector-mcp` 调试桥接，可在游戏运行时读取关卡、玩家槽位、角色对象和截图。
 - 已保留官方英雄类型请求；加入方收不到回复时，会在等待 18 秒后使用本地备用生成；Workshop 线上玩家掉线重建时会保存并恢复原英雄类型，不再因原生重新分配而自动换人。
 - 已修复 Workshop 掉线槽位重入时控制器绑定丢失：自动加入和攻击键触发的 `AddLocalPlayer` 都复用掉线前的本地控制器，并在角色注册阶段再次校正控制器归属。
-- 已增加晚加入请求确认和超时重试：`AddLocalPlayer` 发出后若 5 秒内没有形成有效本地玩家槽位，会释放挂起状态并重新请求；`Player.Start` 或本地 `SetPlayerCharacter` 确认登记后停止重试。
+- 已增加晚加入请求确认和超时重试：`AddLocalPlayer` 发出后若 45 秒内没有形成有效本地玩家槽位，会释放挂起状态并重新请求；`Player.Start` 或本地 `SetPlayerCharacter` 确认登记后停止重试。同一 PID 已占用槽位时，房主会拒绝重复 `RequestJoinGame`，避免高延迟重试创建额外角色。
+- 已验证联机 AFK 禁用开关：双方按需开启后，长时间没有输入的本机角色不会被原生逻辑自动移入观战。
 - 已知部分 Workshop 地图会在 `GeneratePole.Awake` 抛出空引用错误；该地图对象问题与晚加入角色创建问题分开处理。
+- 重复退出/重入多轮后的稳定性和特定地图第 4 关通关黑屏仍未完成定位，不能视为稳定发布版本。
+- 当前 DLL 仍只使用 Steam Lobby/Steam P2P。`FRP Direct` 仅完成可行性调查和方案设计，尚未实现；只运行 `frpc` 或开放 UDP 端口不会改变当前联机路径。
 
-## 使用方式
+## 安装与使用
 
-> 目前所有测试环境只包含 `UMM` 以及 `BroforceOnlineDiagnostics.dll`, 已测试双方安装了不同的mod仍可三方图大厅联机.
+> 已验证双方可以安装不同的其它 Mod，但双方的 `BroforceOnlineDiagnostics.dll` 必须来自相同构建。是否一致应通过日志 `buildHash` 判断，不能只看文件名。
 
-1. 所有玩家必须安装 `r2modman`
-2. `r2modman` 管理器安装好了之后, 找到 `UMM` 并安装, 之后启动一次游戏, 确认 `UMM` 加载成功.
-3. 找到对应 `r2modman` 的配置(profiles) `xxxxxx\Broforce\profiles\Broforce\mods.yml`, 增加如下内容:
+1. 所有玩家安装 `r2modman`，为 Broforce 创建或选择同一个用途的 profile。
+2. 在该 profile 中安装 `UMM`，启动一次游戏并确认 UMM 加载成功。
+3. 如果该本地 Mod 尚未登记到 r2modman，在对应 profile 的 `xxxxxx\Broforce\profiles\Broforce\mods.yml` 中增加以下内容：
 ```
 - manifestVersion: 1
   name: GJKen-BroforceOnlineDiagnostics
@@ -51,9 +54,9 @@
   enabled: true
   onlineSource: false
 ```
-> `r2modman` 有个好处就是可以创建不同的 profiles 来创建不同的mod环境.
-4. 从项目根目录复制 `BroforceOnlineDiagnostics` 文件夹到 `xxxxxx\Broforce\profiles\Broforce\UMM\Mods`。该文件夹就是给其它玩家复制的安装包，必须包含 `BroforceOnlineDiagnostics.dll` 和 `Info.json`。构建者每次运行 `BuildAndDeploy.ps1` 后，项目内的安装包文件夹会自动更新，同时覆盖本机和内网测试端的 DLL。之后在 UMM 设置中开启 `Inject configured workshop map into online level switching`。
-5. 第 3 步和第 4 步完成后需要重启一次 `r2modman`，让它重新读取新增的 `BroforceOnlineDiagnostics`。
+> `r2modman` profile 可以隔离不同的 Mod 测试环境。
+4. 在 `xxxxxx\Broforce\profiles\Broforce\UMM\Mods` 下创建 `GJKen-BroforceOnlineDiagnostics` 目录，把项目根目录 `BroforceOnlineDiagnostics` 安装包中的 `BroforceOnlineDiagnostics.dll` 和 `Info.json` 复制进去。UMM 目录名必须使用 `GJKen-BroforceOnlineDiagnostics`。构建者每次运行 `BuildAndDeploy.ps1` 后，项目内安装包会自动更新，并覆盖脚本中配置的本机和内网测试部署目标。
+5. 完成登记和复制后重启 `r2modman`，启动游戏并在 UMM 中确认 `Broforce Online Diagnostics 0.5.0` 已加载。然后在 UMM 设置中开启 `Inject configured workshop map into online level switching`。
 6. 所有玩家订阅并下载相同的 Workshop 地图，并在 UMM 设置中填写相同的 Workshop ID。战役名不预填；场景名默认是 `Test Evan2`，如果地图使用其它场景名再按实际情况修改。
 
 首次双端测试可以使用以下配置：
@@ -66,7 +69,7 @@ Diagnostic session ID: test001
 两端 Diagnostic label: 任意标识或留空
 ```
 
-两端的 Workshop ID 和 Diagnostic session ID 必须完全一致；保存双方 UMM 设置后，再开启线上地图注入。
+两端的 Workshop ID 必须完全一致。`Diagnostic session ID` 可以留空；需要关联双方日志时再填写相同值。保存双方 UMM 设置后，再开启线上地图注入。
 
 填写或修改设置后，请点击 UMM 设置面板的保存按钮；正常切换 Mod 或退出游戏时也会尝试自动保存。
 
@@ -88,7 +91,7 @@ Diagnostic session ID: test001
 
 双端排查时可以在 UMM 设置中填写相同的 `Diagnostic session ID`，并为两端填写不同的可选 `Diagnostic label`。进入或加入 Steam 大厅时会自动创建新的会话日志；Harmony 详细追踪会写入同名的 `.trace.log` 文件，普通事件日志不会与上一次联机测试混在一起。日志还会记录实际网络角色，但标签本身不参与联机行为。
 
-每次测试结束后，必须同时收集本机测试端和内网测试端的诊断 `.log`、`.trace.log`，并结合两端的 UMM `Core\Log.txt` 和游戏 `error.log` 分析。内网测试端的 DLL 部署目录只用于安装 Mod，不是日志目录；内网测试端运行游戏后，日志仍写入该机器自己的 `Application.persistentDataPath\BroforceOnlineDiagnostics\`。除非明确要求跳过，否则不得只分析单端日志。
+每次测试结束后，必须收集本次实际参与测试的所有端的诊断 `.log`、`.trace.log`，并尽量同时保存各端的 UMM `Core\Log.txt` 和游戏 `error.log`。共享 DLL 部署目录只用于安装 Mod，不是集中日志目录；每台机器的诊断日志都写入自己的 `Application.persistentDataPath\BroforceOnlineDiagnostics\`。对面只有日志而没有 MCP 状态时，仍应先比较 `BUILD_INFO buildHash`，并在结论中明确缺失的证据。除非用户明确要求跳过，否则不得仅凭单端日志断定网络根因。
 
 Mod 默认关闭注入；关闭注入时只记录诊断信息。
 
@@ -103,7 +106,7 @@ Mod 默认关闭注入；关闭注入时只记录诊断信息。
 3. 加入方重新加入、但尚未按攻击键时再次记录。
 4. 按攻击键后立即记录，并比较玩家数量、`playerNum`、`character` 和本地角色标记的变化。
 
-默认的 `unity_inspector` MCP 端点连接当前电脑；如果为内网机器配置独立的 `unity_inspector_remote` 端点，也可以通过局域网读取另一台正在运行的 Broforce。远程客户端退出后，MCP 仍无法读取已经退出的进程状态。`read_log` 和 `watch_log` 默认查找 `Default` profile；使用 `profiles\Broforce` 等自定义 r2modman profile 时，应配置实际的 UMM `Core\Log.txt` 路径或直接收集该文件。
+默认的 `unity_inspector` MCP 端点连接当前电脑；如果为另一台可访问的测试机器配置独立的 `unity_inspector_remote` 端点，也可以读取该机器上正在运行的 Broforce。异地加入方通常只有其导出的日志，不能假定 MCP 可直接连接。远程客户端退出后，MCP 无法读取已经退出的进程状态。`read_log` 和 `watch_log` 默认查找 `Default` profile；使用 `profiles\Broforce` 等自定义 r2modman profile 时，应配置实际的 UMM `Core\Log.txt` 路径或直接收集该文件。
 
 #### 联机稳定性目标
 
@@ -151,13 +154,17 @@ BroforceOnlineDiagnostics/   给其它玩家复制的 UMM Mod 安装包
 modinfo.json                 UMM Mod 清单模板
 LocalBroforcePath.props.example   本机路径配置示例
 docs/DEVELOPMENT.md          开发、逆向、测试和故障排查记录
+issues/                      历史问题、测试证据、验收结果和方案记录
 ```
 
 ## 文档
 
 - [开发与测试文档](docs/DEVELOPMENT.md)
+- [问题记录索引](issues/README.md)
+- [最新异地加入、重复角色与 AFK 验收记录](issues/ISSUES-2026-08-24-联机加入方重复角色与AFK开关编译测试记录.md)
+- [FRP Direct 可行性与实施方案](issues/ISSUES-2026-08-24-FRP内网穿透联机方案.md)
 
-开发文档包含已确认的官方联机流程、Workshop 注入调用链、英雄回复问题、构建约束、日志分析和后续测试步骤。
+开发文档包含当前有效的官方联机流程、Workshop 注入调用链、英雄回复问题、构建约束、日志分析和后续测试步骤。`issues` 保存每轮问题和测试证据，其中可能包含已经撤销或被后续结论取代的历史方案；阅读时以问题索引、README 和开发文档的当前状态为准。
 
 ## 参考资料
 
