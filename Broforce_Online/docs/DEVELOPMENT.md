@@ -1,16 +1,18 @@
 # Broforce 第三方地图联机 Mod：开发文档
 
-项目概览、安装方式和日常使用说明请先看 [根目录 README](../README.md)。本文只保留当前有效的实现、测试、日志、构建和排查约定。
+项目概览、安装方式和日常使用说明请先看 [根目录 README](../README.md)。本文只保留当前有效的实现、测试、日志、构建和排查约定；每轮历史问题和证据见 [issues 索引](../issues/README.md)。
 
 ## 项目范围
 
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。它复用官方 Steam 多人大厅，让已经安装相同 Mod、并订阅相同 Workshop 地图的玩家尝试共同进入第三方地图。
 
-当前版本为实验性的 `0.4.0`，尚未达到稳定发布状态。
+当前版本为实验性的 `0.5.0`，尚未达到稳定发布状态。
+
+当前默认传输仍是 `SteamLayer` 和官方 Steam Lobby。最近一次经过用户验收的构建为 `buildHash=373c58897c8981e349a32b3c3f7ddb9c464ac17308c888c732f5064881905c6e`；该值只标识最近一次已验收 DLL，不代表后续工作区源码仍对应同一构建。`FRP Direct` 仍处于方案阶段，当前 DLL 不能仅通过运行 `frpc` 或开放 UDP 端口启用 FRP。
 
 所有玩家必须：
 
-- 安装相同版本的 Mod。
+- 安装相同构建的 Mod，并优先通过日志 `BUILD_INFO buildHash` 核对。
 - 订阅并下载相同的 Workshop 地图。
 - 使用官方线上主持流程创建或加入大厅。
 
@@ -18,10 +20,12 @@
 
 - 已验证房主和加入方可以通过官方大厅流程进入同一张 Workshop 地图。
 - 双端测试已验证：过场加载期间加入可以进入地图，P2 角色可以正常创建，双方角色控制保持独立。
-- UMM 设置支持 Workshop ID、可选战役名、场景名、诊断会话 ID 和端角色。
+- UMM 设置支持 Workshop ID、可选战役名、场景名、诊断会话 ID 和日志标签。
 - 线上地图注入默认关闭；关闭时只记录诊断信息。
 - 已验证 `Esc` 返回路径会先进入 `VictoryCustomCampaignSteam`，再离开 Steam Lobby 并加载 `MainMenu`；当前实现会在启用 Workshop 注入的线上会话中，于 `MainMenu` 加载后调用官方 `MainMenu.TryToGoToLobby`，直接打开在线房间查看界面。
 - 已验证从在线房间大厅返回主菜单时，Logo 入场动画完成前不会显示菜单文字或高亮框；普通主菜单流程和本地地图返回流程不受影响。
+- 最新异地高延迟测试未再出现同一加入方生成 P2-P4 多个角色；重复 `RequestJoinGame` 防护和联机 AFK 禁用开关已通过用户实测，但该轮未附新的双方运行日志。
+- 重复退出/重入多轮后的稳定性、第 4 关通关黑屏和不同 Workshop 地图兼容性仍未全部定位。
 
 ## 双端测试
 
@@ -75,10 +79,10 @@
 
 为减少准备时间，AI 按以下固定路径使用 MCP：
 
-- 端点固定为：`unity_inspector` = 本机 Broforce，`unity_inspector_remote` = 内网测试端。用户说“双端”时，默认同时并行调用两个端点。
-- 连通性检查直接并行调用两端 `ping`；不要先读取配置、枚举工具或测试 TCP 端口。工具未加载或 `ping` 报错时，立即报告实际错误。
+- 端点示例为：`unity_inspector` = 当前可访问的本机 Broforce，`unity_inspector_remote` = 可选的另一台测试端。用户说“双端”时，应按本次实际参与测试的端点和日志来源处理，不能默认一定是内网机器。
+- 连通性检查直接并行调用本次可用端点的 `ping`；不要先读取配置、枚举工具或测试 TCP 端口。异地端只有日志时不尝试 MCP。工具未加载或 `ping` 报错时，立即报告实际错误。
 - 常用请求直接映射：查看总体状态用 `game_state`，查看玩家用 `inspect_player`，截图用 `take_screenshot`，查看场景对象用 `query_gameobjects`/`inspect_gameobject`，读取诊断日志用 `read_log` 或 MCP 只读日志访问。
-- 正式监控开始时的固定顺序是：双端 `ping` → 双端 `game_state` → 双端 `inspect_player` → 记录当前会话日志位置 → 按问题相关事件持续采样 40 秒。
+- 正式监控开始时的固定顺序是：可用端点 `ping` → `game_state` → `inspect_player` → 记录当前会话日志位置 → 按问题相关事件持续采样 40 秒。只有日志的参与端通过同一会话文件对齐。
 - 联机稳定性目标范围内的只读请求和运行时修改均已获得持续授权。AI 可以自行决定执行传送、改血或生命、改速度、切关或重启、模拟输入和安全的临时代码注入，无需逐项确认，但必须记录操作、目标、前后状态和验证结果。
 - MCP 工具不可用时，不要用文档中的工具名反复尝试，也不要自行改用端口探测代替 MCP 结果；直接说明“当前会话未加载该 MCP 工具”或引用实际错误。
 
@@ -132,13 +136,13 @@ Diagnostic session ID: test001
 2. 双方填写相同的会话 ID；日志标签可按两台设备自行填写或留空。
 3. 任意一端创建大厅并停留在 `newJoin`，另一端加入并确认出现在大厅。
 4. 创建方选择任务，测试进入地图、玩家生成和后续切关卡。
-5. 测试结束后按会话 ID 收集本机测试端和内网测试端的诊断日志，同时收集两端的 UMM `Core\Log.txt` 和游戏 `error.log`。除非明确要求跳过，否则不得只收集或分析其中一端。
+5. 测试结束后按会话 ID 收集本次实际参与测试的所有端的诊断日志，同时尽量收集各端的 UMM `Core\Log.txt` 和游戏 `error.log`。对面只有日志时，先比较 `BUILD_INFO buildHash`，并在结论中注明没有 MCP 或 `error.log` 的证据边界。
 
 ### 晚加入支持
 
 当前版本在 `ConnectionLayer.OnJoinedLobby` 后检查创建方传来的 `RoomInfo.CurrentSceneName` 和 Steam Lobby 阶段。如果创建方处于 Workshop 的 `loading` 或 `ready` 阶段，加入方会主动刷新 Lobby 数据并使用本地 `Workshop ID` 并行加载地图。客户端 Workshop 场景和原生 `SpawnJoinedPlayers` 都就绪后，Mod 等待 250ms 让玩家列表稳定，再使用本机主控制器调用一次原生 `HeroController.AddLocalPlayer(-1, controllerId)`；已有本地槽位或待处理请求时直接复用。
 
-自动加入请求发出后，若 5 秒内没有观察到本地 `Player.Start` 或本地 `SetPlayerCharacter` 确认有效槽位，Mod 会清除挂起请求并重新调用一次 `AddLocalPlayer`；确认本地槽位建立后停止重试。实际成为 Steam Lobby Host 的端也会启用晚加入 `RequestJoinGame` 的保护放行，不再只依赖最初是否通过 `CreateMatch` 创建大厅。
+自动加入请求发出后，若 45 秒内没有观察到本地 `Player.Start` 或本地 `SetPlayerCharacter` 确认有效槽位，Mod 会清除挂起请求并重新调用一次 `AddLocalPlayer`；确认本地槽位建立后停止重试。普通重复加入保护使用 10 秒限频窗口，不等于晚加入请求的 45 秒总超时。实际成为 Steam Lobby Host 的端也会启用晚加入 `RequestJoinGame` 的保护放行，不再只依赖最初是否通过 `CreateMatch` 创建大厅。
 
 这是实验性分支，依赖创建方和加入方使用相同版本 Mod。创建方处于 `newJoin` 或任务选择界面时，加入方不会启动晚加入地图加载；进入 Workshop 过场后即可触发，最多等待约 120 秒。host 端只在晚加入 Workshop 会话中放宽 `HeroController.RequestJoinGame` 的关卡完成和控制器注册保护，使加入方的 P2 请求能够创建角色。晚加入后仍可能受到玩家状态、英雄同步和地图脚本影响，因此稳定测试仍应优先使用“先加入大厅、创建方后进入地图”的顺序。
 
@@ -233,7 +237,7 @@ Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause`
 <Application.persistentDataPath>/BroforceOnlineDiagnostics/
 ```
 
-双端测试必须分别收集本机测试端和内网测试端的该目录。内网测试端的 Mod 部署共享目录只存放 DLL 和 `Info.json`，不会集中保存运行日志；内网测试端启动游戏后，日志写入该机器自己的 `Application.persistentDataPath/BroforceOnlineDiagnostics/`。因此，内网测试端需要从它本机的日志目录单独取回 `.log` 和 `.trace.log` 文件。
+联机测试必须分别收集本次实际参与测试的所有端的该目录。共享 Mod 部署目录只存放 DLL 和 `Info.json`，不会集中保存运行日志；每台机器启动游戏后，日志都写入自己的 `Application.persistentDataPath/BroforceOnlineDiagnostics/`。异地加入方无法直接访问时，应让对方导出 `.log` 和 `.trace.log` 文件。
 
 插件加载时会创建启动日志；检测到 `SteamLayer.CreateMatch` 或 `SteamLayer.JoinLobby` 时会创建新的联机会话。每个会话包含普通事件日志和独立的 Harmony 详细追踪日志，例如：
 
@@ -257,7 +261,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - 日志写入前会清洗未配对 UTF-16 代理项，避免异常字符串再次破坏 Unity 日志路径。
 - 本项目不自动设置日志大小上限，也不自动删除旧日志；测试结束后按会话文件清理不需要的历史日志。
 
-分析双端时序时，必须同时对照本机测试端和内网测试端相同会话 ID 的 `.log`、`.trace.log`、UMM `Core\Log.txt` 和 `error.log`，不能仅凭单端日志判断问题位置。只有在用户明确要求时，才可以跳过其中一端或某类辅助日志。
+分析联机时序时，必须对照本次实际参与测试的所有端相同会话 ID 的 `.log`、`.trace.log`、UMM `Core\Log.txt` 和 `error.log`，不能仅凭单端日志判断网络根因。对面只能提供诊断日志时，先使用 `BUILD_INFO buildHash` 核对 DLL，并在结论中明确缺少 MCP、UMM 日志或 `error.log` 的证据边界。只有在用户明确要求时，才可以跳过某一参与端或某类辅助日志。
 
 ## 当前已知问题
 
@@ -266,8 +270,12 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - 晚加入依赖双方使用相同版本 Mod；过场期间可以并行加载，但地图脚本、网络状态或原生错误仍可能导致加入失败。
 - `test011` 已确认创建方先进入地图时，加入方可在场景就绪后自动创建 P2；仍需继续验证不同地图和控制器组合。
 - `test009` 使用的 Workshop 地图曾在 `GeneratePole.Awake` 抛出 `NullReferenceException`。该错误来自地图对象初始化，当前未阻止本轮晚加入和 P2 创建，但更换地图或地图对象时仍需单独排查。
+- 重复退出/重入若干轮后，加入方可能无法再次进入；现有证据不足以定位到 Lobby、PID、槽位或 `Dropout` 清理，状态仍是未修复、未定位。
+- 特定 Workshop 地图第 4 关通关后曾出现黑屏；需要在现场保留双方场景、`levelFinished`、目标场景和 Lobby phase/ready 后独立分析。
+- 2026-08-21 关于跳关死亡、重入回到第一关和 `BroBase.Start` NRE 的实验性修改已经全部撤销；该 issue 只作为历史分析参考，不代表当前 DLL 包含那些修复。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
+- `FRP Direct` 尚未实现。当前只能使用 Steam 联机，不能把 MCP TCP `9999` 或原有 FuckNet 端口直接当作可用的 FRP 游戏入口。
 
 ## 构建与部署
 
