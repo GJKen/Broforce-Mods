@@ -48,6 +48,9 @@ namespace BroforceOnlineDiagnostics
             new TraceTarget("SteamLayer", "LeaveMatch"),
             new TraceTarget("SteamLayer", "LobbyCreated_Callback"),
             new TraceTarget("SteamLayer", "LobbyJoined_Callback"),
+            new TraceTarget("BroforceOnlineDiagnostics.FrpDirectLayer", "CreateMatch"),
+            new TraceTarget("BroforceOnlineDiagnostics.FrpDirectLayer", "JoinLobby"),
+            new TraceTarget("BroforceOnlineDiagnostics.FrpDirectLayer", "LeaveMatch"),
             new TraceTarget("ConnectionLayer", "OnJoinedLobby"),
             new TraceTarget("ConnectionLayer", "PlayerHasJoinedMatch"),
             new TraceTarget("ConnectionLayer", "RegisterNewPlayer"),
@@ -399,11 +402,15 @@ namespace BroforceOnlineDiagnostics
             HarmonyMethod requestJoinGamePostfix,
             HarmonyMethod spawnJoinedPlayersPostfix)
         {
-            if (target.TypeName == "SteamLayer" && target.MethodName == "JoinLobby")
+            if ((target.TypeName == "SteamLayer" ||
+                 target.TypeName == "BroforceOnlineDiagnostics.FrpDirectLayer") &&
+                target.MethodName == "JoinLobby")
             {
                 return joinLobbyPostfix;
             }
-            if (target.TypeName == "SteamLayer" && target.MethodName == "LobbyCreated_Callback")
+            if ((target.TypeName == "SteamLayer" && target.MethodName == "LobbyCreated_Callback") ||
+                (target.TypeName == "BroforceOnlineDiagnostics.FrpDirectLayer" &&
+                 target.MethodName == "CreateMatch"))
             {
                 return lobbyCreatedPostfix;
             }
@@ -415,7 +422,9 @@ namespace BroforceOnlineDiagnostics
             {
                 return joinedLobbyPostfix;
             }
-            if (target.TypeName == "SteamLayer" && target.MethodName == "LeaveMatch")
+            if ((target.TypeName == "SteamLayer" ||
+                 target.TypeName == "BroforceOnlineDiagnostics.FrpDirectLayer") &&
+                target.MethodName == "LeaveMatch")
             {
                 return new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
                     "LeaveMatchPostfix", BindingFlags.NonPublic | BindingFlags.Static));
@@ -477,7 +486,8 @@ namespace BroforceOnlineDiagnostics
                 }
 
                 if (__originalMethod.DeclaringType != null &&
-                    __originalMethod.DeclaringType.Name == "SteamLayer" &&
+                    (__originalMethod.DeclaringType.Name == "SteamLayer" ||
+                     __originalMethod.DeclaringType.Name == "FrpDirectLayer") &&
                     (__originalMethod.Name == "CreateMatch" || __originalMethod.Name == "JoinLobby"))
                 {
                     _sessionIsHost = __originalMethod.Name == "CreateMatch";
@@ -489,7 +499,7 @@ namespace BroforceOnlineDiagnostics
                     }
 
                     DiagnosticLog.BeginSession(
-                        "SteamLayer." + __originalMethod.Name,
+                        __originalMethod.DeclaringType.Name + "." + __originalMethod.Name,
                         __originalMethod.Name == "CreateMatch" ? "host" : "client");
                     Interlocked.Exchange(ref _sequence, 0);
                     lock (Sync)

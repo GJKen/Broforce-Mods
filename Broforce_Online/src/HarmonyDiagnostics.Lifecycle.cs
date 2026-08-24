@@ -216,6 +216,75 @@ namespace BroforceOnlineDiagnostics
             DiagnosticLog.EndSession("SteamLayer.LeaveMatch");
         }
 
+        internal static void PrepareFrpDirectRoomExit(string trigger)
+        {
+            try
+            {
+                _networkSessionActive = false;
+                _injectedForSession = false;
+                _workshopCompletionHandledForSession = true;
+                _joinLobbyInProgress = false;
+                _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+                _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
+                _workshopSpawnRebroadcastPending = false;
+                _workshopSpawnRebroadcastUseCurrentPositions = false;
+                ClearDuplicateWorkshopLoadSuppression();
+                ClearWorkshopLevelNumberOverride();
+                ClearWorkshopOnlineLobbyReturnState();
+                ClearWorkshopLocalJoinRequests();
+                ClearLateJoinState();
+                ClearLifecycleState();
+
+                var gameModeControllerType = AccessTools.TypeByName("GameModeController");
+                var gameModeControllerField = gameModeControllerType == null
+                    ? null
+                    : gameModeControllerType.GetField(
+                        "instance",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                var gameModeController = gameModeControllerField == null
+                    ? null
+                    : gameModeControllerField.GetValue(null);
+                if (gameModeController != null)
+                {
+                    SetFieldOrProperty(gameModeController, "switchingLevel", false);
+                    SetFieldOrProperty(gameModeController, "waitingForAllPlayersToReady", false);
+                    SetFieldOrProperty(gameModeController, "levelFinished", false);
+                    SetFieldOrProperty(gameModeController, "nextScene", LevelSelectionController.MainMenuScene);
+                }
+
+                var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+                if (state != null)
+                {
+                    SetFieldOrProperty(state, "loadCustomCampaign", false);
+                    SetFieldOrProperty(state, "customLevelID", string.Empty);
+                    SetFieldOrProperty(state, "campaignName", string.Empty);
+                    SetFieldOrProperty(state, "sceneToLoad", LevelSelectionController.MainMenuScene);
+                }
+
+                var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
+                SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
+                SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
+                ClearCurrentCampaignForWorkshopLoad();
+                global::Networking.Networking.PauseStream = false;
+                DiagnosticLog.Info(
+                    "FRP_DIRECT cleared pending Workshop and level-switch state before room exit; trigger=" +
+                    trigger + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "FRP_DIRECT room-exit state cleanup failed; trigger=" + trigger +
+                    "; error=" + exception.GetType().Name + ".");
+            }
+        }
+
+        internal static void CompleteFrpDirectRemoteRoomExit(string trigger)
+        {
+            global::Networking.Networking.PauseStream = false;
+            _sessionIsHost = false;
+            DiagnosticLog.EndSession("FRP Direct " + trigger);
+        }
+
         private static void ObserveOnlineHostRole()
         {
             if (!_networkSessionActive)

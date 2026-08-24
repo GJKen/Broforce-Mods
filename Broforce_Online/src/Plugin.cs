@@ -6,7 +6,7 @@ namespace BroforceOnlineDiagnostics
 {
     public static class Plugin
     {
-        private const int CurrentDiagnosticSettingsVersion = 2;
+        private const int CurrentDiagnosticSettingsVersion = 4;
         private static UnityModManager.ModEntry _modEntry;
         private static DiagnosticsBehaviour _behaviour;
 
@@ -45,7 +45,7 @@ namespace BroforceOnlineDiagnostics
 
                 DiagnosticLog.Initialize(modEntry);
                 DiagnosticLog.Info(
-                    "Plugin loaded. Observation-only mode is active; buildHash=" +
+                    "Plugin loaded. Steam diagnostics are active; optional injections and FRP prototype follow saved settings; buildHash=" +
                     BuildMetadata.BuildHash + ".");
                 return true;
             }
@@ -118,12 +118,85 @@ namespace BroforceOnlineDiagnostics
             Settings.DiagnosticRole = GUILayout.TextField(
                 Settings.DiagnosticRole ?? string.Empty,
                 GUILayout.Width(260f));
+            GUILayout.Space(10f);
+            Settings.EnableFrpDirectPrototype = GUILayout.Toggle(
+                Settings.EnableFrpDirectPrototype,
+                "Enable FRP Direct transport prototype");
+            Settings.EnableFrpDirectGameLayer = GUILayout.Toggle(
+                Settings.EnableFrpDirectGameLayer,
+                "Route Broforce rooms and RPC through FRP Direct (experimental)");
+            GUILayout.Label("FRP Direct role");
+            var roleIndex = string.Equals(
+                Settings.FrpDirectRole,
+                "client",
+                StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            roleIndex = GUILayout.Toolbar(roleIndex, new[] { "Host", "Client" }, GUILayout.Width(260f));
+            Settings.FrpDirectRole = roleIndex == 1 ? "client" : "host";
+            if (roleIndex == 0)
+            {
+                GUILayout.Label("Local UDP listen port");
+                Settings.FrpDirectLocalPort = DrawPortField(Settings.FrpDirectLocalPort);
+            }
+            else
+            {
+                GUILayout.Label("FRP server endpoint (host:port)");
+                Settings.FrpDirectServerEndpoint = GUILayout.TextField(
+                    Settings.FrpDirectServerEndpoint ?? string.Empty,
+                    GUILayout.Width(260f));
+            }
+            GUILayout.Label("FRP room password (optional)");
+            Settings.FrpDirectRoomPassword = GUILayout.PasswordField(
+                Settings.FrpDirectRoomPassword ?? string.Empty,
+                '*',
+                GUILayout.Width(260f));
+            GUILayout.Label("FRP Direct status: " + GetFrpDirectStatus());
+            if (GUILayout.Button("Apply / restart FRP Direct", GUILayout.Width(260f)))
+            {
+                SaveSettings(modEntry);
+                ApplyFrpDirectSettings(true);
+            }
             GUILayout.Label("Changes are saved when UMM settings are saved, the Mod is toggled, or the game exits normally.");
         }
 
         private static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
             SaveSettings(modEntry);
+            ApplyFrpDirectSettings(false);
+        }
+
+        private static int DrawPortField(int value)
+        {
+            int parsed;
+            var text = GUILayout.TextField(value.ToString(), GUILayout.Width(260f));
+            return int.TryParse(text, out parsed) && parsed >= 1 && parsed <= 65535 ? parsed : value;
+        }
+
+        private static string GetFrpDirectStatus()
+        {
+            return _behaviour == null ? "Mod disabled" : _behaviour.GetFrpDirectStatus();
+        }
+
+        private static void ApplyFrpDirectSettings(bool forceRestart)
+        {
+            if (_behaviour != null)
+            {
+                _behaviour.ApplyFrpDirectSettings(forceRestart);
+            }
+        }
+
+        internal static bool ShouldUseFrpDirectGameLayer
+        {
+            get
+            {
+                return Settings != null &&
+                       Settings.EnableFrpDirectPrototype &&
+                       Settings.EnableFrpDirectGameLayer;
+            }
+        }
+
+        internal static FrpDirectTransport GetFrpDirectTransport()
+        {
+            return _behaviour == null ? null : _behaviour.GetFrpDirectTransport();
         }
 
         private static void SaveSettings(UnityModManager.ModEntry modEntry)
@@ -173,7 +246,47 @@ namespace BroforceOnlineDiagnostics
                 settings.WorkshopSceneName = DiagnosticSettings.DefaultWorkshopSceneName;
             }
 
+            if (!string.Equals(settings.FrpDirectRole, "client", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.FrpDirectRole = "host";
+            }
+
+            if (settings.FrpDirectLocalPort < 1 || settings.FrpDirectLocalPort > 65535)
+            {
+                settings.FrpDirectLocalPort = 27045;
+            }
+
+            if (settings.FrpDirectServerPort < 1 || settings.FrpDirectServerPort > 65535)
+            {
+                settings.FrpDirectServerPort = 27045;
+            }
+
+            settings.FrpDirectServerAddress = settings.FrpDirectServerAddress ?? string.Empty;
+            settings.FrpDirectServerEndpoint = settings.FrpDirectServerEndpoint ?? string.Empty;
+            if (string.IsNullOrEmpty(settings.FrpDirectServerEndpoint.Trim()) &&
+                !string.IsNullOrEmpty(settings.FrpDirectServerAddress.Trim()))
+            {
+                settings.FrpDirectServerEndpoint = FormatServerEndpoint(
+                    settings.FrpDirectServerAddress.Trim(),
+                    settings.FrpDirectServerPort);
+            }
+            settings.FrpDirectRoomPassword = settings.FrpDirectRoomPassword ?? string.Empty;
+
             settings.DiagnosticSettingsVersion = CurrentDiagnosticSettingsVersion;
+        }
+
+        private static string FormatServerEndpoint(string address, int port)
+        {
+            if (string.IsNullOrEmpty(address))
+            {
+                return string.Empty;
+            }
+
+            var formattedAddress = address.IndexOf(':') >= 0 &&
+                                   !address.StartsWith("[", StringComparison.Ordinal)
+                ? "[" + address + "]"
+                : address;
+            return formattedAddress + ":" + port;
         }
 
         private static void StopDiagnostics()

@@ -8,7 +8,7 @@
 
 当前版本为实验性的 `0.5.0`，尚未达到稳定发布状态。
 
-当前默认传输仍是 `SteamLayer` 和官方 Steam Lobby。最近一次经过用户验收的构建为 `buildHash=373c58897c8981e349a32b3c3f7ddb9c464ac17308c888c732f5064881905c6e`；该值只标识最近一次已验收 DLL，不代表后续工作区源码仍对应同一构建。`FRP Direct` 仍处于方案阶段，当前 DLL 不能仅通过运行 `frpc` 或开放 UDP 端口启用 FRP。
+当前默认传输仍是 `SteamLayer` 和官方 Steam Lobby。最近一次经过用户验收的 Steam 构建为 `buildHash=373c58897c8981e349a32b3c3f7ddb9c464ac17308c888c732f5064881905c6e`；该值只标识最近一次已验收 DLL，不代表后续工作区源码仍对应同一构建。默认关闭的 `FRP Direct` 已接入房间查询、原生 PID/ServerID、RPC 字节传输和 Steam Workshop 内容加载；2026-08-25 用户确认 `buildHash=a53f0dc3a627d57efac53d36f34a84363aa16aa500754282b0305ea36cc11ec7` 已能通过公共 FRP UDP 端点完成正常双端联机游玩。该结果确认 FRP 游戏路径可用，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。
 
 所有玩家必须：
 
@@ -26,6 +26,9 @@
 - 已验证从在线房间大厅返回主菜单时，Logo 入场动画完成前不会显示菜单文字或高亮框；普通主菜单流程和本地地图返回流程不受影响。
 - 最新异地高延迟测试未再出现同一加入方生成 P2-P4 多个角色；重复 `RequestJoinGame` 防护和联机 AFK 禁用开关已通过用户实测，但该轮未附新的双方运行日志。
 - 重复退出/重入多轮后的稳定性、第 4 关通关黑屏和不同 Workshop 地图兼容性仍未全部定位。
+- 默认关闭的 `FRP Direct` 已通过公共 FRP UDP 端点完成双端正常游玩实测；FRP 负责房间、PID 和游戏 RPC，Steam 仅负责 Workshop 内容下载。
+- FRP 联机的 `Esc` 在线玩家列表现已复用原生 PID 名字同步，显示本机和仍在线的远端玩家；用户已完成双端实测，确认双方游戏名正常显示。
+- 名单修复构建 `buildHash=683227dab9d54673e85a8fbc3a39354778faea5e0d7290e7381ba7b54bdfe518` 已通过双端玩家名显示验收；它只在已经通过正常双端游玩验收的 `a53f...` 基础上补充 FRP 成员名枚举。
 
 ## 双端测试
 
@@ -111,6 +114,11 @@
 | `Diagnostic session ID` | 单轮测试可以留空；多轮测试建议每轮使用不同值，例如 `test001`、`test002`。双端必须一致。 |
 | `Diagnostic label (optional)` | 只作为日志文件名和关联信息的标签，可留空；不参与联机行为。 |
 | `Inject configured workshop map into online level switching` | 默认关闭。确认配置和地图一致后再开启。 |
+| `Enable FRP Direct transport prototype` | 默认关闭。只启用独立 UDP 握手原型，不改变 Steam 游戏传输。 |
+| `FRP Direct role` | 房主选择 `Host`；加入方选择 `Client`。 |
+| `Local UDP listen port` | 房主的固定 Lidgren UDP 监听端口，默认 `27045`。 |
+| `FRP server endpoint (host:port)` | 加入方在一个输入框填写公共 FRP 服务地址和公网 UDP 端口，例如 `frp-use.com:27045`；IPv6 使用 `[地址]:端口`。 |
+| `FRP room password` | 可选，双方必须一致；只发送挑战 HMAC，不记录密码或摘要。UMM 会把密码保存在本机设置文件中。 |
 
 首次双端测试可以使用：
 
@@ -147,6 +155,26 @@ Diagnostic session ID: test001
 这是实验性分支，依赖创建方和加入方使用相同版本 Mod。创建方处于 `newJoin` 或任务选择界面时，加入方不会启动晚加入地图加载；进入 Workshop 过场后即可触发，最多等待约 120 秒。host 端只在晚加入 Workshop 会话中放宽 `HeroController.RequestJoinGame` 的关卡完成和控制器注册保护，使加入方的 P2 请求能够创建角色。晚加入后仍可能受到玩家状态、英雄同步和地图脚本影响，因此稳定测试仍应优先使用“先加入大厅、创建方后进入地图”的顺序。
 
 ## 当前实现
+
+### FRP Direct 实验游戏层
+
+`FrpDirectTransport` 直接复用 `Assembly-CSharp.dll` 中的 `Lidgren.Network.NetPeer`，使用独立应用标识 `BroforceOnlineDiagnostics.FrpDirect.v1`。只开启传输原型开关时仍保持隔离；同时开启游戏层开关后，`FrpDirectNetworkManager` 才让平台工厂返回独立 `FrpDirectLayer`：
+
+- Host 固定监听设置中的 UDP 端口，默认 `27045`，允许一台远端机器连接。
+- Client 使用临时本地端口，解析设置中的单一 FRP 公网 `host:port`；普通断线后每 5 秒重试。旧版分离保存的地址和端口在设置版本 4 中自动合并。
+- Lidgren 连接完成后，Host 发送一次随机挑战。Client 使用房间密码、挑战值、双方协议版本和双方 `buildHash` 计算 HMAC-SHA256；密码和认证摘要均不写入日志。
+- Host 同时验证协议版本、`buildHash` 和 HMAC。任一不匹配都会以固定原因码拒绝；认证失败或版本不匹配后 Client 不自动重试，必须修改或重新应用设置。
+- 协议 v2 增加房间查询/状态、加入确认/拒绝、离开通知和 `GameData`。`FrpDirectLayer` 复用原生 `GeneratePlayerID`、`BroadcastPlayerID`、`RPCBatcher` 和 `ConnectionLayer.RecieveBytes`，游戏 RPC 不经过 Steam P2P。
+- `FrpDirectLayer.GetAllOnlinePlayerNames` 按本机、远端的稳定顺序返回成员名。名字来自原生 `Connect.SetPlayerName` RPC 建立的 PID 名字表；断开的远端不再显示，且不会把 FRP 机器 ID 或公网端点暴露到界面。
+- FRP 层对 Broforce 的内容来源报告 `LayerType.Steam`，只用于让 Workshop campaign 继续通过 `SteamController` 下载；实际房间、PID 和 RPC 仍由 FRP 层处理。
+- 握手完成后 Client 每 5 秒发送应用层心跳，Host 回应序号；正常持续 Update 时 60 秒没有有效心跳才断开。Unity 主线程因场景加载停顿超过 10 秒时，恢复后重启心跳窗口，避免把本机加载停顿误判为远端断线。Lidgren 自身的连接 ping/timeout 继续保留。
+- 本地离房、房主离开或 FRP 配置变化时，会清除待处理的 Workshop 完成回调状态、`switchingLevel`、`nextScene` 和暂停的网络流，避免返回菜单后旧状态再次拉起关卡。
+
+房间密码只保护握手，不为后续 UDP 内容提供加密。UMM 会将该字段保存在本机 Mod 设置文件中，测试应使用独立的临时密码。FRP token 不属于 Mod 设置，也不会参与协议。
+
+2026-08-25 已由用户通过公共端点 `frp-use.com:27045/UDP` 完成真实双端验收：双方状态和持续心跳符合预期，确认公网 UDP 转发、Lidgren 连接、密码挑战、协议及 `buildHash` 校验链路可用。该验收只覆盖传输原型，不代表玩家槽位或游戏 RPC 已接入。
+
+同日首轮游戏层实测使用 `buildHash=867a32fd986fcf0d75e292da196f1cda2eab7c390fb4a04e6f36a4428f2b4df2`：加入方能看到唯一房间、进入 P1-P4 并占用 P2。房主在进入 Workshop 时反复加载 `Test Evan2`，加入方黑屏；房主日志随后因主线程加载停顿出现心跳超时，退出时旧 `switchingLevel/nextScene` 又重新加载该场景。源码与日志共同确认旧构建把 FRP 层标记为 `Badumna`，令 `GameState.LoadLevel` 进入 Playtomic 分支，而 Mod 监听的是 `SteamController.LevelLoadCompleteEvent`。修复这些问题的 `buildHash=a53f0dc3a627d57efac53d36f34a84363aa16aa500754282b0305ea36cc11ec7` 已由用户按相同双端流程复测，确认双方能够进入第三方地图并正常联机游玩。
 
 ### Workshop 地图注入
 
@@ -224,6 +252,10 @@ Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause`
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：线上房间、Steam Lobby、关卡切换、Workshop 加载和英雄请求追踪/注入。
 - `src/ReflectionProbe.cs`：只读扫描 `Assembly-CSharp` 中可能相关的类型。
+- `src/FrpDirectTransport.cs`：Lidgren UDP 监听/直连、握手认证、版本校验、心跳、重连、房间控制消息和可靠 RPC 字节通道。
+- `src/FrpDirectRoomInfo.cs`：FRP 房间信息编码，以及 Workshop ready/phase 元数据同步。
+- `src/FrpDirectLayer.cs`：复用 Broforce 原生 PID、ServerID、RPCBatcher 和 RecieveBytes 的 FRP ConnectionLayer。
+- `src/FrpDirectNetworkManager.cs`：按显式开关选择 FRP/Steam 层并处理 Connect.layer 生命周期。
 
 方法级追踪不记录房间密码、Steam ID、主机名或 Workshop 作者身份。
 
@@ -239,7 +271,7 @@ Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause`
 
 联机测试必须分别收集本次实际参与测试的所有端的该目录。共享 Mod 部署目录只存放 DLL 和 `Info.json`，不会集中保存运行日志；每台机器启动游戏后，日志都写入自己的 `Application.persistentDataPath/BroforceOnlineDiagnostics/`。异地加入方无法直接访问时，应让对方导出 `.log` 和 `.trace.log` 文件。
 
-插件加载时会创建启动日志；检测到 `SteamLayer.CreateMatch` 或 `SteamLayer.JoinLobby` 时会创建新的联机会话。每个会话包含普通事件日志和独立的 Harmony 详细追踪日志，例如：
+插件加载时会创建启动日志；检测到 `SteamLayer` 或 `FrpDirectLayer` 的 `CreateMatch`/`JoinLobby` 时会创建新的联机会话。每个会话包含普通事件日志和独立的 Harmony 详细追踪日志，例如：
 
 ```text
 diagnostics-host-<session>-<utc-time>.log
@@ -275,7 +307,9 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - 2026-08-21 关于跳关死亡、重入回到第一关和 `BroBase.Start` NRE 的实验性修改已经全部撤销；该 issue 只作为历史分析参考，不代表当前 DLL 包含那些修复。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
-- `FRP Direct` 尚未实现。当前只能使用 Steam 联机，不能把 MCP TCP `9999` 或原有 FuckNet 端口直接当作可用的 FRP 游戏入口。
+- `FRP Direct` 游戏层已完成公共 FRP UDP 双端正常游玩验收，但仍是默认关闭的实验功能，不能视为稳定发布版本。
+- FRP 第一版不支持主机迁移；房主退出即结束房间。断线重入、多地图、高延迟和长期稳定性仍需继续验证。
+- 公网入口只能使用服务商分配的 UDP 端点；MCP TCP `9999` 和原有 FuckNet 匹配/中继端口不是 FRP Direct 游戏入口。
 
 ## 构建与部署
 

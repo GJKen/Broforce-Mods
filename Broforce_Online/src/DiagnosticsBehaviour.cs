@@ -25,6 +25,7 @@ namespace BroforceOnlineDiagnostics
         private readonly HashSet<int> _fallbackResponseGuards = new HashSet<int>();
         private readonly Dictionary<string, UnityErrorState> _unityErrorStates =
             new Dictionary<string, UnityErrorState>();
+        private FrpDirectTransport _frpDirectTransport;
 
         public static DiagnosticsBehaviour Create()
         {
@@ -39,6 +40,12 @@ namespace BroforceOnlineDiagnostics
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             Application.logMessageReceived -= OnUnityLog;
+            FrpDirectNetworkManager.Stop();
+            if (_frpDirectTransport != null)
+            {
+                _frpDirectTransport.Dispose();
+                _frpDirectTransport = null;
+            }
             if (gameObject != null)
             {
                 Destroy(gameObject);
@@ -54,11 +61,18 @@ namespace BroforceOnlineDiagnostics
             DiagnosticLog.Info("Unity version: " + Application.unityVersion);
             _nextSnapshotAt = Time.unscaledTime;
             _nextHeroFallbackCheckAt = Time.unscaledTime;
+            _frpDirectTransport = new FrpDirectTransport();
+            _frpDirectTransport.Apply(Plugin.Settings, true);
+            FrpDirectNetworkManager.ApplyConfiguredLayer(_frpDirectTransport);
         }
 
         private void Update()
         {
             HarmonyDiagnostics.Update();
+            if (_frpDirectTransport != null)
+            {
+                _frpDirectTransport.Update();
+            }
 
             var now = Time.unscaledTime;
             if (now >= _nextSnapshotAt)
@@ -72,6 +86,25 @@ namespace BroforceOnlineDiagnostics
                 _nextHeroFallbackCheckAt = now + HeroFallbackCheckIntervalSeconds;
                 RecoverStalledLocalHeroRequests(now);
             }
+        }
+
+        internal void ApplyFrpDirectSettings(bool forceRestart)
+        {
+            if (_frpDirectTransport != null)
+            {
+                _frpDirectTransport.Apply(Plugin.Settings, forceRestart);
+                FrpDirectNetworkManager.ApplyConfiguredLayer(_frpDirectTransport);
+            }
+        }
+
+        internal FrpDirectTransport GetFrpDirectTransport()
+        {
+            return _frpDirectTransport;
+        }
+
+        internal string GetFrpDirectStatus()
+        {
+            return _frpDirectTransport == null ? "Disabled" : _frpDirectTransport.Status;
         }
 
         private void RecoverStalledLocalHeroRequests(float now)

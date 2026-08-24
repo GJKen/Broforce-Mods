@@ -57,6 +57,10 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopLobby.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
     <Compile Include="src\BuildMetadata.cs" />
+    <Compile Include="src\FrpDirectTransport.cs" />
+    <Compile Include="src\FrpDirectRoomInfo.cs" />
+    <Compile Include="src\FrpDirectLayer.cs" />
+    <Compile Include="src\FrpDirectNetworkManager.cs" />
   </ItemGroup>
 
   <Target Name="DeployBroforceOnlineDiagnostics" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
