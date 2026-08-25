@@ -135,6 +135,8 @@
       width: min(320px, 100%);
     }
 
+    .segments.player-limit { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
     .segments button, .preset-grid button, .apply {
       min-height: 32px;
       border: 1px solid #555b64;
@@ -217,9 +219,16 @@
           <button type="button" aria-pressed="false">Client</button>
         </div>
         <label>Local UDP listen port<input type="number" value="27045"></label>
+        <div class="field-label">FRP room player limit (applies immediately)</div>
+        <div class="segments player-limit" role="group" aria-label="FRP room player limit">
+          <button type="button" aria-pressed="false">1</button>
+          <button type="button" aria-pressed="false">2</button>
+          <button type="button" aria-pressed="false">3</button>
+          <button type="button" aria-pressed="true">4</button>
+        </div>
         <label>FRP room password (optional)<input type="password" value="preview"></label>
         <div class="status">FRP Direct status: Listening on UDP 27045</div>
-        <button class="apply" type="button">Apply / restart FRP Direct</button>
+        <button class="apply" type="button">Apply connection settings / restart</button>
       </div>
     </section>
 

@@ -15,6 +15,7 @@ namespace BroforceOnlineDiagnostics
         public bool EnableFrpDirectGameLayer;
         public string FrpDirectRole;
         public int FrpDirectLocalPort;
+        public int FrpDirectPlayerLimit;
         public string FrpDirectServerEndpoint;
         // Retained for migration from settings version 3. The UI no longer exposes these fields.
         public string FrpDirectServerAddress;
@@ -50,6 +51,7 @@ namespace BroforceOnlineDiagnostics
             EnableFrpDirectGameLayer = false;
             FrpDirectRole = "host";
             FrpDirectLocalPort = 27045;
+            FrpDirectPlayerLimit = 4;
             FrpDirectServerEndpoint = string.Empty;
             FrpDirectServerAddress = string.Empty;
             FrpDirectServerPort = 27045;

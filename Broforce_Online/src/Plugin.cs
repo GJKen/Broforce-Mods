@@ -6,7 +6,7 @@ namespace BroforceOnlineDiagnostics
 {
     public static class Plugin
     {
-        private const int CurrentDiagnosticSettingsVersion = 5;
+        private const int CurrentDiagnosticSettingsVersion = 6;
         private const float SectionHeaderWidth = 540f;
         private const float SectionHeaderHeight = 30f;
         private static UnityModManager.ModEntry _modEntry;
@@ -157,6 +157,22 @@ namespace BroforceOnlineDiagnostics
                 {
                     GUILayout.Label("Local UDP listen port");
                     Settings.FrpDirectLocalPort = DrawPortField(Settings.FrpDirectLocalPort);
+                    GUILayout.Label("FRP room player limit (applies immediately)");
+                    var currentPlayerLimit = global::System.Math.Max(
+                        1,
+                        global::System.Math.Min(4, Settings.FrpDirectPlayerLimit));
+                    var playerLimitIndex = currentPlayerLimit - 1;
+                    playerLimitIndex = GUILayout.Toolbar(
+                        playerLimitIndex,
+                        new[] { "1", "2", "3", "4" },
+                        GUILayout.Width(260f));
+                    var selectedPlayerLimit = playerLimitIndex + 1;
+                    if (selectedPlayerLimit != currentPlayerLimit)
+                    {
+                        Settings.FrpDirectPlayerLimit = selectedPlayerLimit;
+                        SaveSettings(modEntry);
+                        ApplyFrpDirectPlayerLimit(selectedPlayerLimit);
+                    }
                 }
                 else
                 {
@@ -171,7 +187,7 @@ namespace BroforceOnlineDiagnostics
                     '*',
                     GUILayout.Width(260f));
                 GUILayout.Label("FRP Direct status: " + GetFrpDirectStatus());
-                if (GUILayout.Button("Apply / restart FRP Direct", GUILayout.Width(260f)))
+                if (GUILayout.Button("Apply connection settings / restart", GUILayout.Width(260f)))
                 {
                     SaveSettings(modEntry);
                     ApplyFrpDirectSettings(true);
@@ -315,6 +331,14 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
+        private static void ApplyFrpDirectPlayerLimit(int playerLimit)
+        {
+            if (_behaviour != null)
+            {
+                _behaviour.ApplyFrpDirectPlayerLimit(playerLimit);
+            }
+        }
+
         internal static bool ShouldUseFrpDirectGameLayer
         {
             get
@@ -385,6 +409,11 @@ namespace BroforceOnlineDiagnostics
             if (settings.FrpDirectLocalPort < 1 || settings.FrpDirectLocalPort > 65535)
             {
                 settings.FrpDirectLocalPort = 27045;
+            }
+
+            if (settings.FrpDirectPlayerLimit < 1 || settings.FrpDirectPlayerLimit > 4)
+            {
+                settings.FrpDirectPlayerLimit = 4;
             }
 
             // Legacy settings did not persist section state. Keep the Workshop

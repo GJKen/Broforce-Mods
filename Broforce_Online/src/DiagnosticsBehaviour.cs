@@ -97,6 +97,14 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
+        internal void ApplyFrpDirectPlayerLimit(int playerLimit)
+        {
+            if (_frpDirectTransport != null)
+            {
+                _frpDirectTransport.UpdatePlayerLimit(playerLimit);
+            }
+        }
+
         internal FrpDirectTransport GetFrpDirectTransport()
         {
             return _frpDirectTransport;

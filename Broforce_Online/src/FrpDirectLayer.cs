@@ -5,10 +5,17 @@ namespace BroforceOnlineDiagnostics
 {
     internal sealed class FrpDirectLayer : ConnectionLayer, IDisposable
     {
+        private const string MachineIdPrefix = "frp-direct:";
+
         private readonly FrpDirectTransport _transport;
         private readonly IDWrapper _localId;
-        private IDWrapper _remoteId;
-        private bool _remoteJoined;
+        private readonly Dictionary<string, IDWrapper> _remoteIds =
+            new Dictionary<string, IDWrapper>(StringComparer.Ordinal);
+        private readonly HashSet<string> _joinedRemoteMachineIds =
+            new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _departedRemoteMachineIds =
+            new HashSet<string>(StringComparer.Ordinal);
+        private bool _clientJoined;
         private bool _roomReady;
         private bool _roomQueryPending;
         private bool _disposed;
@@ -32,14 +39,20 @@ namespace BroforceOnlineDiagnostics
         public override bool IsOnlineRoomReady { get { return _roomReady; } }
         public override bool ReadyToFindLobby
         {
-            get { return !_transport.IsHost && _transport.IsHandshakeComplete; }
+            get { return !IsHost && _transport.IsHandshakeComplete; }
         }
         public override bool CanInviteFriends { get { return false; } }
         public override bool CanEditLobbyName { get { return true; } }
-        // Broforce uses the layer type to choose the custom-content provider.
-        // FRP replaces Steam networking, but Workshop campaigns still come from Steam.
         public override LayerType ConnectionType { get { return LayerType.Steam; } }
-        public override string Host { get { return IsHost ? _localId.UnderlyingID : RemoteUnderlyingId; } }
+        public override string Host
+        {
+            get
+            {
+                return IsHost
+                    ? _localId.UnderlyingID
+                    : FormatMachineId(_transport.RemoteMachineId);
+            }
+        }
         public override string HostName
         {
             get
@@ -55,25 +68,49 @@ namespace BroforceOnlineDiagnostics
         }
         public override IDWrapper MyNetworkLayerID { get { return _localId; } }
 
-        internal int RoomMemberCount { get { return _remoteJoined ? 2 : 1; } }
+        internal int RoomMemberCount
+        {
+            get
+            {
+                if (IsHost)
+                {
+                    return 1 + _joinedRemoteMachineIds.Count;
+                }
+                return _clientJoined ? global::System.Math.Max(2, PlayerIDPairs.Count) : 1;
+            }
+        }
+
+        private int PlayerLimit
+        {
+            get { return NormalizePlayerLimit(_transport.PlayerLimit); }
+        }
+
+        private int RemoteMemberLimit
+        {
+            get { return PlayerLimit - 1; }
+        }
 
         public override void CreateMatch()
         {
             if (!IsHost)
             {
-                DiagnosticLog.Warning("FRP_DIRECT client cannot create a room while configured as Client.");
+                DiagnosticLog.Warning(
+                    "FRP_DIRECT client cannot create a room while configured as Client.");
                 OnMatchingError();
                 return;
             }
 
             base.CreateMatch();
             ResetRoomState();
+            Connect.PlayerLimit = PlayerLimit;
             var room = new FrpDirectRoomInfo(this);
             room.HostName = Connect.PlayerName;
             room.GameName = Connect.GameName;
             OnCreatedLobby(room, _localId);
             _roomReady = true;
-            DiagnosticLog.Info("FRP_DIRECT Broforce room created; waiting for the authenticated client.");
+            DiagnosticLog.Info(
+                "FRP_DIRECT Broforce room created; playerLimit=" + PlayerLimit +
+                "; remoteMemberLimit=" + RemoteMemberLimit + ".");
         }
 
         public override void FindLobby()
@@ -89,12 +126,17 @@ namespace BroforceOnlineDiagnostics
                 OnReceiveLobbyListing(LobbyList);
                 if (!_transport.IsHandshakeComplete)
                 {
-                    DiagnosticLog.Warning("FRP_DIRECT room query is waiting for the transport handshake.");
+                    DiagnosticLog.Warning(
+                        "FRP_DIRECT room query is waiting for the transport handshake.");
                 }
             }
         }
 
-        public override void JoinLobby(RoomInfo room, int controllerId, string password, Action completed)
+        public override void JoinLobby(
+            RoomInfo room,
+            int controllerId,
+            string password,
+            Action completed)
         {
             var frpRoom = room as FrpDirectRoomInfo;
             if (IsHost || frpRoom == null || !_transport.IsHandshakeComplete)
@@ -141,39 +183,77 @@ namespace BroforceOnlineDiagnostics
 
         protected override string[] GetAllOnlinePlayerNames()
         {
-            var names = new List<string>(2);
+            var names = new List<string>();
             var localName = Connect.PlayerName;
             names.Add(string.IsNullOrEmpty(localName) ? "Local Player" : localName);
 
-            if (!_remoteJoined || !_transport.IsHandshakeComplete || _remoteId == null)
-            {
-                return names.ToArray();
-            }
-
-            PID remotePid = null;
+            var remotePids = new List<PID>();
             foreach (var pair in PlayerIDPairs)
             {
-                if (pair.Value == null || !pair.Value.Connected || !pair.Value.Equals(_remoteId))
+                if (pair.Value == null || pair.Key == PID.MyID ||
+                    !IsWrapperAvailable(pair.Value))
                 {
                     continue;
                 }
-                if (remotePid == null || pair.Key.AsByte < remotePid.AsByte)
-                {
-                    remotePid = pair.Key;
-                }
+                remotePids.Add(pair.Key);
             }
-
-            var remoteName = remotePid == null ? string.Empty : remotePid.PlayerName;
-            names.Add(string.IsNullOrEmpty(remoteName) ? "FRP Direct Player" : remoteName);
+            remotePids.Sort(delegate(PID left, PID right)
+            {
+                return left.AsByte.CompareTo(right.AsByte);
+            });
+            foreach (var remotePid in remotePids)
+            {
+                var remoteName = remotePid.PlayerName;
+                names.Add(string.IsNullOrEmpty(remoteName)
+                    ? "FRP Direct Player"
+                    : remoteName);
+            }
             return names.ToArray();
         }
 
         public override void SendData(PID target, byte[] bytes)
         {
-            if (!ShouldSendToRemote(target) || !_transport.SendGameData(bytes))
+            if (Room == null || bytes == null || bytes.Length == 0 ||
+                target == PID.NoID || target == PID.MatchMakingServer || target == PID.MyID)
             {
                 return;
             }
+
+            if (target == PID.TargetAll || target == PID.TargetOthers)
+            {
+                if (IsHost)
+                {
+                    BroadcastToJoinedRemotes(bytes, null);
+                }
+                else
+                {
+                    _transport.SendGameData("*", bytes, null);
+                }
+                return;
+            }
+            if (target == PID.TargetServer)
+            {
+                if (!IsHost)
+                {
+                    _transport.SendGameData(string.Empty, bytes, null);
+                }
+                return;
+            }
+
+            var wrapper = GetPIDWrapper(target);
+            var targetMachineId = GetMachineId(wrapper);
+            if (string.IsNullOrEmpty(targetMachineId) ||
+                string.Equals(targetMachineId, _transport.LocalMachineId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (!IsHost &&
+                string.Equals(targetMachineId, _transport.RemoteMachineId, StringComparison.Ordinal))
+            {
+                targetMachineId = string.Empty;
+            }
+            _transport.SendGameData(targetMachineId, bytes, null);
         }
 
         public override IDWrapper GetPIDWrapper(PID pid)
@@ -185,8 +265,7 @@ namespace BroforceOnlineDiagnostics
         public override bool IsPlayerDisconnected(PID pid)
         {
             var wrapper = GetPIDWrapper(pid);
-            return wrapper == null || !wrapper.Connected ||
-                   (IsRemote(wrapper) && !_transport.IsHandshakeComplete);
+            return wrapper == null || !wrapper.Connected || !IsWrapperAvailable(wrapper);
         }
 
         public override bool IsReadyToRecieveRPCs(PID pid)
@@ -197,22 +276,52 @@ namespace BroforceOnlineDiagnostics
             }
             if (pid == PID.TargetOthers || pid == PID.TargetAll)
             {
-                return _remoteJoined && _transport.IsHandshakeComplete;
+                return Room != null && (IsHost
+                    ? _joinedRemoteMachineIds.Count > 0
+                    : _clientJoined && _transport.IsHandshakeComplete);
             }
             if (pid == PID.TargetServer)
             {
-                return IsHost || (_remoteJoined && _transport.IsHandshakeComplete);
+                return IsHost || (_clientJoined && _transport.IsHandshakeComplete);
             }
 
             var wrapper = GetPIDWrapper(pid);
-            return _transport.IsHandshakeComplete && wrapper != null && wrapper.Connected;
+            return wrapper != null && wrapper.Connected && IsWrapperAvailable(wrapper);
+        }
+
+        protected override void RegisterNewPlayer(string underlyingId, PID allocatedID)
+        {
+            IDWrapper wrapper;
+            if (string.Equals(underlyingId, _localId.UnderlyingID, StringComparison.Ordinal))
+            {
+                wrapper = _localId;
+            }
+            else
+            {
+                var machineId = ParseMachineId(underlyingId);
+                if (string.IsNullOrEmpty(machineId))
+                {
+                    base.RegisterNewPlayer(underlyingId, allocatedID);
+                    return;
+                }
+
+                wrapper = GetOrCreateRemoteId(machineId);
+                wrapper.ProcessConnected();
+                _departedRemoteMachineIds.Remove(machineId);
+            }
+
+            if (_localId.Equals(wrapper) && !Connect.IsOffline)
+            {
+                PID.SetMyID(allocatedID.AsByte);
+            }
+            SetPIDPair(allocatedID, wrapper);
         }
 
         internal void PublishRoomState(FrpDirectRoomInfo room)
         {
             if (IsHost && room != null && Room == room)
             {
-                _transport.SendRoomState(true, room.EncodeForPeer());
+                _transport.SendRoomState(true, room.EncodeForPeer(), null);
             }
         }
 
@@ -223,11 +332,17 @@ namespace BroforceOnlineDiagnostics
             {
                 return string.Empty;
             }
-            if (string.Equals(key, "GJKen_BroforceOnline_WorkshopReady", StringComparison.Ordinal))
+            if (string.Equals(
+                key,
+                "GJKen_BroforceOnline_WorkshopReady",
+                StringComparison.Ordinal))
             {
                 return room.WorkshopReady ? "1" : "0";
             }
-            if (string.Equals(key, "GJKen_BroforceOnline_WorkshopPhase", StringComparison.Ordinal))
+            if (string.Equals(
+                key,
+                "GJKen_BroforceOnline_WorkshopPhase",
+                StringComparison.Ordinal))
             {
                 return room.WorkshopPhase ?? string.Empty;
             }
@@ -241,11 +356,17 @@ namespace BroforceOnlineDiagnostics
             {
                 return false;
             }
-            if (string.Equals(key, "GJKen_BroforceOnline_WorkshopReady", StringComparison.Ordinal))
+            if (string.Equals(
+                key,
+                "GJKen_BroforceOnline_WorkshopReady",
+                StringComparison.Ordinal))
             {
                 room.WorkshopReady = string.Equals(value, "1", StringComparison.Ordinal);
             }
-            else if (string.Equals(key, "GJKen_BroforceOnline_WorkshopPhase", StringComparison.Ordinal))
+            else if (string.Equals(
+                key,
+                "GJKen_BroforceOnline_WorkshopPhase",
+                StringComparison.Ordinal))
             {
                 room.WorkshopPhase = value ?? string.Empty;
             }
@@ -264,14 +385,14 @@ namespace BroforceOnlineDiagnostics
             {
                 return;
             }
-
             _disposed = true;
             Unsubscribe();
         }
 
-        private void OnHandshakeCompleted()
+        private void OnHandshakeCompleted(string machineId)
         {
-            EnsureRemoteId();
+            GetOrCreateRemoteId(machineId).ProcessConnected();
+            _departedRemoteMachineIds.Remove(machineId);
             if (!IsHost && _roomQueryPending)
             {
                 _transport.RequestRoomState();
@@ -281,43 +402,41 @@ namespace BroforceOnlineDiagnostics
                 var room = Room as FrpDirectRoomInfo;
                 if (room != null)
                 {
-                    room.PushUpdatedInfo(true, false);
+                    _transport.SendRoomState(true, room.EncodeForPeer(), machineId);
                 }
             }
         }
 
-        private void OnRoomQueryReceived()
+        private void OnRoomQueryReceived(string machineId)
         {
-            if (!IsHost || Room == null)
-            {
-                _transport.SendRoomState(false, string.Empty);
-                return;
-            }
-
             var room = Room as FrpDirectRoomInfo;
-            if (room == null)
+            if (!IsHost || room == null)
             {
-                _transport.SendRoomState(false, string.Empty);
+                _transport.SendRoomState(false, string.Empty, machineId);
                 return;
             }
-
-            room.PushUpdatedInfo(true, false);
+            _transport.SendRoomState(true, room.EncodeForPeer(), machineId);
         }
 
-        private void OnRoomStateReceived(bool hasRoom, string encodedRoom)
+        private void OnRoomStateReceived(
+            string machineId,
+            bool hasRoom,
+            string encodedRoom)
         {
             var joinedRoom = Room as FrpDirectRoomInfo;
-            if (_remoteJoined && joinedRoom != null)
+            if (_clientJoined && joinedRoom != null)
             {
                 if (hasRoom)
                 {
                     joinedRoom.ApplyEncodedRoom(encodedRoom);
+                    if (!joinedRoom.invalidInfo)
+                    {
+                        Connect.PlayerLimit = NormalizePlayerLimit(joinedRoom.Capacity);
+                    }
                 }
                 return;
             }
 
-            // Hosts also push RoomState when room metadata changes. Broforce's Lobby UI
-            // appends entries for every listing callback, so only finish an explicit query.
             if (!_roomQueryPending)
             {
                 return;
@@ -340,47 +459,52 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
-        private void OnJoinRequestReceived()
+        private void OnJoinRequestReceived(string machineId)
         {
             var room = Room as FrpDirectRoomInfo;
             if (!IsHost || room == null)
             {
-                _transport.RejectJoin("room_not_available");
+                _transport.RejectJoin("room_not_available", machineId);
                 return;
             }
-            if (_remoteJoined)
+            if (_joinedRemoteMachineIds.Contains(machineId))
             {
-                _transport.AcceptJoin(room.EncodeForPeer());
+                _transport.AcceptJoin(room.EncodeForPeer(), machineId);
+                return;
+            }
+            if (_joinedRemoteMachineIds.Count >= RemoteMemberLimit)
+            {
+                _transport.RejectJoin("room_full", machineId);
                 return;
             }
 
-            EnsureRemoteId();
-            if (_remoteId == null || !_transport.AcceptJoin(room.EncodeForPeer()))
+            var remoteId = GetOrCreateRemoteId(machineId);
+            remoteId.ProcessConnected();
+            if (!_transport.AcceptJoin(room.EncodeForPeer(), machineId))
             {
-                _transport.RejectJoin("join_failed");
+                _transport.RejectJoin("join_failed", machineId);
                 return;
             }
 
-            _remoteJoined = true;
-            PlayerHasJoinedMatch(_remoteId);
+            _joinedRemoteMachineIds.Add(machineId);
+            _departedRemoteMachineIds.Remove(machineId);
+            PlayerHasJoinedMatch(remoteId);
             room.PushUpdatedInfo(true, false);
-            DiagnosticLog.Info("FRP_DIRECT authenticated client joined the Broforce room; PID assignment started.");
+            DiagnosticLog.Info(
+                "FRP_DIRECT authenticated client joined the Broforce room; " +
+                "remoteMembers=" + _joinedRemoteMachineIds.Count + ".");
         }
 
-        private void OnJoinAcceptedReceived(string encodedRoom)
+        private void OnJoinAcceptedReceived(string machineId, string encodedRoom)
         {
-            if (IsHost)
-            {
-                return;
-            }
-            if (_remoteJoined && _roomReady)
+            if (IsHost || (_clientJoined && _roomReady))
             {
                 return;
             }
 
             var room = new FrpDirectRoomInfo(this, encodedRoom);
-            EnsureRemoteId();
-            if (room.invalidInfo || _remoteId == null)
+            var hostId = GetOrCreateRemoteId(machineId);
+            if (room.invalidInfo || hostId == null)
             {
                 ResetRoomState();
                 base.LeaveMatch(-1);
@@ -388,14 +512,17 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            _remoteJoined = true;
+            hostId.ProcessConnected();
+            _clientJoined = true;
+            Connect.PlayerLimit = NormalizePlayerLimit(room.Capacity);
             SetNewLobbyRoom(room);
             OnJoinedLobby(room, _localId);
             _roomReady = true;
-            DiagnosticLog.Info("FRP_DIRECT joined the Broforce room; waiting for host PID assignment.");
+            DiagnosticLog.Info(
+                "FRP_DIRECT joined the Broforce room; waiting for host PID assignment.");
         }
 
-        private void OnJoinRejectedReceived(string reason)
+        private void OnJoinRejectedReceived(string machineId, string reason)
         {
             ResetRoomState();
             base.LeaveMatch(-1);
@@ -403,64 +530,79 @@ namespace BroforceOnlineDiagnostics
             OnFailedToJoinGame();
         }
 
-        private void OnGameDataReceived(byte[] bytes)
+        private void OnGameDataReceived(
+            string sourceMachineId,
+            string route,
+            byte[] bytes)
         {
-            if (Room == null || !_remoteJoined)
+            if (Room == null)
             {
                 return;
             }
 
-            RecieveBytes(bytes);
-        }
-
-        private void OnLeaveNoticeReceived()
-        {
             if (IsHost)
             {
-                RemoveRemotePlayer();
-                var room = Room as FrpDirectRoomInfo;
-                if (room != null)
+                if (!_joinedRemoteMachineIds.Contains(sourceMachineId))
                 {
-                    room.PushUpdatedInfo(true, false);
+                    return;
+                }
+                if (string.IsNullOrEmpty(route))
+                {
+                    RecieveBytes(bytes);
+                    return;
+                }
+                if (string.Equals(route, "*", StringComparison.Ordinal))
+                {
+                    RecieveBytes(bytes);
+                    BroadcastToJoinedRemotes(bytes, sourceMachineId);
+                    return;
+                }
+                if (_joinedRemoteMachineIds.Contains(route))
+                {
+                    _transport.SendGameData(route, bytes, sourceMachineId);
                 }
                 return;
             }
 
-            var hadRoom = Room != null;
-            if (hadRoom)
+            if (_clientJoined &&
+                string.Equals(sourceMachineId, _transport.RemoteMachineId, StringComparison.Ordinal))
             {
-                HarmonyDiagnostics.PrepareFrpDirectRoomExit("host leave notice");
-                Connect.OnConnectionDown();
-            }
-            ResetRoomState();
-            base.LeaveMatch(-1);
-            if (hadRoom)
-            {
-                HarmonyDiagnostics.CompleteFrpDirectRemoteRoomExit("host leave notice");
+                RecieveBytes(bytes);
             }
         }
 
-        private void OnRemoteDisconnected()
+        private void OnLeaveNoticeReceived(string machineId)
         {
             if (IsHost)
             {
-                RemoveRemotePlayer();
-                var room = Room as FrpDirectRoomInfo;
-                if (room != null)
-                {
-                    room.PushUpdatedInfo(true, false);
-                }
+                RemoveRemotePlayer(machineId, true);
+                return;
+            }
+
+            LeaveRemoteRoom("host leave notice");
+        }
+
+        private void OnRemoteDisconnected(string machineId)
+        {
+            if (IsHost)
+            {
+                RemoveRemotePlayer(machineId, true);
                 return;
             }
 
             if (Room != null)
             {
-                HarmonyDiagnostics.PrepareFrpDirectRoomExit("host transport disconnected");
-                Connect.OnConnectionDown();
-                ResetRoomState();
-                base.LeaveMatch(-1);
-                HarmonyDiagnostics.CompleteFrpDirectRemoteRoomExit("host transport disconnected");
+                LeaveRemoteRoom("host transport disconnected");
             }
+        }
+
+        private void OnMemberLeftReceived(string machineId)
+        {
+            if (IsHost || !_clientJoined)
+            {
+                return;
+            }
+            MarkRemotePlayerDisconnected(machineId);
         }
 
         private void OnConfigurationChanging()
@@ -478,107 +620,191 @@ namespace BroforceOnlineDiagnostics
             HarmonyDiagnostics.CompleteFrpDirectRemoteRoomExit("FRP configuration changed");
         }
 
-        private bool ShouldSendToRemote(PID target)
+        private void OnPlayerLimitChanged(int playerLimit)
         {
-            if (Room == null || !_remoteJoined || !_transport.IsHandshakeComplete ||
-                target == PID.NoID || target == PID.MatchMakingServer || target == PID.MyID)
+            if (!IsHost)
             {
-                return false;
-            }
-            if (target == PID.TargetOthers || target == PID.TargetAll)
-            {
-                return true;
-            }
-            if (target == PID.TargetServer)
-            {
-                return !IsHost;
-            }
-
-            var wrapper = GetPIDWrapper(target);
-            return wrapper != null && IsRemote(wrapper);
-        }
-
-        private void EnsureRemoteId()
-        {
-            var underlyingId = RemoteUnderlyingId;
-            if (string.IsNullOrEmpty(underlyingId))
-            {
-                _remoteId = null;
                 return;
             }
-            if (_remoteId == null ||
-                !string.Equals(_remoteId.UnderlyingID, underlyingId, StringComparison.Ordinal))
+
+            Connect.PlayerLimit = NormalizePlayerLimit(playerLimit);
+            var room = Room as FrpDirectRoomInfo;
+            if (room != null)
             {
-                _remoteId = new IDWrapper(underlyingId, PID.NoID, true);
+                room.PushUpdatedInfo(true, false);
             }
-            else
+            DiagnosticLog.Info(
+                "FRP_DIRECT active room player limit updated; playerLimit=" +
+                Connect.PlayerLimit +
+                "; currentMembers=" + RoomMemberCount +
+                "; existingMembersRetained=true.");
+        }
+
+        private void LeaveRemoteRoom(string reason)
+        {
+            var hadRoom = Room != null;
+            if (hadRoom)
             {
-                _remoteId.ProcessConnected();
+                HarmonyDiagnostics.PrepareFrpDirectRoomExit(reason);
+                Connect.OnConnectionDown();
+            }
+            ResetRoomState();
+            base.LeaveMatch(-1);
+            if (hadRoom)
+            {
+                HarmonyDiagnostics.CompleteFrpDirectRemoteRoomExit(reason);
             }
         }
 
-        private void RemoveRemotePlayer()
+        private void RemoveRemotePlayer(string machineId, bool notifyOthers)
         {
-            if (_remoteId != null)
+            if (string.IsNullOrEmpty(machineId))
             {
-                _remoteId.ProcessDisconnected();
-                foreach (var pair in PlayerIDPairs)
-                {
-                    if (pair.Value != null && pair.Value.Equals(_remoteId))
-                    {
-                        pair.Value.ProcessDisconnected();
-                    }
-                }
-                Connect.ClearDCPlayers();
+                return;
             }
-            _remoteJoined = false;
-            _roomReady = IsHost && Room != null;
+
+            var wasJoined = _joinedRemoteMachineIds.Remove(machineId);
+            if (!wasJoined)
+            {
+                _remoteIds.Remove(machineId);
+                _departedRemoteMachineIds.Remove(machineId);
+                return;
+            }
+
+            MarkRemotePlayerDisconnected(machineId);
+            if (notifyOthers)
+            {
+                _transport.SendMemberLeft(machineId, machineId);
+            }
+            var room = Room as FrpDirectRoomInfo;
+            if (room != null)
+            {
+                room.PushUpdatedInfo(true, false);
+            }
+            _roomReady = Room != null;
+        }
+
+        private void BroadcastToJoinedRemotes(byte[] bytes, string excludeMachineId)
+        {
+            foreach (var machineId in _joinedRemoteMachineIds)
+            {
+                if (string.Equals(machineId, excludeMachineId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                _transport.SendGameData(machineId, bytes, null);
+            }
+        }
+
+        private void MarkRemotePlayerDisconnected(string machineId)
+        {
+            _departedRemoteMachineIds.Add(machineId);
+            IDWrapper remoteId;
+            if (_remoteIds.TryGetValue(machineId, out remoteId))
+            {
+                remoteId.ProcessDisconnected();
+            }
+            foreach (var pair in PlayerIDPairs)
+            {
+                if (string.Equals(
+                    GetMachineId(pair.Value),
+                    machineId,
+                    StringComparison.Ordinal))
+                {
+                    pair.Value.ProcessDisconnected();
+                }
+            }
+            Connect.ClearDCPlayers();
+            _remoteIds.Remove(machineId);
         }
 
         private void ResetRoomState()
         {
-            _remoteJoined = false;
+            _clientJoined = false;
             _roomReady = false;
-            if (_remoteId != null)
-            {
-                if (_transport.IsHandshakeComplete)
-                {
-                    _remoteId.ProcessConnected();
-                }
-                else
-                {
-                    _remoteId.ProcessDisconnected();
-                }
-            }
             _roomQueryPending = false;
+            _joinedRemoteMachineIds.Clear();
+            _departedRemoteMachineIds.Clear();
+            foreach (var remoteId in _remoteIds.Values)
+            {
+                remoteId.ProcessDisconnected();
+            }
+            _remoteIds.Clear();
             PlayerIDPairs.Clear();
             Reset();
             PID.Reset();
+            Connect.PlayerLimit = 4;
         }
 
-        private bool IsRemote(IDWrapper wrapper)
+        private static int NormalizePlayerLimit(int value)
         {
-            return _remoteId != null && wrapper.Equals(_remoteId);
+            return global::System.Math.Max(1, global::System.Math.Min(4, value));
         }
 
-        private string RemoteUnderlyingId
+        private bool IsWrapperAvailable(IDWrapper wrapper)
         {
-            get
+            if (wrapper == null || !wrapper.Connected)
             {
-                return string.IsNullOrEmpty(_transport.RemoteMachineId)
-                    ? string.Empty
-                    : FormatMachineId(_transport.RemoteMachineId);
+                return false;
             }
+            var machineId = GetMachineId(wrapper);
+            if (string.IsNullOrEmpty(machineId) ||
+                string.Equals(machineId, _transport.LocalMachineId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+            if (_departedRemoteMachineIds.Contains(machineId))
+            {
+                return false;
+            }
+            if (IsHost)
+            {
+                return _joinedRemoteMachineIds.Contains(machineId) &&
+                       _transport.IsMachineConnected(machineId);
+            }
+            return _clientJoined && _transport.IsHandshakeComplete;
+        }
+
+        private IDWrapper GetOrCreateRemoteId(string machineId)
+        {
+            if (string.IsNullOrEmpty(machineId))
+            {
+                return null;
+            }
+
+            IDWrapper remoteId;
+            if (!_remoteIds.TryGetValue(machineId, out remoteId))
+            {
+                remoteId = new IDWrapper(FormatMachineId(machineId), PID.NoID, true);
+                _remoteIds.Add(machineId, remoteId);
+            }
+            return remoteId;
+        }
+
+        private static string GetMachineId(IDWrapper wrapper)
+        {
+            return wrapper == null ? string.Empty : ParseMachineId(wrapper.UnderlyingID);
+        }
+
+        private static string ParseMachineId(string underlyingId)
+        {
+            if (string.IsNullOrEmpty(underlyingId) ||
+                !underlyingId.StartsWith(MachineIdPrefix, StringComparison.Ordinal))
+            {
+                return string.Empty;
+            }
+            return underlyingId.Substring(MachineIdPrefix.Length);
         }
 
         private static string FormatMachineId(string value)
         {
-            return string.IsNullOrEmpty(value) ? string.Empty : "frp-direct:" + value;
+            return string.IsNullOrEmpty(value) ? string.Empty : MachineIdPrefix + value;
         }
 
         private void Subscribe()
         {
             _transport.ConfigurationChanging += OnConfigurationChanging;
+            _transport.PlayerLimitChanged += OnPlayerLimitChanged;
             _transport.HandshakeCompleted += OnHandshakeCompleted;
             _transport.RemoteDisconnected += OnRemoteDisconnected;
             _transport.RoomQueryReceived += OnRoomQueryReceived;
@@ -588,11 +814,13 @@ namespace BroforceOnlineDiagnostics
             _transport.JoinRejectedReceived += OnJoinRejectedReceived;
             _transport.GameDataReceived += OnGameDataReceived;
             _transport.LeaveNoticeReceived += OnLeaveNoticeReceived;
+            _transport.MemberLeftReceived += OnMemberLeftReceived;
         }
 
         private void Unsubscribe()
         {
             _transport.ConfigurationChanging -= OnConfigurationChanging;
+            _transport.PlayerLimitChanged -= OnPlayerLimitChanged;
             _transport.HandshakeCompleted -= OnHandshakeCompleted;
             _transport.RemoteDisconnected -= OnRemoteDisconnected;
             _transport.RoomQueryReceived -= OnRoomQueryReceived;
@@ -602,6 +830,7 @@ namespace BroforceOnlineDiagnostics
             _transport.JoinRejectedReceived -= OnJoinRejectedReceived;
             _transport.GameDataReceived -= OnGameDataReceived;
             _transport.LeaveNoticeReceived -= OnLeaveNoticeReceived;
+            _transport.MemberLeftReceived -= OnMemberLeftReceived;
         }
     }
 }
