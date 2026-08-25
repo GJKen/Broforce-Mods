@@ -26,7 +26,7 @@
 
 当前构建还新增四类只读兼容性诊断：`LEVEL_OUTCOME` 记录联机关卡结束和扣命前后的生命、场景、切关及房间状态；`WORKSHOP_GAME_MODE_COMPARE` 比较下载到的 Workshop Campaign、`GameState` 和 `RoomInfo` 的 `gameMode`，不主动改写任何模式；`OPTIONAL_BRO_MOD` 通过可选公开 API 记录 Swap Bros 的版本、API 能力、有序角色表指纹和本地选择指纹；`AFK_TIMER`、`AFK_STATE` 和 `PLAYER_DROPOUT` 记录本机角色的原生 AFK 倒计时、35 秒超时和玩家槽位移除前后状态。这些诊断借鉴 Utility Mod 使用原生完成事件、状态入口和弱依赖 API 的方式，但不引入 RocketLib、不复制调试菜单，也不控制角色切换或更改原生 AFK 规则；代码已通过 .NET 3.5 标准构建，尚待游戏内双端触发验收。
 
-当前仍需继续验证：新增诊断在真实双端会话中的日志内容，尤其是 AFK 触发后房主是否仍把已移除槽位计入存活人数；道具修复在官方 Steam 大厅 Workshop 会话中的独立复测、重复退出/重入、多地图兼容、高延迟和长期稳定性；以及使用新 `LEVEL_OUTCOME` 证据定位特定地图第 4 关通关黑屏。部分 Workshop 地图还可能在 `GeneratePole.Awake`、`BroBase` 或特效销毁流程抛出自身运行错误。详细实现、测试边界和历史证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
+当前仍需继续验证：新增诊断在真实双端会话中的日志内容，尤其是 AFK 触发后房主是否仍把已移除槽位计入存活人数；道具修复在官方 Steam 大厅 Workshop 会话中的独立复测、重复退出/重入、多地图兼容、高延迟和长期稳定性。部分 Workshop 地图还可能在 `GeneratePole.Awake`、`BroBase` 或特效销毁流程抛出自身运行错误。详细实现、测试边界和历史证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
 
 ## 安装与使用
 
@@ -147,7 +147,7 @@ FRP room password: 与房主一致
 
 完成握手后按原有 Broforce 流程操作：房主打开线上建房界面并创建大厅；加入方打开线上大厅列表，等待唯一的 FRP 房间出现后选择加入。双方进入 P1-P4 后分别占用玩家位置，再由房主进入 Workshop 地图。无需额外输入房间码，也无需在游戏大厅里再次填写 FRP 地址。
 
-2026-08-25 用户已通过公共端点 `frp-use.com:27045/UDP` 完成基础双端验收：双方能够进入同一张第三方地图并正常联机游玩；当前分发构建又通过了双方按 `Esc` 正常显示自己和对方游戏名的验收。首轮失败、Workshop 加载分支修复和各轮构建记录见 [FRP Direct 实施与验收记录](issues/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
+2026-08-25 用户已通过公共端点 `frp-use.com:27045/UDP` 完成基础双端验收：双方能够进入同一张第三方地图并正常联机游玩；当前分发构建又通过了双方按 `Esc` 正常显示自己和对方游戏名的验收。首轮失败、Workshop 加载分支修复和各轮构建记录见 [FRP Direct 实施与验收记录](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
 
 当前实验层只支持房主和一台远端机器之间的连接；每台机器仍可使用 Broforce 原生本地玩家槽位。重复加入请求会复用现有身份，远端离开时房主大厅继续保留。第一版尚未实现 FRP 主机迁移，房主离开会结束房间；断线重入、长时间游玩、不同 Workshop 地图和高延迟环境仍需实机验收。
 
@@ -190,8 +190,8 @@ issues/                      历史问题、测试证据、验收结果和方案
 
 - [开发与测试文档](docs/DEVELOPMENT.md)
 - [问题记录索引](issues/README.md)
-- [最新异地加入、重复角色与 AFK 验收记录](issues/ISSUES-2026-08-24-联机加入方重复角色与AFK开关编译测试记录.md)
-- [FRP Direct 可行性与实施方案](issues/ISSUES-2026-08-24-FRP内网穿透联机方案.md)
+- [已归档：异地加入、重复角色与 AFK 验收记录](issues/archive/ISSUES-2026-08-24-联机加入方重复角色与AFK开关编译测试记录.md)
+- [已归档：FRP Direct 可行性与实施方案](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)
 - [Utility Mod 代码借鉴方案与 AFK 诊断改进](issues/ISSUES-2026-08-25-Utility-Mod代码借鉴方案与AFK诊断改进.md)
 
 开发文档包含当前有效的 Steam/FRP 联机流程、Workshop 注入调用链、英雄回复问题、构建约束、日志分析和后续测试步骤。`issues` 保存每轮问题和测试证据，其中可能包含已经撤销或被后续结论取代的历史方案；阅读时以问题索引、README 和开发文档的当前状态为准。

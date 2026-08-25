@@ -25,7 +25,7 @@
 - 已验证 `Esc` 返回路径会先进入 `VictoryCustomCampaignSteam`，再离开 Steam Lobby 并加载 `MainMenu`；当前实现会在启用 Workshop 注入的线上会话中，于 `MainMenu` 加载后调用官方 `MainMenu.TryToGoToLobby`，直接打开在线房间查看界面。
 - 已验证从在线房间大厅返回主菜单时，Logo 入场动画完成前不会显示菜单文字或高亮框；普通主菜单流程和本地地图返回流程不受影响。
 - 最新异地高延迟测试未再出现同一加入方生成 P2-P4 多个角色；重复 `RequestJoinGame` 防护和联机 AFK 禁用开关已通过用户实测，但该轮未附新的双方运行日志。
-- 重复退出/重入多轮后的稳定性、第 4 关通关黑屏和不同 Workshop 地图兼容性仍未全部定位。
+- 重复退出/重入多轮后的稳定性和不同 Workshop 地图兼容性仍未全部定位。
 - 默认关闭的 `FRP Direct` 已通过公共 FRP UDP 端点完成双端正常游玩实测；FRP 负责房间、PID 和游戏 RPC，Steam 仅负责 Workshop 内容下载。
 - 当前分发构建已通过 FRP 双方游戏名显示验收；`Esc` 在线玩家列表会显示本机和仍在线的远端玩家。
 - 当前分发构建已实现 Workshop 联机道具确定性和重复拾取防护，`test003` 已通过 FRP Direct 双端实测验收；官方 Steam 大厅中的 Workshop 路径使用同一补丁判定，但尚待独立复测。
@@ -187,7 +187,7 @@ Diagnostic session ID: test001
 
 房间密码只保护握手，不为后续 UDP 内容提供加密。UMM 会将该字段保存在本机 Mod 设置文件中，测试应使用独立的临时密码。FRP token 不属于 Mod 设置，也不会参与协议。
 
-2026-08-25 用户已通过公共端点 `frp-use.com:27045/UDP` 完成真实双端验收：公网 UDP 转发、Lidgren 连接、密码挑战、协议、`buildHash`、房间查询、PID/ServerID、P1-P4、Workshop 内容加载和游戏 RPC 均已推进到正常双端游玩；当前分发构建又通过了双方 `Esc` 玩家名显示验收。FRP 第一版仍只支持房主和一台远端机器，不支持主机迁移。首轮失败根因与各轮构建证据见 [FRP Direct 实施与验收记录](../issues/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
+2026-08-25 用户已通过公共端点 `frp-use.com:27045/UDP` 完成真实双端验收：公网 UDP 转发、Lidgren 连接、密码挑战、协议、`buildHash`、房间查询、PID/ServerID、P1-P4、Workshop 内容加载和游戏 RPC 均已推进到正常双端游玩；当前分发构建又通过了双方 `Esc` 玩家名显示验收。FRP 第一版仍只支持房主和一台远端机器，不支持主机迁移。首轮失败根因与各轮构建证据见 [FRP Direct 实施与验收记录](../issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
 
 ### Workshop 地图注入
 
@@ -232,7 +232,7 @@ Diagnostic session ID: test001
 
 当前构建为联机问题增加四类低频、只读诊断，不改变原生关卡结果、Workshop 模式、角色选择或 AFK 规则：
 
-- `LEVEL_OUTCOME` 在 `GameModeController.LevelFinish` 和 `Player.RemoveLife` 前后各采集一次状态，记录结果参数、当前场景、玩家槽位和生命、存活人数、本地人数、总生命、直升机人数、`levelFinished`、`switchingLevel`、`waitingForAllPlayersToReady`、目标场景、`GameState` 关卡/模式以及 `RoomInfo` 关卡/场景/模式。它只在已经建立的在线会话中写入普通日志和 `.trace.log`，用于分析全员死亡未重启、重启循环和通关黑屏。
+- `LEVEL_OUTCOME` 在 `GameModeController.LevelFinish` 和 `Player.RemoveLife` 前后各采集一次状态，记录结果参数、当前场景、玩家槽位和生命、存活人数、本地人数、总生命、直升机人数、`levelFinished`、`switchingLevel`、`waitingForAllPlayersToReady`、目标场景、`GameState` 关卡/模式以及 `RoomInfo` 关卡/场景/模式。它只在已经建立的在线会话中写入普通日志和 `.trace.log`，用于分析全员死亡未重启、重启循环和其它关卡结果异常。
 - `WORKSHOP_GAME_MODE_COMPARE` 在 `SteamController.LevelLoadCompleteEvent` 返回有效 `Campaign` 后比较 `campaign.header.gameMode`、`GameState.gameMode` 与 `RoomInfo.gameMode`。至少两个可读取来源不一致时写警告；该诊断明确标记 `action=observe-only`，不会把任一来源写回其它状态。
 - `OPTIONAL_BRO_MOD` 使用 `UnityModManager.FindMod("Swap Bros Mod")` 和 `Swap_Bros_Mod.API` 做弱依赖探测。日志包含 Mod/程序集版本、模块 ID、可用 API、有序角色表 SHA-256、P1-P4 本地选择 SHA-256 和经过清洗的选择名称；未安装、未启用、API 缺失或调用失败时安全降级。当前 Mod 不引用 RocketLib、不调用换人 API，也不会因为指纹不同自动拒绝 Steam 或 FRP 会话。
 - `AFK_TIMER`、`AFK_STATE` 和 `PLAYER_DROPOUT` 观察本机原生 AFK 倒计时、35 秒触发和槽位移除前后状态；具体字段、旧日志证据和双端验收方式见前文“AFK 开关与原生保底行为”。
@@ -365,7 +365,6 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - `test011` 已确认创建方先进入地图时，加入方可在场景就绪后自动创建 P2；仍需继续验证不同地图和控制器组合。
 - `test009` 使用的 Workshop 地图曾在 `GeneratePole.Awake` 抛出 `NullReferenceException`。该错误来自地图对象初始化，当前未阻止本轮晚加入和 P2 创建，但更换地图或地图对象时仍需单独排查。
 - 重复退出/重入若干轮后，加入方可能无法再次进入；现有证据不足以定位到 Lobby、PID、槽位或 `Dropout` 清理，状态仍是未修复、未定位。
-- 特定 Workshop 地图第 4 关通关后曾出现黑屏；当前构建已增加 `LEVEL_OUTCOME` 采集双方场景、`levelFinished`、切关目标、生命和 RoomInfo 状态，但仍需现场双端日志才能定位。
 - 2026-08-21 关于跳关死亡、重入回到第一关和 `BroBase.Start` NRE 的实验性修改已经全部撤销；该 issue 只作为历史分析参考，不代表当前 DLL 包含那些修复。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证；Swap Bros 已有只读版本/API/角色表指纹诊断，但尚未完成双端兼容性验收，也不会自动阻止环境不一致的会话。
 - Workshop 道具同步和重复拾取防护已通过 `test003` FRP Direct 双端实机验收；官方 Steam 大厅 Workshop 会话和更多地图仍需独立覆盖。
