@@ -40,28 +40,125 @@ namespace BroforceOnlineDiagnostics
             var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
                 "PlayerUpdateAfkPreventionPrefix",
                 BindingFlags.NonPublic | BindingFlags.Static);
-            if (updateMethod == null || idleTimerField == null || prefixMethod == null)
+            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "PlayerUpdateAfkDiagnosticsPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (updateMethod == null || idleTimerField == null ||
+                prefixMethod == null || postfixMethod == null)
             {
                 DiagnosticLog.Warning(
-                    "Online AFK prevention patch could not resolve Player.Update or Player.idleTimer.");
+                    "Online AFK diagnostics patch could not resolve Player.Update or Player.idleTimer.");
                 return;
             }
 
             try
             {
-                _harmony.Patch(updateMethod, new HarmonyMethod(prefixMethod), null, null, null);
+                _playerIdleTimerField = idleTimerField;
+                _harmony.Patch(
+                    updateMethod,
+                    new HarmonyMethod(prefixMethod),
+                    new HarmonyMethod(postfixMethod),
+                    null,
+                    null);
+
+                var dropoutRpc = typeof(HeroController).GetMethod(
+                    "DropoutRPC",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                    null,
+                    new[] { typeof(int) },
+                    null);
+                var dropoutPrefix = typeof(HarmonyDiagnostics).GetMethod(
+                    "AfkDropoutRpcPrefix",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                var dropoutPostfix = typeof(HarmonyDiagnostics).GetMethod(
+                    "AfkDropoutRpcPostfix",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                if (dropoutRpc == null || dropoutPrefix == null || dropoutPostfix == null)
+                {
+                    DiagnosticLog.Warning(
+                        "Online AFK diagnostics could not resolve HeroController.DropoutRPC.");
+                }
+                else
+                {
+                    _harmony.Patch(
+                        dropoutRpc,
+                        new HarmonyMethod(dropoutPrefix),
+                        new HarmonyMethod(dropoutPostfix),
+                        null,
+                        null);
+                }
+
+                var playerUpdatePatched = HasCurrentHarmonyOwnerPatch(
+                    updateMethod,
+                    prefixMethod,
+                    postfixMethod);
+                var dropoutRpcPatched = dropoutRpc != null &&
+                    HasCurrentHarmonyOwnerPatch(
+                        dropoutRpc,
+                        dropoutPrefix,
+                        dropoutPostfix);
+                LogAfkEvent(
+                    "AFK_DIAGNOSTICS_PATCH playerUpdate=" + playerUpdatePatched +
+                    "; dropoutRpc=" + dropoutRpcPatched +
+                    "; expectedPlayerHooks=prefix+postfix" +
+                    "; expectedDropoutHooks=prefix+postfix");
                 DiagnosticLog.Info(
-                    "Online AFK prevention patch enabled; behavior is controlled by the UMM setting.");
+                    "Online AFK diagnostics enabled; native timer milestones and dropout state are observed; prevention remains controlled by the UMM setting.");
             }
             catch (Exception exception)
             {
                 DiagnosticLog.Warning(
-                    "Online AFK prevention patch failed: " + exception);
+                    "Online AFK diagnostics patch failed: " + exception);
             }
         }
 
-        private static void PlayerUpdateAfkPreventionPrefix(Player __instance)
+        private static bool HasCurrentHarmonyOwnerPatch(
+            MethodBase method,
+            MethodInfo expectedPrefix,
+            MethodInfo expectedPostfix)
         {
+            if (_harmony == null || method == null ||
+                expectedPrefix == null || expectedPostfix == null)
+            {
+                return false;
+            }
+
+            var patchInfo = Harmony.GetPatchInfo(method);
+            if (patchInfo == null)
+            {
+                return false;
+            }
+
+            var prefixFound = false;
+            foreach (var patch in patchInfo.Prefixes)
+            {
+                if (string.Equals(patch.owner, _harmony.Id, StringComparison.Ordinal) &&
+                    patch.PatchMethod == expectedPrefix)
+                {
+                    prefixFound = true;
+                    break;
+                }
+            }
+
+            var postfixFound = false;
+            foreach (var patch in patchInfo.Postfixes)
+            {
+                if (string.Equals(patch.owner, _harmony.Id, StringComparison.Ordinal) &&
+                    patch.PatchMethod == expectedPostfix)
+                {
+                    postfixFound = true;
+                    break;
+                }
+            }
+
+            return prefixFound && postfixFound;
+        }
+
+        private static void PlayerUpdateAfkPreventionPrefix(
+            Player __instance,
+            out AfkUpdateObservation __state)
+        {
+            __state = BeginAfkUpdateObservation(__instance);
             var settings = Plugin.Settings;
             if (__instance == null || settings == null ||
                 !settings.DisableOnlineAfkSpectatorMode || !IsOnline() || !__instance.IsMine)
@@ -70,6 +167,25 @@ namespace BroforceOnlineDiagnostics
             }
 
             SetFieldOrProperty(__instance, "idleTimer", 0f);
+        }
+
+        private static void PlayerUpdateAfkDiagnosticsPostfix(
+            Player __instance,
+            AfkUpdateObservation __state)
+        {
+            CompleteAfkUpdateObservation(__instance, __state);
+        }
+
+        private static void AfkDropoutRpcPrefix(
+            int playerNum,
+            out AfkDropoutObservation __state)
+        {
+            __state = BeginAfkDropoutObservation(playerNum);
+        }
+
+        private static void AfkDropoutRpcPostfix(AfkDropoutObservation __state)
+        {
+            CompleteAfkDropoutObservation(__state);
         }
 
         private static IEnumerable<CodeInstruction> RequestJoinGameTranspiler(

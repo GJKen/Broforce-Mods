@@ -336,12 +336,14 @@ namespace BroforceOnlineDiagnostics
             PatchWorkshopJoinPromptSuppression();
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
+            PatchLevelOutcomeDiagnostics();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
             PatchLobbyMainMenuReturnPostfix();
             PatchMainMenuMenuActiveSetter();
             PatchMainMenuShowRoutineCompletion();
             NotifySceneLoaded(SceneManager.GetActiveScene());
+            OptionalBroModDiagnostics.LogCompatibilitySnapshot("diagnostics-start");
 
             DiagnosticLog.Info("Harmony method tracing enabled; patched methods=" + patchedCount + ".");
         }
@@ -502,6 +504,7 @@ namespace BroforceOnlineDiagnostics
                     DiagnosticLog.BeginSession(
                         __originalMethod.DeclaringType.Name + "." + __originalMethod.Name,
                         __originalMethod.Name == "CreateMatch" ? "host" : "client");
+                    OptionalBroModDiagnostics.LogCompatibilitySnapshot("network-session-start");
                     Interlocked.Exchange(ref _sequence, 0);
                     lock (Sync)
                     {

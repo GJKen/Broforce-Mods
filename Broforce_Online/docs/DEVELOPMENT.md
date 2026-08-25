@@ -8,7 +8,7 @@
 
 当前版本为实验性的 `0.5.0`，尚未达到稳定发布状态。
 
-当前分发构建为 `buildHash=3e456a6c6f077b5e466fd6bc191b649b42dd70364f23bc5b8b3a1c1b4d8fba62`，DLL SHA-256 为 `171B879B0934E260DC81C83C6668E01A989091E887C7BAE0F54A91DD910E9E8C`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。更早的构建与失败修复时间线只保留在对应 issue 中。
+当前分发构建为 `buildHash=0915020604a45c80f6cb8b465368fde880bfd5ff00938a135dcce7d878a26caf`，DLL SHA-256 为 `792177CB5ECE13EF50AEE967B32F18C3AA30804FD824667AF1468721EAFE4AE9`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。当前构建新增关卡结果、Workshop `gameMode` 一致性、可选 Swap Bros 指纹和原生 AFK 流程诊断；代码与双端部署已验证，游戏内双端触发尚待验收。更早的构建与失败修复时间线只保留在对应 issue 中。
 
 所有玩家必须：
 
@@ -62,6 +62,12 @@ UMM 选项 `Disable automatic AFK spectator mode in online games` 由每台客�
 2026-08-25 双端实测确认：房主开启、加入方关闭时，加入方角色仍按原生超时进入 AFK，房主角色保持在线。需要保护双方角色时，双方必须分别开启该选项。双方都关闭时，一名玩家先进入 AFK 后，剩余端通常变成“存活玩家数等于本机玩家数”，原生逻辑会把最后一名角色的 `idleTimer` 清零。
 
 对应原生条件位于 `Player.Update`：只有 `HeroController.GetPlayersAliveCount() > HeroController.GetLocalPlayerCount()` 时才累计本地角色的 `idleTimer`，达到 35 秒后调用 `HeroController.Dropout`。因此，单靠原生 AFK 超时通常会保留最后一个角色，不会让双方角色全部进入 AFK；若其它退出、断线或角色移除路径造成场上无人，仍需按独立问题观察重启行为。
+
+当前构建对该原生流程增加低频只读观测，不改变倒计时或退出行为：约 5 秒记录 `AFK_TIMER event=counting`，约 30 秒记录 `event=warning`，倒计时清零记录 `event=reset`；本机确实进入 35 秒分支后记录 `AFK_STATE event=timeout-triggered`，`HeroController.DropoutRPC` 执行后记录 `PLAYER_DROPOUT event=applied`。原生 AFK 触发与网络 RPC 之间使用 2 秒关联窗口，避免回调稍晚时误记为未知原因。只有与本机 35 秒分支对应的退出写 `reason=native-afk-timeout`，其它退出保守写 `reason=unknown`。进房清理期和本来就未激活的空槽位不写 `PLAYER_DROPOUT`，避免把初始化清理当作真实退出。
+
+上一轮官方 Steam Workshop 双端会话使用旧构建 `fcb50bff38661e2d5ecca9e79ea4a4a190d56702b3f2a719f846c30a400e112a`：房主在第三关生命归零后仍记录 `alive=1`，约 5 分钟未判定失败；加入方据用户确认已进入 AFK，但旧日志直到退出房间时才出现 `Dropout`，退出后房主才变为 `alive=0` 并触发 `LevelFinish(Fail)`。该证据只能说明远端槽位消失后失败判定恢复，不能区分“AFK 没同步给房主”和“房主仍把 AFK 槽位计入存活”。公开房间里额外出现但未成功加载 Mod/地图的成员不纳入该结论。
+
+下一轮实测先检查启动日志 `AFK_DIAGNOSTICS_PATCH playerUpdate=True; dropoutRpc=True`。随后让目标客户端保持无输入至少 35 秒，双方都收集相同会话 ID 的普通日志和 `.trace.log`；重点对齐加入方的 `AFK_TIMER`、`AFK_STATE`、`PLAYER_DROPOUT` 与房主同一时刻的 `alive`、`slotPlaying`、`playerPresent`。若启用了防 AFK 开关，应看到一次 `AFK_STATE event=prevention-active`，且不应出现该本机槽位的 `timeout-triggered`。
 
 ### MCP 状态调试
 
@@ -222,6 +228,32 @@ Diagnostic session ID: test001
 
 后续在官方 Steam 大厅独立复测时，双方必须完全退出并重启游戏，先核对日志中的 `BUILD_INFO buildHash`；然后确认同一位置的道具数量和类型一致，弹药已满站在箱子上不会持续播放动画或音效，消耗弹药后能正常拾取一次，并检查 MechDrop、RCCar 等显式特殊箱仍保持原类型。
 
+### 关卡结果与兼容性诊断
+
+当前构建为联机问题增加四类低频、只读诊断，不改变原生关卡结果、Workshop 模式、角色选择或 AFK 规则：
+
+- `LEVEL_OUTCOME` 在 `GameModeController.LevelFinish` 和 `Player.RemoveLife` 前后各采集一次状态，记录结果参数、当前场景、玩家槽位和生命、存活人数、本地人数、总生命、直升机人数、`levelFinished`、`switchingLevel`、`waitingForAllPlayersToReady`、目标场景、`GameState` 关卡/模式以及 `RoomInfo` 关卡/场景/模式。它只在已经建立的在线会话中写入普通日志和 `.trace.log`，用于分析全员死亡未重启、重启循环和通关黑屏。
+- `WORKSHOP_GAME_MODE_COMPARE` 在 `SteamController.LevelLoadCompleteEvent` 返回有效 `Campaign` 后比较 `campaign.header.gameMode`、`GameState.gameMode` 与 `RoomInfo.gameMode`。至少两个可读取来源不一致时写警告；该诊断明确标记 `action=observe-only`，不会把任一来源写回其它状态。
+- `OPTIONAL_BRO_MOD` 使用 `UnityModManager.FindMod("Swap Bros Mod")` 和 `Swap_Bros_Mod.API` 做弱依赖探测。日志包含 Mod/程序集版本、模块 ID、可用 API、有序角色表 SHA-256、P1-P4 本地选择 SHA-256 和经过清洗的选择名称；未安装、未启用、API 缺失或调用失败时安全降级。当前 Mod 不引用 RocketLib、不调用换人 API，也不会因为指纹不同自动拒绝 Steam 或 FRP 会话。
+- `AFK_TIMER`、`AFK_STATE` 和 `PLAYER_DROPOUT` 观察本机原生 AFK 倒计时、35 秒触发和槽位移除前后状态；具体字段、旧日志证据和双端验收方式见前文“AFK 开关与原生保底行为”。
+
+双端分析时，先比较 `BUILD_INFO buildHash`，再比较双方 `OPTIONAL_BRO_MOD` 的安装/启用状态、版本、`rosterHash` 和 `selectedHash`。角色表或选择指纹不同只能证明双方可选角色环境不同，不能单独证明某次英雄生成失败的根因；仍需结合英雄请求、生成和双方错误日志。首次实测还应确认 `Level outcome diagnostics enabled; patched methods=2.`，并分别触发一次扣命和通关/失败来检查 `LEVEL_OUTCOME` 前后状态是否完整。
+
+#### Utility Mod 借鉴边界
+
+本轮参考 Utility Mod 的 Workshop 完成事件、原生关卡状态入口和 Swap Bros 公开 API 弱依赖方式，但没有复制其调试菜单或主动修改游戏状态的功能。当前落地范围如下：
+
+| 候选方案 | 当前状态 |
+| --- | --- |
+| Workshop 下载完成后的状态恢复 | 现有回调已保留 Campaign、发布/在线标志和权威关卡号；本轮只新增 `gameMode` 一致性观测，不强制写回 |
+| 通关和失败状态的原生观测点 | 已新增 `LEVEL_OUTCOME`，待双端触发验收 |
+| 调试操作记录与重放 | 未实现，用户暂不需要自动复现 |
+| 确定性对象注册顺序 | 未实现；当前道具确定性修复不生成动态对象，不能等同于 `Registry.RegisterDeterminsiticGameObject` |
+| 可选 Mod 弱依赖 | 已新增只读 `OPTIONAL_BRO_MOD`，不引用 RocketLib、不调用换人 API |
+| 设置写入前序列化验证 | 未实现；当前仍直接调用 `UnityModManager.ModSettings.Save`，异常时只记录错误 |
+
+完整源码依据、AFK 日志增补、构建哈希和后续清单见 [Utility Mod 代码借鉴方案与 AFK 诊断改进](../issues/ISSUES-2026-08-25-Utility-Mod代码借鉴方案与AFK诊断改进.md)。
+
 ### 英雄回复策略
 
 部分加入方客户端可能收不到官方 `RequestHeroTypeFromMaster` 回复。当前策略是：
@@ -276,6 +308,9 @@ Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause`
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：线上房间、Steam Lobby、关卡切换、Workshop 加载和英雄请求追踪/注入。
 - `src/HarmonyDiagnostics.WorkshopPickup.cs`：Workshop 道具生成确定性、拾取所有权、重复调用幂等和弹药已满退避。
+- `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、超时触发与玩家槽位移除的低频只读观测。
+- `src/HarmonyDiagnostics.LevelOutcome.cs`：联机 `LevelFinish`/`RemoveLife` 的低频前后状态快照。
+- `src/OptionalBroModDiagnostics.cs`：可选 Swap Bros 公开 API、版本、角色表和选择指纹的只读弱依赖诊断。
 - `src/ReflectionProbe.cs`：只读扫描 `Assembly-CSharp` 中可能相关的类型。
 - `src/FrpDirectTransport.cs`：Lidgren UDP 监听/直连、握手认证、版本校验、心跳、重连、房间控制消息和可靠 RPC 字节通道。
 - `src/FrpDirectRoomInfo.cs`：FRP 房间信息编码，以及 Workshop ready/phase 元数据同步。
@@ -305,6 +340,8 @@ diagnostics-host-<session>-<utc-time>.trace.log
 
 普通 `.log` 记录关键联机事件，`.trace.log` 记录详细 Harmony 调用。每行包含 UTC 时间、会话相对时间、会话 ID、日志标签和日志级别；会话开始事件还会记录实际网络角色。普通日志约每 750ms 刷新一次，警告、错误和会话结束时立即刷新。
 
+新增的 `LEVEL_OUTCOME`、`AFK_TIMER`、`AFK_STATE` 和 `PLAYER_DROPOUT` 同时写普通日志和 `.trace.log`；`WORKSHOP_GAME_MODE_COMPARE` 和 `OPTIONAL_BRO_MOD` 写普通日志。`OPTIONAL_BRO_MOD` 在诊断启用和每个网络会话开始时各采集一次，网络问题分析以对应会话文件中的第二次快照为准。
+
 `SteamLayer.JoinLobby` 内部可能先调用一次 `LeaveMatch` 清理旧大厅；该调用不再被诊断系统当成正式离开，因此不会提前关闭客户端的加入会话日志。
 
 每次通过标准 `BuildAndDeploy.ps1` 构建时，脚本会把本次源码、引用程序集、编译器目标和配置组成清单并计算 SHA-256 `buildHash`，再将该值作为编译期常量嵌入 DLL。启动日志、普通会话日志和 `.trace.log` 都会写入 `BUILD_INFO algorithm=SHA-256; buildHash=...`，`SESSION_BEGIN` 也会带上同一值。双端分析必须先比较该值；对面只有日志时也可据此确认是否使用同一构建。未经过标准脚本的源码/IDE 构建使用 `UNBUILT` 标记。
@@ -328,9 +365,9 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - `test011` 已确认创建方先进入地图时，加入方可在场景就绪后自动创建 P2；仍需继续验证不同地图和控制器组合。
 - `test009` 使用的 Workshop 地图曾在 `GeneratePole.Awake` 抛出 `NullReferenceException`。该错误来自地图对象初始化，当前未阻止本轮晚加入和 P2 创建，但更换地图或地图对象时仍需单独排查。
 - 重复退出/重入若干轮后，加入方可能无法再次进入；现有证据不足以定位到 Lobby、PID、槽位或 `Dropout` 清理，状态仍是未修复、未定位。
-- 特定 Workshop 地图第 4 关通关后曾出现黑屏；需要在现场保留双方场景、`levelFinished`、目标场景和 Lobby phase/ready 后独立分析。
+- 特定 Workshop 地图第 4 关通关后曾出现黑屏；当前构建已增加 `LEVEL_OUTCOME` 采集双方场景、`levelFinished`、切关目标、生命和 RoomInfo 状态，但仍需现场双端日志才能定位。
 - 2026-08-21 关于跳关死亡、重入回到第一关和 `BroBase.Start` NRE 的实验性修改已经全部撤销；该 issue 只作为历史分析参考，不代表当前 DLL 包含那些修复。
-- 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证。
+- 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证；Swap Bros 已有只读版本/API/角色表指纹诊断，但尚未完成双端兼容性验收，也不会自动阻止环境不一致的会话。
 - Workshop 道具同步和重复拾取防护已通过 `test003` FRP Direct 双端实机验收；官方 Steam 大厅 Workshop 会话和更多地图仍需独立覆盖。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
 - `FRP Direct` 游戏层已完成公共 FRP UDP 双端正常游玩验收，但仍是默认关闭的实验功能，不能视为稳定发布版本。
