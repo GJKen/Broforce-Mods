@@ -8,7 +8,7 @@
 
 当前版本为实验性的 `0.5.0`，尚未达到稳定发布状态。
 
-当前分发构建为 `buildHash=caf775d4805d39773b9a6b00c0569366e5a693607323133e0401033e6322e2da`，DLL SHA-256 为 `08FFC24B5FFE1E2284DA28244360B3C95D3415ECC8E3B5C75C6594D1B153BB9A`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。当前构建新增关卡结果、Workshop `gameMode` 一致性、可选 Swap Bros 指纹和原生 AFK 流程诊断；代码与双端部署已验证，游戏内双端触发尚待验收。更早的构建与失败修复时间线只保留在对应 issue 中。
+当前分发构建为 `buildHash=f4be08d8d30129049f3acd003c93116e077edaf5f3be3cda8a9ce1faac8701a5`，DLL SHA-256 为 `93E8848A4BBCA07DD39B35442CC5F43B68C443C6828D6BFC6023104F8B27B7F2`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收。当前构建增加了晚加入/重入时向新加入客户端重放房主 buffered 网络实例的修复，并已通过当前 Workshop 地图上的双端退出房间和重新加入实测；多地图、高延迟和长期稳定性仍未完整覆盖，因此 FRP Direct 继续属于实验功能。更早的构建与失败修复时间线只保留在对应 issue 中。
 
 所有玩家必须：
 
@@ -83,6 +83,7 @@ UMM 选项 `Disable automatic AFK spectator mode in online games` 由每台客�
 - 上述联机稳定性目标处于测试或修复阶段时，视为已经持续授权双端 MCP 读取和运行时调试，不要求用户额外发送固定口令“开始”，也不要求逐项确认。授权持续到目标完成、用户要求停止或客户端不可用；客户端重新启动并恢复连接后可以继续同一轮排查。
 - 快速检查与正式监控必须区分：连通性检查、单次状态读取、截图和指定日志读取属于快速检查，应直接调用已配置端点并立即返回结果，不发送倒计时提示、不等待 40 秒，也不扩展成完整事件监控。
 - 快速检查优先直接调用双端 MCP 的 `ping`；不要先扫描配置文件、枚举工具或额外测试 TCP 端口。只有 MCP 工具未加载或 `ping` 返回连接错误时，才简短报告原因；除非用户要求继续排查，否则不追加配置和端口诊断。
+- MCP 单次请求返回 `Game process died` 只表示该次请求失败，不能据此认定游戏已经退出。必须立即用同一端点的 `ping`，必要时再用 `game_state` 复核；只要端点仍响应或用户确认游戏仍在运行，就继续按请求失败处理。只有后续连接检查持续失败，并且有进程状态、UMM 日志或 `error.log` 等独立证据时，才能判断客户端退出或崩溃。
 - 只有需要复现并持续观察联机事件时才进入正式监控。正式监控开始前发送“倒计时开始了!!!”，固定观察 40 秒，结束后发送“倒计时结束了!!!”。
 - 用户确认游戏和 Unity Inspector Mod 已运行后，正式监控开始时只读取一次基础状态，并记录当前诊断会话日志及读取位置，然后立即进入监控。
 - 正式监控的 40 秒内只持续采样和收集数据，不中途停下来分析、总结、判断根因、询问用户、修改代码或发送进度汇报；所有分析和后续操作统一放在“倒计时结束了!!!”之后。
@@ -171,6 +172,14 @@ Diagnostic session ID: test001
 
 自动加入请求发出后，若 45 秒内没有观察到本地 `Player.Start` 或本地 `SetPlayerCharacter` 确认有效槽位，Mod 会清除挂起请求并重新调用一次 `AddLocalPlayer`；确认本地槽位建立后停止重试。普通重复加入保护使用 10 秒限频窗口，不等于晚加入请求的 45 秒总超时。实际成为 Steam Lobby Host 的端也会启用晚加入 `RequestJoinGame` 的保护放行，不再只依赖最初是否通过 `CreateMatch` 创建大厅。
 
+2026-08-25 FRP Direct 双端日志和 MCP 状态确认了退出后重入的缺失链路：加入方加载 Workshop 场景前曾正确建立房主 P1 和 `Rambro`，但场景重载后 `HeroController.players[0]` 变为 `null`；房主 PID、`playersPlaying[0]` 和控制器编号仍正确。原生 `SpawnJoinedPlayers` 只为本机拥有且尚无 `Player` 的槽位广播 `AddPlayer`，所以加入方不会替远程房主创建 P1，而已经在关卡中的房主也不会为这次重入重新执行该场景入口。随后收到的 `RequestAllPlayerData`/`UpdatePlayerData` 只能恢复槽位元数据，不能补建 `Player` 实例。
+
+`test004` 使用 `buildHash=02768780e9c4c304d97c602e5fbae6e6b39dd1127e1f0a3c667f05e78fa0da6b` 复测后仍然失败。房主两次成功执行 `RequestJoinGame`、给加入方分配 P2，并记录向目标 PID 定向重发一个已有槽位；加入方只执行了本地 P2 的 `HeroController.AddPlayer(playerNum=1)`，从未执行房主 P1 的 `AddPlayer(playerNum=0)`。程序集 IL 确认 `RPCController.CreateRPC` 会保存委托方法的声明类型和方法名，`StaticRPCObject.Execute` 会先通过 `RPCSecurity.IsAllowed` 再反射调用。旧实现发送的是 Mod 程序集内的 `AddPlayerForWorkshopRebroadcast` wrapper，接收端因此静默拒绝；房主侧的“已重发”日志只证明 RPC 创建和路由调用完成，不证明远端执行。
+
+本轮 40 秒双端 MCP 监控完整捕获了后续失败时序：加入方退出后，房主在约 5 秒后接受新的 FRP 连接；加入方仍处于 `MainMenu` 时，房主 P1 的 buffered `PlayerPrefab` 和角色已经提前实例化。随后加入方加载最终 Workshop 场景，MainMenu 阶段建立的 P1 随场景卸载被销毁；最终场景只创建本地 P2。上一构建定向发送的原生 `HeroController.AddPlayer(playerNum=0)` 确实到达并执行，但程序集 IL 证明该方法对远程 PID 只调用 `PingController.ResetPingSampler`，不会实例化 `Player`，因此无法恢复 P1。最终场景的 `Registry` 已确认不再包含房主旧 P1 的 `60001/60003` NID，可安全重放相同实例。
+
+当前修复在房主成功处理晚加入 `RequestJoinGame`、确认新加入方已经处于最终场景并建立自己的槽位后，调用原生 `InstantiationController.SendInstantiatedPrefabs(requesteeID)`，向该加入方重新发送房主当前的 buffered 网络实例，包括房主的 `PlayerPrefab` 和角色实例。它不会向其它客户端重复广播，也不会覆盖新加入方自己的槽位。房主记录了 `Late workshop replayed buffered network instances to the joining client`；加入方在最终 Workshop 场景中重新出现房主 P1 的 `Player.Start`、`RegisterHeroToPlayer` 和 `SetPlayerCharacter`。`buildHash=f4be08d8d30129049f3acd003c93116e077edaf5f3be3cda8a9ce1faac8701a5` 已完成双端退出房间和重新加入实测：双方最终均有 P1/P2，加入方远程 P1 的角色、位置和房主一致，用户确认未再出现房主角色不可见。
+
 这是实验性分支，依赖创建方和加入方使用相同版本 Mod。创建方处于 `newJoin` 或任务选择界面时，加入方不会启动晚加入地图加载；进入 Workshop 过场后即可触发，最多等待约 120 秒。host 端只在晚加入 Workshop 会话中放宽 `HeroController.RequestJoinGame` 的关卡完成和控制器注册保护，使加入方的 P2 请求能够创建角色。晚加入后仍可能受到玩家状态、英雄同步和地图脚本影响，因此稳定测试仍应优先使用“先加入大厅、创建方后进入地图”的顺序。
 
 ## 当前实现
@@ -213,7 +222,9 @@ Diagnostic session ID: test001
 
 加入方晚加入时，如果房间信息或 Lobby 阶段显示创建方正在进入配置中的 Workshop 场景，`ConnectionLayer.OnJoinedLobby` 会刷新 Lobby 数据并先执行一次 Workshop 加载；地图下载完成后复用同一个完成回调继续原生流程。晚加入状态机在配置场景的 `sceneLoaded` 回调和 `SpawnJoinedPlayers` 都发生后才自动申请本地玩家槽位，避免玩家在加载阶段按下的攻击键丢失，也避免在原生玩家列表建立前发出无效请求。host 端的 `RequestJoinGame` 补丁只对晚加入 Workshop 会话绕过两个会使原生方法提前返回的保护条件，普通大厅仍使用原生判断。进入原生请求前会记录 `GetNextUnusedPlayerNumber()` 和四个玩家槽位；如果发现已标记为 playing 但对应 `Player` 对象为空，会清理该明确失效槽位。请求成功后，拥有角色的一端会在物理状态稳定后向其它客户端重发该角色当前的权威 `SetSpawnPositon` 坐标，并保留出生类型；不得通过 `WorkOutSpawnPosition` 重新计算出生位置，因为它会把已经不是首次部署的角色改判为中途空投。启用有效 Workshop 注入配置的线上会话中，每台机器同一时间只允许一个本地 `AddLocalPlayer` 请求；已有本地槽位或请求时晚加入流程直接复用，且 `SpawnJoinedPlayers` 会在广播前清理额外的本地空槽位。明确本地掉线后才释放请求锁以允许正常重入。
 
-晚加入测试成功判据：host 日志出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方日志按顺序出现 `Starting late workshop join load`、`Late workshop client scene loaded`、`Late workshop SpawnJoinedPlayers observed`、`Late workshop join requested a local player slot after scene readiness` 和 `Late workshop automatic join completed`；无需再次按攻击键即可创建 P2 角色。普通进入时，双方都应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不会重新计算远程角色出生点。
+房主在最终 Workshop 场景处理成功的 `RequestJoinGame` 后，会调用 `InstantiationController.SendInstantiatedPrefabs(requesteeID)`，只向新 PID 重放当前 buffered 网络实例，恢复可能在加入方场景加载时被销毁的远程房主 `PlayerPrefab` 和角色；不会向其它客户端重复广播，也不会覆盖加入方自己的槽位。
+
+晚加入测试成功判据：host 日志出现 `HeroController.AddPlayer`、`Late workshop RequestJoinGame state after native handling` 和 `Workshop spawn-position rebroadcast completed with authoritative current positions`；加入方日志按顺序出现 `Starting late workshop join load`、`Late workshop client scene loaded`、`Late workshop SpawnJoinedPlayers observed`、`Late workshop join requested a local player slot after scene readiness` 和 `Late workshop automatic join completed`；无需再次按攻击键即可创建 P2 角色。退出/重入还应确认房主日志出现 `Late workshop replayed buffered network instances to the joining client`，加入方最终 Workshop 场景重新出现房主 P1 的 `Player.Start`、`RegisterHeroToPlayer` 和 `SetPlayerCharacter`。普通进入时，双方都应记录 `Recorded local Workshop spawn position for exact rebroadcast` 和当前坐标重发日志，并且不会重新计算远程角色出生点。
 
 ### Workshop 道具同步与重复拾取防护
 
@@ -370,13 +381,13 @@ diagnostics-host-<session>-<utc-time>.trace.log
 - 晚加入依赖双方使用相同版本 Mod；过场期间可以并行加载，但地图脚本、网络状态或原生错误仍可能导致加入失败。
 - `test011` 已确认创建方先进入地图时，加入方可在场景就绪后自动创建 P2；仍需继续验证不同地图和控制器组合。
 - `test009` 使用的 Workshop 地图曾在 `GeneratePole.Awake` 抛出 `NullReferenceException`。该错误来自地图对象初始化，当前未阻止本轮晚加入和 P2 创建，但更换地图或地图对象时仍需单独排查。
-- 重复退出/重入若干轮后，加入方可能无法再次进入；现有证据不足以定位到 Lobby、PID、槽位或 `Dropout` 清理，状态仍是未修复、未定位。
+- FRP 加入方退出后重入时看不到房主的问题已定位为房主 buffered 实例在加入方仍处于 `MainMenu` 时提前到达，并随后的 Workshop 场景加载被销毁；原生 `AddPlayer` 对远程 PID 不会创建 `Player`。当前构建在最终场景的重连请求成功后重放房主 buffered 实例，已通过本轮单地图双端退出和重入实测；多地图、高延迟、异常断网和长期多轮重入仍需继续验证。
 - 2026-08-21 关于跳关死亡、重入回到第一关和 `BroBase.Start` NRE 的实验性修改已经全部撤销；该 issue 只作为历史分析参考，不代表当前 DLL 包含那些修复。
 - 不同 Workshop 地图、地图脚本和其它 Mod 的兼容性尚未充分验证；Swap Bros 已有只读版本/API/角色表指纹诊断，但尚未完成双端兼容性验收，也不会自动阻止环境不一致的会话。
 - Workshop 道具同步和重复拾取防护已通过 `test003` FRP Direct 双端实机验收；官方 Steam 大厅 Workshop 会话和更多地图仍需独立覆盖。
 - 线上地图注入仍属于测试功能，默认关闭，不能按稳定发布版本使用。
 - `FRP Direct` 游戏层已完成公共 FRP UDP 双端正常游玩验收，但仍是默认关闭的实验功能，不能视为稳定发布版本。
-- FRP 第一版不支持主机迁移；房主退出即结束房间。断线重入、多地图、高延迟和长期稳定性仍需继续验证。
+- FRP 第一版不支持主机迁移；房主退出即结束房间。正常退出房间后重新加入已通过当前地图实测；异常断网重连、多地图、高延迟和长期稳定性仍需继续验证。
 - 公网入口只能使用服务商分配的 UDP 端点；MCP TCP `9999` 和原有 FuckNet 匹配/中继端口不是 FRP Direct 游戏入口。
 
 ## 构建与部署

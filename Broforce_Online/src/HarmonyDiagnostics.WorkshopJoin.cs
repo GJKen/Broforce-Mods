@@ -493,10 +493,35 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
+            ReplayBufferedWorkshopInstancesToJoiner(requesteeID, assignedPlayerNumber);
+
             QueueWorkshopSpawnRebroadcast(
                 "a late Workshop player registered: player=" + assignedPlayerNumber,
                 750,
                 true);
+        }
+
+        private static void ReplayBufferedWorkshopInstancesToJoiner(
+            PID requesteeID,
+            int assignedPlayerNumber)
+        {
+            if (requesteeID == null)
+            {
+                return;
+            }
+
+            try
+            {
+                InstantiationController.SendInstantiatedPrefabs(requesteeID);
+                DiagnosticLog.Info(
+                    "Late workshop replayed buffered network instances to the joining client: " +
+                    "target=" + requesteeID + "; assignedPlayer=" + assignedPlayerNumber + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Late workshop buffered network-instance replay failed: " + exception);
+            }
         }
 
         private static int GetImmediateNextUnusedPlayerNumber()
