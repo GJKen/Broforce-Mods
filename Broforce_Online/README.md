@@ -10,8 +10,8 @@
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=3e456a6c6f077b5e466fd6bc191b649b42dd70364f23bc5b8b3a1c1b4d8fba62` |
-| DLL SHA-256 | `171B879B0934E260DC81C83C6668E01A989091E887C7BAE0F54A91DD910E9E8C` |
+| 当前分发构建 | `buildHash=0915020604a45c80f6cb8b465368fde880bfd5ff00938a135dcce7d878a26caf` |
+| DLL SHA-256 | `792177CB5ECE13EF50AEE967B32F18C3AA30804FD824667AF1468721EAFE4AE9` |
 | Steam 联机 | 默认路径；已验证双方能通过官方大厅进入同一张第三方 Workshop 地图 |
 | FRP Direct | 默认关闭的实验路径；已验证公共 FRP UDP 双端正常游玩及 `Esc` 双方玩家名显示 |
 
@@ -24,7 +24,9 @@
 
 当前构建已实现 Workshop 联机道具同步和重复拾取防护：普通弹药箱不再由各端按本地随机状态转换成不同特殊道具，远程角色镜像不再扫描本机道具，已消费道具的重复 `Collect` 会被忽略，弹药已满时只在本机显示原生反馈而不持续广播拾取 RPC。`test003` 已通过 FRP Direct 双端实测，原有的重复动画、重复音效和不可见道具问题未再出现；日志确认双方构建一致、普通箱确定性和满弹药抑制均实际生效。
 
-当前仍需继续验证：道具修复在官方 Steam 大厅 Workshop 会话中的独立复测、重复退出/重入、多地图兼容、高延迟和长期稳定性，以及特定地图第 4 关通关黑屏。部分 Workshop 地图还可能在 `GeneratePole.Awake`、`BroBase` 或特效销毁流程抛出自身运行错误。详细实现、测试边界和历史证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
+当前构建还新增四类只读兼容性诊断：`LEVEL_OUTCOME` 记录联机关卡结束和扣命前后的生命、场景、切关及房间状态；`WORKSHOP_GAME_MODE_COMPARE` 比较下载到的 Workshop Campaign、`GameState` 和 `RoomInfo` 的 `gameMode`，不主动改写任何模式；`OPTIONAL_BRO_MOD` 通过可选公开 API 记录 Swap Bros 的版本、API 能力、有序角色表指纹和本地选择指纹；`AFK_TIMER`、`AFK_STATE` 和 `PLAYER_DROPOUT` 记录本机角色的原生 AFK 倒计时、35 秒超时和玩家槽位移除前后状态。这些诊断借鉴 Utility Mod 使用原生完成事件、状态入口和弱依赖 API 的方式，但不引入 RocketLib、不复制调试菜单，也不控制角色切换或更改原生 AFK 规则；代码已通过 .NET 3.5 标准构建，尚待游戏内双端触发验收。
+
+当前仍需继续验证：新增诊断在真实双端会话中的日志内容，尤其是 AFK 触发后房主是否仍把已移除槽位计入存活人数；道具修复在官方 Steam 大厅 Workshop 会话中的独立复测、重复退出/重入、多地图兼容、高延迟和长期稳定性；以及使用新 `LEVEL_OUTCOME` 证据定位特定地图第 4 关通关黑屏。部分 Workshop 地图还可能在 `GeneratePole.Awake`、`BroBase` 或特效销毁流程抛出自身运行错误。详细实现、测试边界和历史证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
 
 ## 安装与使用
 
@@ -109,6 +111,10 @@ UMM 设置中的 `Disable automatic AFK spectator mode in online games` 默认�
 
 双方都关闭时则完全使用 Broforce 原生规则。原生 `Player.Update` 只在“存活玩家数大于本机玩家数”时累计 AFK 计时，因此一名玩家先进入 AFK 后，最后一名本地角色通常会停止累计并被保留，不会仅因无人输入而让双方角色全部进入 AFK。
 
+当前构建会以低频日志记录原生 AFK 流程：约 5 秒写入 `AFK_TIMER event=counting`，约 30 秒写入 `event=warning`，有输入或条件改变后写入 `event=reset`；确实达到原生 35 秒分支时写入 `AFK_STATE event=timeout-triggered`，槽位实际移除后写入 `PLAYER_DROPOUT event=applied`。只有能与本机 35 秒触发对应的退出才标记 `reason=native-afk-timeout`，其它主动退出或断线统一保守记录为 `reason=unknown`。每条关键日志都带有移除前后玩家槽位、角色、生命、存活人数、本地人数和总生命，可直接检查房主是否还把 AFK 玩家算作存活。
+
+上一轮使用旧构建 `fcb50bff...112a` 的双端日志不包含这些 AFK 观测点，只能看到加入方最终发生 `Dropout`，无法证明 AFK 倒计时何时开始、35 秒分支是否执行，或房主在槽位移除前后如何计算存活人数。公开房间里额外出现但未成功加载 Mod/地图的成员不作为该问题证据。下一轮应先确认启动日志出现 `AFK_DIAGNOSTICS_PATCH playerUpdate=True; dropoutRpc=True`，再让目标客户端保持无输入至少 35 秒并收集双方同一会话日志。
+
 ### FRP Direct 实验联机
 
 FRP Direct 已完成公共 FRP UDP 的基础双端游戏验收，但仍是默认关闭的实验功能。开启游戏层开关后，Mod 会用 FRP 连接接管 Broforce 房间查询、PID 分配和 RPC 字节传输；不开启游戏层开关时，独立 UDP peer 仍只做握手/心跳验证，Steam 联机保持默认。
@@ -186,6 +192,7 @@ issues/                      历史问题、测试证据、验收结果和方案
 - [问题记录索引](issues/README.md)
 - [最新异地加入、重复角色与 AFK 验收记录](issues/ISSUES-2026-08-24-联机加入方重复角色与AFK开关编译测试记录.md)
 - [FRP Direct 可行性与实施方案](issues/ISSUES-2026-08-24-FRP内网穿透联机方案.md)
+- [Utility Mod 代码借鉴方案与 AFK 诊断改进](issues/ISSUES-2026-08-25-Utility-Mod代码借鉴方案与AFK诊断改进.md)
 
 开发文档包含当前有效的 Steam/FRP 联机流程、Workshop 注入调用链、英雄回复问题、构建约束、日志分析和后续测试步骤。`issues` 保存每轮问题和测试证据，其中可能包含已经撤销或被后续结论取代的历史方案；阅读时以问题索引、README 和开发文档的当前状态为准。
 

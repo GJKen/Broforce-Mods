@@ -109,6 +109,7 @@ namespace BroforceOnlineDiagnostics
 
         private static void ClearLifecycleState()
         {
+            ClearAfkDiagnosticsState();
             ClearWorkshopPickupSynchronizationState();
             PendingSpawnPositions.Clear();
             LocalWorkshopSpawnPositions.Clear();
@@ -555,6 +556,7 @@ namespace BroforceOnlineDiagnostics
 
                 _workshopCompletionHandledForSession = true;
                 SetCurrentCampaign(campaign);
+                ObserveWorkshopGameModeConsistency(campaign);
                 SetStaticFieldOrProperty(
                     AccessTools.TypeByName("LevelSelectionController"),
                     "loadPublishedCampaign",
@@ -644,6 +646,94 @@ namespace BroforceOnlineDiagnostics
             }
 
             throw new MissingMemberException(type.FullName, "currentCampaign");
+        }
+
+        private static void ObserveWorkshopGameModeConsistency(Campaign campaign)
+        {
+            try
+            {
+                var header = GetFieldOrPropertyValue(campaign, "header");
+                var campaignMode = GetFieldOrPropertyValue(header, "gameMode");
+                var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+                var stateMode = GetFieldOrPropertyValue(state, "gameMode");
+                var room = GetCurrentRoom();
+                var roomMode = GetFieldOrPropertyValue(room, "gameMode");
+                var observations = new[]
+                {
+                    new GameModeObservation("campaign", campaignMode),
+                    new GameModeObservation("gameState", stateMode),
+                    new GameModeObservation("room", roomMode)
+                };
+                var comparableCount = 0;
+                string expected = null;
+                var matches = true;
+                foreach (var observation in observations)
+                {
+                    if (!observation.Available)
+                    {
+                        continue;
+                    }
+
+                    comparableCount++;
+                    if (expected == null)
+                    {
+                        expected = observation.ComparisonValue;
+                    }
+                    else if (!string.Equals(
+                        expected,
+                        observation.ComparisonValue,
+                        StringComparison.Ordinal))
+                    {
+                        matches = false;
+                    }
+                }
+
+                var message =
+                    "WORKSHOP_GAME_MODE_COMPARE campaign=" + observations[0].DisplayValue +
+                    "; gameState=" + observations[1].DisplayValue +
+                    "; room=" + observations[2].DisplayValue +
+                    "; comparableSources=" + comparableCount +
+                    "; match=" + (comparableCount >= 2 ? matches.ToString() : "unknown") +
+                    "; action=observe-only.";
+                if (comparableCount >= 2 && !matches)
+                {
+                    DiagnosticLog.Warning(message);
+                }
+                else
+                {
+                    DiagnosticLog.Info(message);
+                }
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop game-mode comparison failed; no game state was changed: " + exception);
+            }
+        }
+
+        private sealed class GameModeObservation
+        {
+            public GameModeObservation(string source, object value)
+            {
+                Source = source;
+                Available = value != null;
+                if (value == null)
+                {
+                    ComparisonValue = string.Empty;
+                    DisplayValue = "unavailable";
+                    return;
+                }
+
+                ComparisonValue = Convert.ToString(
+                    value,
+                    System.Globalization.CultureInfo.InvariantCulture);
+                DisplayValue = Sanitize(ComparisonValue, 80);
+            }
+
+            public string Source { get; private set; }
+            public bool Available { get; private set; }
+            public string ComparisonValue { get; private set; }
+            public string DisplayValue { get; private set; }
         }
 
         private static string GetConfiguredWorkshopSceneName()
