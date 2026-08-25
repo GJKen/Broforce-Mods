@@ -10,10 +10,10 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=f4be08d8d30129049f3acd003c93116e077edaf5f3be3cda8a9ce1faac8701a5` |
-| DLL SHA-256 | `93E8848A4BBCA07DD39B35442CC5F43B68C443C6828D6BFC6023104F8B27B7F2` |
+| 当前分发构建 | `buildHash=c8c879d399ed413dbc50218629d1b5ff497c7a5f1b19fec0370c62505db45127` |
+| DLL SHA-256 | `D08AC54D330B737B79FE8B917CD14D46C3491B0A430E5CD96B534F4553CA2BDC` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图 |
-| FRP Direct | 默认关闭的实验路径；已验证公共 UDP 双端游玩和在线玩家名显示 |
+| FRP Direct | 默认关闭的实验路径；双端已验证，代码支持房主加最多三台远端 |
 
 当前构建已经验证：
 
@@ -23,7 +23,9 @@
 - Workshop 道具的普通弹药箱、远程拾取和弹药已满时的重复 RPC 已做确定性和幂等处理。
 - UMM 设置支持 Workshop、FRP Direct、诊断日志三个可持久化折叠面板，以及九类日志开关和五种预设。
 
-仍需继续覆盖：AFK 诊断在真实双端会话中的内容、官方 Steam 大厅下的道具修复、多地图兼容、异常断网、高延迟和长期多轮退出/重入。FRP 第一版只支持房主加一台远端机器，不支持主机迁移。部分 Workshop 地图可能有自身的 `GeneratePole.Awake`、`BroBase` 或特效销毁异常。详细实现和证据见 [开发与测试文档](docs/DEVELOPMENT.md)、[问题记录索引](issues/README.md)。
+当前构建还加入了 Workshop 关卡结束动作的防重入保护，用于阻止地图在原生切关已经开始后逐帧重复结束关卡并持续增加关卡号。该修复已由双端日志定位并完成构建部署，仍需游戏内通关复测。
+
+仍需继续覆盖：AFK 诊断在真实双端会话中的内容、官方 Steam 大厅下的道具修复、多地图兼容、异常断网、高延迟和长期多轮退出/重入。FRP 已实现房主加最多三台远端，但尚未完成三台或四台机器的实机验收，也不支持主机迁移。部分 Workshop 地图可能有自身的 `GeneratePole.Awake`、`BroBase` 或特效销毁异常。详细实现和证据见 [开发与测试文档](docs/DEVELOPMENT.md)、[问题记录索引](issues/README.md)。
 
 ## 安装与首次测试
 
@@ -94,10 +96,13 @@ Route Broforce rooms and RPC through FRP Direct (experimental): 开启
 ```text
 FRP Direct role: Host
 Local UDP listen port: 27045
-FRP room password: 双方约定的临时密码，或留空
+FRP room player limit: 点击 1、2、3、4 中的一个按钮，立即生效
+FRP room password: 所有参与方约定的临时密码，或留空
 ```
 
-点击 `Apply / restart FRP Direct` 后应显示 `Listening on UDP 27045`；`frpc` 将公网 UDP 端口转发到 `127.0.0.1:27045`。
+人数按钮设置整个房间的角色上限：`1` 只允许房主，`2` 允许房主加一名加入方，`3` 允许房主加两名加入方，`4` 允许房主加三名加入方。该设置不会突破 Broforce 原生四人上限。房主可以在已经进入地图后打开 UMM 并直接切换人数，无需重启 FRP；新上限立即用于后续加入，已经在房间里的玩家不会被踢出。例如当前有三人时改为 `1`，三人仍可继续游戏，但退出的玩家不能重新加入，直到上限再次调高。
+
+端口、Host/Client 角色或房间密码等连接参数改变后，点击 `Apply connection settings / restart`；该按钮会重启 FRP，不能在希望保持当前联机时点击。正常启动后应显示 `Listening on UDP 27045`；`frpc` 将公网 UDP 端口转发到 `127.0.0.1:27045`。
 
 加入方：
 
@@ -107,9 +112,9 @@ FRP server endpoint: 服务商提供的完整 host:port（IPv6 使用 [地址]:�
 FRP room password: 与房主一致
 ```
 
-双方使用同一标准构建且密码一致时，状态应为 `Handshake complete; heartbeat active`。协议版本、`buildHash` 或密码不一致会拒绝握手且不会自动降级。密码会保存在本机 UMM 设置文件中，但不会写入日志或通过网络明文发送；请使用临时密码，不要复用其它账号密码。FRP token 只属于 `frpc`，不要填入 Mod。
+所有参与方使用同一标准构建且密码一致时，Client 状态应为 `Handshake complete; heartbeat active`，Host 会显示已认证客户端数量。协议版本、`buildHash` 或密码不一致会拒绝握手且不会自动降级。密码会保存在本机 UMM 设置文件中，但不会写入日志或通过网络明文发送；请使用临时密码，不要复用其它账号密码。FRP token 只属于 `frpc`，不要填入 Mod。
 
-握手完成后，房主照常创建线上大厅，加入方在在线大厅列表中选择唯一的 FRP 房间；双方进入 `p1-p4` 后分别占位，再由房主进入 Workshop 地图。FRP 当前不支持主机迁移；异常断网重连、多地图、高延迟和长期稳定性仍需验收。完整协议和历史失败记录见 [FRP Direct 验收记录](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
+握手完成后，房主照常创建线上大厅，各加入方在在线大厅列表中选择唯一的 FRP 房间；所有玩家进入 `p1-p4` 后分别占位，再由房主进入 Workshop 地图。房间按房主当前选择的 `1` 至 `4` 人上限接受加入方；达到上限后的加入请求会被拒绝。地图内降低上限只关闭后续空位，不移除现有成员；提高上限会立即重新开放空位。客户端之间的 RPC 由房主定向中继。该多客户端及动态容量路径已经构建通过，但尚未完成三台或四台机器实测。FRP 当前不支持主机迁移；异常断网重连、多地图、高延迟和长期稳定性仍需验收。完整协议和历史失败记录见 [FRP Direct 验收记录](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
 
 ## 构建
 

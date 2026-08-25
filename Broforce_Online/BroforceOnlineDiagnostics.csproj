@@ -62,6 +62,7 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopPickup.cs" />
     <Compile Include="src\HarmonyDiagnostics.Afk.cs" />
     <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopLevelEnd.cs" />
     <Compile Include="src\OptionalBroModDiagnostics.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
     <Compile Include="src\BuildMetadata.cs" />

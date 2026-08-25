@@ -7,7 +7,7 @@
 - 项目是面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod，目标框架为 .NET Framework 3.5。
 - 默认网络路径是官方 Steam Lobby/P2P；`FRP Direct` 默认关闭，启用后接管房间、PID 和游戏 RPC，Steam 只负责 Workshop 内容下载。
 - Steam Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名、正常退出后重入和 Workshop 道具防重复已通过当前测试地图验收。
-- FRP 仍只支持房主加一台远端机器，不支持主机迁移；多地图、高延迟、异常断网和长期稳定性尚未完整覆盖。
+- FRP 代码支持房主加最多三台远端机器，但多客户端尚未完成实机验收，也不支持主机迁移；多地图、高延迟、异常断网和长期稳定性尚未完整覆盖。
 - 当前版本、分发 `buildHash`、DLL SHA-256 和用户侧限制以 [README 当前状态](../README.md#当前状态) 为唯一来源，避免多处维护。
 
 所有参与端必须使用相同构建并下载相同 Workshop 地图。双端版本只以日志中的 `BUILD_INFO buildHash` 判断，不能依赖文件名、时间或大小。
@@ -22,11 +22,12 @@
 - `src/HarmonyDiagnostics.WorkshopPickup.cs`：道具确定性、拾取所有权、幂等和满弹药退避。
 - `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、超时和槽位移除观测。
 - `src/HarmonyDiagnostics.LevelOutcome.cs`：`LevelFinish`/`RemoveLife` 前后快照。
+- `src/HarmonyDiagnostics.WorkshopLevelEnd.cs`：Workshop 关卡结束动作防重入保护。
 - `src/OptionalBroModDiagnostics.cs`：Swap Bros 公开 API、版本和角色指纹的只读弱依赖诊断。
 - `src/ReflectionProbe.cs`：只读扫描 `Assembly-CSharp` 中的相关类型。
-- `src/FrpDirectTransport.cs`：Lidgren UDP、握手、认证、心跳、重连和可靠字节通道。
+- `src/FrpDirectTransport.cs`：Lidgren UDP、多连接握手、认证、心跳、重连和可靠字节路由。
 - `src/FrpDirectRoomInfo.cs`：FRP 房间信息和 Workshop 阶段元数据。
-- `src/FrpDirectLayer.cs`：复用原生 PID、ServerID、RPCBatcher 和 `RecieveBytes` 的连接层。
+- `src/FrpDirectLayer.cs`：复用原生 PID、ServerID、RPCBatcher 和 `RecieveBytes`，并按机器路由多客户端 RPC。
 - `src/FrpDirectNetworkManager.cs`：选择 FRP/Steam 层并管理 `Connect.layer` 生命周期。
 
 方法级追踪不记录房间密码、Steam ID、主机名或 Workshop 作者身份。
@@ -104,10 +105,13 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 `FrpDirectTransport` 复用 `Assembly-CSharp.dll` 的 Lidgren，应用标识为 `BroforceOnlineDiagnostics.FrpDirect.v1`。只有同时开启传输原型和游戏层开关，`FrpDirectNetworkManager` 才返回独立连接层。
 
-- Host 固定监听配置的 UDP 端口，默认 27045，只允许一台远端机器。
+- Host 固定监听配置的 UDP 端口，默认 27045；设置页用 `1`、`2`、`3`、`4` 四个按钮选择房间总角色上限。`1` 只允许房主，`4` 允许房主加最多三台远端，不突破 Broforce 原生四人上限。按钮在地图内点击后立即生效，不重启传输。
 - Client 使用临时端口连接完整 `host:port`，普通断线后每 5 秒重试。
-- Lidgren 建连后 Host 发随机挑战；Client 用密码、挑战、协议版本和双方 `buildHash` 计算 HMAC-SHA256。Host 同时验证三者；失败后 Client 不自动重试。
-- 协议 v2 提供房间查询/状态、加入确认/拒绝、离开通知和 `GameData`。游戏 RPC 复用原生 `GeneratePlayerID`、`BroadcastPlayerID`、`RPCBatcher` 和 `ConnectionLayer.RecieveBytes`，不经过 Steam P2P。
+- 每条连接独立维护握手、心跳和超时。Lidgren 建连后 Host 发随机挑战；Client 用密码、挑战、协议版本和双方 `buildHash` 计算 HMAC-SHA256。Host 同时验证三者和机器 ID 唯一性；失败后 Client 不自动重试。
+- 协议 v3 提供房间查询/状态、加入确认/拒绝、离开通知、成员离开通知和带机器路由的 `GameData`。v2 与 v3 构建会因协议不匹配而拒绝连接。
+- Host 通过原生 `GeneratePlayerID` 和 `BroadcastPlayerID` 为每台已加入机器分配 PID，并把已有映射定向同步给新客户端。`RPCBatcher` 展开的具体 PID 按机器直发；客户端之间的数据经 Host 中继，目标不是 Host 时不会在 Host 本地重复执行。
+- 房主创建房间及地图内调整人数时把所选上限写入原生房间 `capacity`，再向 Client 推送最新房间信息。传输层仍可保持最多三台已认证连接，实际加入人数由房间层按 `capacity - 1` 拒绝，因而满房客户端仍可查询房间状态。降低上限不会删除现有机器或 PID；只要当前成员数仍大于等于新上限，新的加入和退出后的重入都会被拒绝。
+- 单个 Client 离开或断线时只清理该机器的 PID，并通知其余 Client；剩余成员和房间状态继续保留。Host 离开仍会结束所有 Client 的房间，当前不支持主机迁移。
 - 在线玩家名来自原生 `Connect.SetPlayerName` 建立的 PID 名字表，不显示 FRP 机器 ID 或公网端点。
 - 连接层对内容来源报告 `LayerType.Steam`，仅用于继续下载 Workshop；房间和 RPC 仍走 FRP。
 - Client 每 5 秒发送应用层心跳；正常 Update 下 60 秒无有效心跳才断开。主线程加载停顿超过 10 秒时恢复心跳窗口。
@@ -130,6 +134,8 @@ MainMenu
 返回主菜单的 Logo 动画复用原生 `Lobby.GoBackToMainMenu -> MainMenu.Show -> ShowRoutine`；菜单文字、高亮和 Renderer 在动画完成后恢复。打开大厅失败时恢复完整主菜单，最长等待 30 秒，避免隐藏或不可操作状态。
 
 ### 关卡结果与兼容性诊断
+
+部分 Workshop 地图会在 `GameModeController.switchingLevel=true` 后继续逐帧触发成功结束流程。重复流程会重新执行 `DetermineLevelOutcome -> CompleteCurrentLevel`，持续增加关卡号并重置切关倒计时；地图结束动作还可能先清除 `levelFinished`，绕过原生幂等保护。当前补丁只在有效线上 Workshop 会话、配置场景和 Workshop ID 均匹配时，抑制切关期间重复的 `LevelEndSuccess`/`LevelEndSuccessSilent` 和成功结算重入；第一次结束动作、失败重试和其它场景保持原生行为。对应根因、构建和复测要求见 [3715087178 黑屏记录](../issues/ISSUES-2026-08-26-3715087178联机通关黑屏与关卡结束重入.md)。
 
 这些诊断均为只读，不改变关卡结果、Workshop 模式、角色选择或 AFK 规则：
 
@@ -237,9 +243,10 @@ diagnostics-host-<session>-<utc-time>.trace.log
 | 晚加入/重入 | 当前地图已通过；不同地图、控制器、高延迟、异常断网和长期多轮仍需覆盖 |
 | AFK/失败 | 新诊断待真实双端触发；需确认远端槽位移除后 Host 的存活人数和失败判定 |
 | Workshop 地图 | `GeneratePole.Awake`、`BroBase` 或特效可能抛出地图自身异常 |
+| Workshop 切关 | `3715087178` 的重复结束动作保护已实现并构建，普通成功、静默成功、失败重试和最终结算仍待双端复测；`3781818421` 仍作为独立问题保留 |
 | 道具 | FRP 已验收；官方 Steam 大厅和更多地图待复测 |
 | 其它 Mod | Swap Bros 只有只读诊断，尚未完成兼容性验收，也不会阻止环境不一致的会话 |
-| FRP Direct | 一台远端、无主机迁移；异常断网、多地图、高延迟和长期稳定性待验证 |
+| FRP Direct | 代码支持地图内动态设置 `1` 至 `4` 人上限并保留现有成员；各容量档位、降额后重入、三/四机、异常断网、多地图、高延迟、长期稳定性和主机迁移仍未实机验收 |
 | 原生崩溃 | 异常与崩溃时间接近不能单独证明因果，必须结合双方诊断、UMM 日志和 `error.log` |
 
 ## 构建与部署

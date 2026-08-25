@@ -337,6 +337,7 @@ namespace BroforceOnlineDiagnostics
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
             PatchLevelOutcomeDiagnostics();
+            PatchWorkshopLevelEndReentryGuard();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
             PatchLobbyMainMenuReturnPostfix();

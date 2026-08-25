@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
@@ -11,7 +12,8 @@ namespace BroforceOnlineDiagnostics
     {
         private const string ApplicationIdentifier = "BroforceOnlineDiagnostics.FrpDirect.v1";
         private const string ProtocolMagic = "BFOD-FRP";
-        private const int ProtocolVersion = 2;
+        private const int ProtocolVersion = 3;
+        private const int MaxRemoteConnections = 3;
         private const int HeartbeatIntervalSeconds = 5;
         private const int HandshakeTimeoutSeconds = 15;
         private const int HeartbeatTimeoutSeconds = 60;
@@ -20,27 +22,18 @@ namespace BroforceOnlineDiagnostics
         private const int MaxRoomStateBytes = 32768;
         private const int MaxGameDataBytes = 2097152;
 
+        private readonly List<FrpPeer> _peers = new List<FrpPeer>();
+        private readonly string _localMachineId;
         private NetPeer _peer;
         private NetPeer _retiringPeer;
-        private NetConnection _connection;
         private IPEndPoint _remoteEndpoint;
         private FrpRole _role;
         private string _roomPassword = string.Empty;
         private string _configurationKey = string.Empty;
-        private string _challenge = string.Empty;
-        private string _clientNonce = string.Empty;
-        private readonly string _localMachineId;
-        private string _remoteMachineId = string.Empty;
-        private DateTime _connectedAtUtc;
-        private DateTime _lastHeartbeatAtUtc;
-        private DateTime _nextHeartbeatAtUtc;
         private DateTime _nextConnectAtUtc;
         private DateTime _lastUpdateAtUtc;
-        private bool _handshakeComplete;
         private bool _fatalConnectionError;
-        private bool _disconnectRequested;
         private bool _disposed;
-        private int _heartbeatSequence;
         private int _suppressedInvalidPackets;
         private DateTime _nextInvalidPacketLogAtUtc;
         private FrpDirectConfiguration _pendingConfiguration;
@@ -48,39 +41,69 @@ namespace BroforceOnlineDiagnostics
         internal string Status { get; private set; }
         internal bool IsEnabled { get; private set; }
         internal bool IsHost { get { return _role == FrpRole.Host; } }
-        internal bool IsHandshakeComplete { get { return _handshakeComplete; } }
+        internal int PlayerLimit { get; private set; }
+        internal bool IsHandshakeComplete
+        {
+            get { return _peers.Exists(item => item.HandshakeComplete); }
+        }
         internal string LocalMachineId { get { return _localMachineId; } }
-        internal string RemoteMachineId { get { return _remoteMachineId; } }
+        internal string RemoteMachineId
+        {
+            get
+            {
+                var remote = _peers.Find(item => item.HandshakeComplete);
+                return remote == null ? string.Empty : remote.MachineId;
+            }
+        }
+        internal IList<string> ConnectedRemoteMachineIds
+        {
+            get
+            {
+                var machineIds = new List<string>();
+                foreach (var remote in _peers)
+                {
+                    if (remote.HandshakeComplete && !string.IsNullOrEmpty(remote.MachineId))
+                    {
+                        machineIds.Add(remote.MachineId);
+                    }
+                }
+                return machineIds;
+            }
+        }
 
-        internal event Action HandshakeCompleted;
+        internal event Action<string> HandshakeCompleted;
         internal event Action ConfigurationChanging;
-        internal event Action RemoteDisconnected;
-        internal event Action RoomQueryReceived;
-        internal event Action<bool, string> RoomStateReceived;
-        internal event Action JoinRequestReceived;
-        internal event Action<string> JoinAcceptedReceived;
-        internal event Action<string> JoinRejectedReceived;
-        internal event Action<byte[]> GameDataReceived;
-        internal event Action LeaveNoticeReceived;
+        internal event Action<int> PlayerLimitChanged;
+        internal event Action<string> RemoteDisconnected;
+        internal event Action<string> RoomQueryReceived;
+        internal event Action<string, bool, string> RoomStateReceived;
+        internal event Action<string> JoinRequestReceived;
+        internal event Action<string, string> JoinAcceptedReceived;
+        internal event Action<string, string> JoinRejectedReceived;
+        internal event Action<string, string, byte[]> GameDataReceived;
+        internal event Action<string> LeaveNoticeReceived;
+        internal event Action<string> MemberLeftReceived;
 
         internal FrpDirectTransport()
         {
             _localMachineId = Guid.NewGuid().ToString("N");
+            PlayerLimit = 4;
             Status = "Disabled";
+        }
+
+        internal bool IsMachineConnected(string machineId)
+        {
+            var remote = FindPeer(machineId);
+            return remote != null && remote.HandshakeComplete && !remote.DisconnectRequested;
         }
 
         internal bool RequestRoomState()
         {
-            return SendEmptyControlMessage(ControlMessageKind.RoomQuery);
+            return SendEmptyControlMessage(ControlMessageKind.RoomQuery, null);
         }
 
-        internal bool SendRoomState(bool hasRoom, string encodedRoom)
+        internal bool SendRoomState(bool hasRoom, string encodedRoom, string targetMachineId)
         {
-            if (!CanSendApplicationMessage())
-            {
-                return false;
-            }
-
             encodedRoom = hasRoom ? encodedRoom ?? string.Empty : string.Empty;
             if (Encoding.UTF8.GetByteCount(encodedRoom) > MaxRoomStateBytes)
             {
@@ -88,68 +111,115 @@ namespace BroforceOnlineDiagnostics
                 return false;
             }
 
-            var outgoing = CreateControlMessage(ControlMessageKind.RoomState);
-            outgoing.Write(hasRoom);
-            outgoing.Write(encodedRoom);
-            SendReliable(outgoing);
-            return true;
+            var sent = false;
+            foreach (var remote in SelectPeers(targetMachineId, false))
+            {
+                if (!CanSendApplicationMessage(remote))
+                {
+                    continue;
+                }
+
+                var outgoing = CreateControlMessage(ControlMessageKind.RoomState);
+                outgoing.Write(hasRoom);
+                outgoing.Write(encodedRoom);
+                SendReliable(remote, outgoing);
+                sent = true;
+            }
+            return sent;
         }
 
         internal bool RequestJoin()
         {
-            return SendEmptyControlMessage(ControlMessageKind.JoinRequest);
+            return SendEmptyControlMessage(ControlMessageKind.JoinRequest, null);
         }
 
-        internal bool AcceptJoin(string encodedRoom)
+        internal bool AcceptJoin(string encodedRoom, string targetMachineId)
         {
-            if (!CanSendApplicationMessage())
-            {
-                return false;
-            }
-
             encodedRoom = encodedRoom ?? string.Empty;
-            if (Encoding.UTF8.GetByteCount(encodedRoom) > MaxRoomStateBytes)
+            var remote = FindPeer(targetMachineId);
+            if (!CanSendApplicationMessage(remote) ||
+                Encoding.UTF8.GetByteCount(encodedRoom) > MaxRoomStateBytes)
             {
                 return false;
             }
 
             var outgoing = CreateControlMessage(ControlMessageKind.JoinAccepted);
             outgoing.Write(encodedRoom);
-            SendReliable(outgoing);
+            SendReliable(remote, outgoing);
             return true;
         }
 
-        internal bool RejectJoin(string reason)
+        internal bool RejectJoin(string reason, string targetMachineId)
         {
-            if (!CanSendApplicationMessage())
+            var remote = FindPeer(targetMachineId);
+            if (!CanSendApplicationMessage(remote))
             {
                 return false;
             }
 
             var outgoing = CreateControlMessage(ControlMessageKind.JoinRejected);
             outgoing.Write(SafeReason(reason));
-            SendReliable(outgoing);
+            SendReliable(remote, outgoing);
             return true;
         }
 
-        internal bool SendGameData(byte[] bytes)
+        internal bool SendGameData(string route, byte[] bytes, string excludeMachineId)
         {
-            if (!CanSendApplicationMessage() || bytes == null || bytes.Length == 0 ||
-                bytes.Length > MaxGameDataBytes)
+            if (bytes == null || bytes.Length == 0 || bytes.Length > MaxGameDataBytes)
             {
                 return false;
             }
 
-            var outgoing = CreateControlMessage(ControlMessageKind.GameData);
-            outgoing.Write(bytes.Length);
-            outgoing.Write(bytes);
-            SendReliable(outgoing);
-            return true;
+            var sent = false;
+            var targetMachineId = _role == FrpRole.Client || string.Equals(route, "*", StringComparison.Ordinal)
+                ? null
+                : route;
+            foreach (var remote in SelectPeers(targetMachineId, string.Equals(route, "*", StringComparison.Ordinal)))
+            {
+                if (!CanSendApplicationMessage(remote) ||
+                    string.Equals(remote.MachineId, excludeMachineId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var outgoing = CreateControlMessage(ControlMessageKind.GameData);
+                outgoing.Write(route ?? string.Empty);
+                outgoing.Write(bytes.Length);
+                outgoing.Write(bytes);
+                SendReliable(remote, outgoing);
+                sent = true;
+            }
+            return sent;
         }
 
         internal bool SendLeaveNotice()
         {
-            return SendEmptyControlMessage(ControlMessageKind.LeaveNotice);
+            return SendEmptyControlMessage(ControlMessageKind.LeaveNotice, null);
+        }
+
+        internal bool SendMemberLeft(string departedMachineId, string excludeMachineId)
+        {
+            departedMachineId = NormalizeMachineId(departedMachineId);
+            if (_role != FrpRole.Host || string.IsNullOrEmpty(departedMachineId))
+            {
+                return false;
+            }
+
+            var sent = false;
+            foreach (var remote in SelectPeers(null, true))
+            {
+                if (!CanSendApplicationMessage(remote) ||
+                    string.Equals(remote.MachineId, excludeMachineId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var outgoing = CreateControlMessage(ControlMessageKind.MemberLeft);
+                outgoing.Write(departedMachineId);
+                SendReliable(remote, outgoing);
+                sent = true;
+            }
+            return sent;
         }
 
         internal void Apply(DiagnosticSettings settings, bool forceRestart)
@@ -160,15 +230,17 @@ namespace BroforceOnlineDiagnostics
             }
 
             var configuration = FrpDirectConfiguration.FromSettings(settings);
-            var configurationKey = configuration.ConfigurationKey;
-            if (!forceRestart && string.Equals(_configurationKey, configurationKey, StringComparison.Ordinal))
+            if (!forceRestart &&
+                string.Equals(_configurationKey, configuration.ConfigurationKey, StringComparison.Ordinal))
             {
+                UpdatePlayerLimit(configuration.PlayerLimit);
                 return;
             }
 
             Raise(ConfigurationChanging, "configuration change");
             Stop("configuration changed");
-            _configurationKey = configurationKey;
+            _configurationKey = configuration.ConfigurationKey;
+            PlayerLimit = configuration.PlayerLimit;
             IsEnabled = configuration.Enabled;
             if (!configuration.Enabled)
             {
@@ -179,6 +251,26 @@ namespace BroforceOnlineDiagnostics
             _pendingConfiguration = configuration;
             Status = "Restarting";
             ContinuePendingStart();
+        }
+
+        internal void UpdatePlayerLimit(int playerLimit)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            var normalizedPlayerLimit = NormalizePlayerLimit(playerLimit);
+            if (PlayerLimit == normalizedPlayerLimit)
+            {
+                return;
+            }
+
+            PlayerLimit = normalizedPlayerLimit;
+            DiagnosticLog.Info(
+                "FRP_DIRECT room player limit changed without restarting transport; playerLimit=" +
+                PlayerLimit + ".");
+            Raise(PlayerLimitChanged, PlayerLimit, "player limit change");
         }
 
         internal void Update()
@@ -244,6 +336,7 @@ namespace BroforceOnlineDiagnostics
         {
             _role = settings.Role;
             _roomPassword = settings.RoomPassword;
+            PlayerLimit = settings.PlayerLimit;
             _fatalConnectionError = false;
 
             try
@@ -262,14 +355,15 @@ namespace BroforceOnlineDiagnostics
                     if (_remoteEndpoint == null)
                     {
                         Status = "Server address could not be resolved";
-                        DiagnosticLog.Warning("FRP_DIRECT client could not resolve the configured server address.");
+                        DiagnosticLog.Warning(
+                            "FRP_DIRECT client could not resolve the configured server address.");
                         return;
                     }
                 }
 
                 var configuration = new NetPeerConfiguration(ApplicationIdentifier);
                 configuration.AcceptIncomingConnections = _role == FrpRole.Host;
-                configuration.MaximumConnections = 1;
+                configuration.MaximumConnections = _role == FrpRole.Host ? MaxRemoteConnections : 1;
                 configuration.Port = _role == FrpRole.Host ? settings.LocalPort : 0;
                 configuration.PingInterval = 4f;
                 configuration.ConnectionTimeout = 25f;
@@ -286,9 +380,10 @@ namespace BroforceOnlineDiagnostics
                     Status = "Listening on UDP " + _peer.Port;
                     DiagnosticLog.Info(
                         "FRP_DIRECT host started; protocol=" + ProtocolVersion +
+                        "; maxRemoteConnections=" + MaxRemoteConnections +
+                        "; playerLimit=" + PlayerLimit +
                         "; localUdpPort=" + _peer.Port +
-                        "; buildHash=" + BuildMetadata.BuildHash +
-                        "; passwordConfigured=" + (!string.IsNullOrEmpty(_roomPassword)) + ".");
+                        "; buildHash=" + BuildMetadata.BuildHash + ".");
                 }
                 else
                 {
@@ -296,8 +391,7 @@ namespace BroforceOnlineDiagnostics
                     DiagnosticLog.Info(
                         "FRP_DIRECT client started; protocol=" + ProtocolVersion +
                         "; remoteUdpPort=" + settings.ServerPort +
-                        "; buildHash=" + BuildMetadata.BuildHash +
-                        "; passwordConfigured=" + (!string.IsNullOrEmpty(_roomPassword)) + ".");
+                        "; buildHash=" + BuildMetadata.BuildHash + ".");
                     ConnectClient();
                 }
             }
@@ -313,7 +407,15 @@ namespace BroforceOnlineDiagnostics
 
         private void Stop(string reason)
         {
-            var notifyDisconnect = _handshakeComplete;
+            var disconnectedMachineIds = new List<string>();
+            foreach (var remote in _peers)
+            {
+                if (remote.HandshakeComplete && !string.IsNullOrEmpty(remote.MachineId))
+                {
+                    disconnectedMachineIds.Add(remote.MachineId);
+                }
+            }
+
             _pendingConfiguration = null;
             if (_peer != null)
             {
@@ -332,21 +434,15 @@ namespace BroforceOnlineDiagnostics
             }
 
             _peer = null;
-            _connection = null;
+            _peers.Clear();
             _remoteEndpoint = null;
-            _challenge = string.Empty;
-            _clientNonce = string.Empty;
-            _remoteMachineId = string.Empty;
             _roomPassword = string.Empty;
-            _handshakeComplete = false;
             _fatalConnectionError = false;
-            _disconnectRequested = false;
-            _heartbeatSequence = 0;
             _suppressedInvalidPackets = 0;
             _nextInvalidPacketLogAtUtc = DateTime.MinValue;
-            if (notifyDisconnect)
+            foreach (var machineId in disconnectedMachineIds)
             {
-                Raise(RemoteDisconnected, "remote disconnect");
+                Raise(RemoteDisconnected, machineId, "remote disconnect");
             }
         }
 
@@ -358,7 +454,6 @@ namespace BroforceOnlineDiagnostics
                 {
                     return;
                 }
-
                 _retiringPeer = null;
             }
 
@@ -393,9 +488,9 @@ namespace BroforceOnlineDiagnostics
             {
                 HandleConnected(connection);
             }
-            else if (status == NetConnectionStatus.Disconnected && connection == _connection)
+            else if (status == NetConnectionStatus.Disconnected)
             {
-                HandleDisconnected();
+                HandleDisconnected(connection);
             }
         }
 
@@ -406,51 +501,54 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            if (_connection != null && _connection != connection)
+            var remote = FindPeer(connection);
+            if (remote == null)
             {
-                connection.Disconnect("FRP Direct room is full");
-                return;
+                if (_role == FrpRole.Host && _peers.Count >= MaxRemoteConnections)
+                {
+                    connection.Disconnect("FRP Direct room is full");
+                    return;
+                }
+
+                remote = new FrpPeer(connection);
+                _peers.Add(remote);
             }
 
-            _connection = connection;
-            _connectedAtUtc = DateTime.UtcNow;
-            _lastHeartbeatAtUtc = _connectedAtUtc;
-            _lastUpdateAtUtc = _connectedAtUtc;
-            _handshakeComplete = false;
-            _disconnectRequested = false;
-            _heartbeatSequence = 0;
+            remote.ConnectedAtUtc = DateTime.UtcNow;
+            remote.LastHeartbeatAtUtc = remote.ConnectedAtUtc;
+            remote.DisconnectRequested = false;
             if (_role == FrpRole.Host)
             {
-                _challenge = Guid.NewGuid().ToString("N");
+                remote.Challenge = Guid.NewGuid().ToString("N");
                 Status = "Peer connected; authenticating";
-                DiagnosticLog.Info("FRP_DIRECT UDP peer connected to host; starting application handshake.");
-                SendServerHello();
+                DiagnosticLog.Info(
+                    "FRP_DIRECT UDP peer connected to host; activeConnections=" + _peers.Count + ".");
+                SendServerHello(remote);
             }
             else
             {
                 Status = "Connected; waiting for host handshake";
-                DiagnosticLog.Info("FRP_DIRECT UDP connection established; waiting for host handshake.");
+                DiagnosticLog.Info(
+                    "FRP_DIRECT UDP connection established; waiting for host handshake.");
             }
         }
 
-        private void HandleDisconnected()
+        private void HandleDisconnected(NetConnection connection)
         {
-            var wasReady = _handshakeComplete;
-            _connection = null;
-            _challenge = string.Empty;
-            _clientNonce = string.Empty;
-            _remoteMachineId = string.Empty;
-            _handshakeComplete = false;
-            _disconnectRequested = false;
+            var remote = FindPeer(connection);
+            if (remote == null)
+            {
+                return;
+            }
+
+            var wasReady = remote.HandshakeComplete;
+            var remoteMachineId = remote.MachineId;
+            _peers.Remove(remote);
             if (_role == FrpRole.Host)
             {
-                Status = "Listening on UDP " + (_peer == null ? 0 : _peer.Port);
+                UpdateHostStatus();
             }
-            else if (_fatalConnectionError)
-            {
-                // Keep the rejection visible until the user changes or reapplies the settings.
-            }
-            else
+            else if (!_fatalConnectionError)
             {
                 Status = "Disconnected; retrying";
                 _nextConnectAtUtc = DateTime.UtcNow.AddSeconds(ReconnectDelaySeconds);
@@ -458,23 +556,20 @@ namespace BroforceOnlineDiagnostics
 
             DiagnosticLog.Warning(
                 "FRP_DIRECT transport disconnected; role=" + RoleName(_role) +
+                "; remoteMachineId=" + SafeMachineId(remoteMachineId) +
                 "; handshakeCompleted=" + wasReady +
                 "; willRetry=" + (_role == FrpRole.Client && !_fatalConnectionError) + ".");
             if (wasReady)
             {
-                Raise(RemoteDisconnected, "remote disconnect");
+                Raise(RemoteDisconnected, remoteMachineId, "remote disconnect");
             }
         }
 
         private void HandleControlMessage(NetIncomingMessage message)
         {
-            if (message.SenderConnection == null || message.SenderConnection != _connection)
-            {
-                return;
-            }
-
-            var magic = message.ReadString();
-            if (!string.Equals(magic, ProtocolMagic, StringComparison.Ordinal))
+            var remote = FindPeer(message.SenderConnection);
+            if (remote == null ||
+                !string.Equals(message.ReadString(), ProtocolMagic, StringComparison.Ordinal))
             {
                 return;
             }
@@ -485,112 +580,112 @@ namespace BroforceOnlineDiagnostics
                 case ControlMessageKind.ServerHello:
                     if (_role == FrpRole.Client)
                     {
-                        ReceiveServerHello(message);
+                        ReceiveServerHello(remote, message);
                     }
                     break;
                 case ControlMessageKind.ClientHello:
                     if (_role == FrpRole.Host)
                     {
-                        ReceiveClientHello(message);
+                        ReceiveClientHello(remote, message);
                     }
                     break;
                 case ControlMessageKind.HandshakeResult:
                     if (_role == FrpRole.Client)
                     {
-                        ReceiveHandshakeResult(message);
+                        ReceiveHandshakeResult(remote, message);
                     }
                     break;
                 case ControlMessageKind.Heartbeat:
-                    if (_role == FrpRole.Host && _handshakeComplete)
+                    if (_role == FrpRole.Host && remote.HandshakeComplete)
                     {
-                        ReceiveHeartbeat(message);
+                        ReceiveHeartbeat(remote, message);
                     }
                     break;
                 case ControlMessageKind.HeartbeatAck:
-                    if (_role == FrpRole.Client && _handshakeComplete)
+                    if (_role == FrpRole.Client && remote.HandshakeComplete)
                     {
-                        ReceiveHeartbeatAck(message);
+                        ReceiveHeartbeatAck(remote, message);
                     }
                     break;
                 case ControlMessageKind.RoomQuery:
-                    if (_role == FrpRole.Host && _handshakeComplete)
+                    if (_role == FrpRole.Host && remote.HandshakeComplete)
                     {
-                        Raise(RoomQueryReceived, "room query");
+                        Raise(RoomQueryReceived, remote.MachineId, "room query");
                     }
                     break;
                 case ControlMessageKind.RoomState:
-                    if (_role == FrpRole.Client && _handshakeComplete)
+                    if (_role == FrpRole.Client && remote.HandshakeComplete)
                     {
-                        ReceiveRoomState(message);
+                        ReceiveRoomState(remote, message);
                     }
                     break;
                 case ControlMessageKind.JoinRequest:
-                    if (_role == FrpRole.Host && _handshakeComplete)
+                    if (_role == FrpRole.Host && remote.HandshakeComplete)
                     {
-                        Raise(JoinRequestReceived, "join request");
+                        Raise(JoinRequestReceived, remote.MachineId, "join request");
                     }
                     break;
                 case ControlMessageKind.JoinAccepted:
-                    if (_role == FrpRole.Client && _handshakeComplete)
+                    if (_role == FrpRole.Client && remote.HandshakeComplete)
                     {
-                        ReceiveJoinAccepted(message);
+                        ReceiveJoinAccepted(remote, message);
                     }
                     break;
                 case ControlMessageKind.JoinRejected:
-                    if (_role == FrpRole.Client && _handshakeComplete)
+                    if (_role == FrpRole.Client && remote.HandshakeComplete)
                     {
-                        Raise(JoinRejectedReceived, SafeReason(message.ReadString()), "join rejected");
+                        Raise(
+                            JoinRejectedReceived,
+                            remote.MachineId,
+                            SafeReason(message.ReadString()),
+                            "join rejected");
                     }
                     break;
                 case ControlMessageKind.GameData:
-                    if (_handshakeComplete)
+                    if (remote.HandshakeComplete)
                     {
-                        ReceiveGameData(message);
+                        ReceiveGameData(remote, message);
                     }
                     break;
                 case ControlMessageKind.LeaveNotice:
-                    if (_handshakeComplete)
+                    if (remote.HandshakeComplete)
                     {
-                        Raise(LeaveNoticeReceived, "leave notice");
+                        Raise(LeaveNoticeReceived, remote.MachineId, "leave notice");
+                    }
+                    break;
+                case ControlMessageKind.MemberLeft:
+                    if (_role == FrpRole.Client && remote.HandshakeComplete)
+                    {
+                        ReceiveMemberLeft(message);
                     }
                     break;
             }
         }
 
-        private void SendServerHello()
+        private void SendServerHello(FrpPeer remote)
         {
             var outgoing = CreateControlMessage(ControlMessageKind.ServerHello);
             outgoing.Write(ProtocolVersion);
             outgoing.Write(BuildMetadata.BuildHash);
-            outgoing.Write(_challenge);
+            outgoing.Write(remote.Challenge);
             outgoing.Write(_localMachineId);
-            SendReliable(outgoing);
+            SendReliable(remote, outgoing);
         }
 
-        private void ReceiveServerHello(NetIncomingMessage message)
+        private void ReceiveServerHello(FrpPeer remote, NetIncomingMessage message)
         {
             var serverProtocol = message.ReadInt32();
             var serverBuildHash = message.ReadString();
             var challenge = message.ReadString();
-            _remoteMachineId = NormalizeMachineId(message.ReadString());
-            _clientNonce = Guid.NewGuid().ToString("N");
-
-            var protocolMatches = serverProtocol == ProtocolVersion;
-            var buildMatches = BuildHashesMatch(serverBuildHash, BuildMetadata.BuildHash);
-            DiagnosticLog.Info(
-                "FRP_DIRECT received host handshake; localProtocol=" + ProtocolVersion +
-                "; remoteProtocol=" + serverProtocol +
-                "; protocolMatch=" + protocolMatches +
-                "; localBuildHash=" + BuildMetadata.BuildHash +
-                "; remoteBuildHash=" + SafeBuildHash(serverBuildHash) +
-                "; buildHashMatch=" + buildMatches + ".");
+            remote.MachineId = NormalizeMachineId(message.ReadString());
+            remote.ClientNonce = Guid.NewGuid().ToString("N");
 
             var proof = ComputePasswordProof(
                 _roomPassword,
                 challenge,
-                _clientNonce,
+                remote.ClientNonce,
                 _localMachineId,
-                _remoteMachineId,
+                remote.MachineId,
                 ProtocolVersion,
                 BuildMetadata.BuildHash,
                 serverProtocol,
@@ -598,27 +693,26 @@ namespace BroforceOnlineDiagnostics
             var outgoing = CreateControlMessage(ControlMessageKind.ClientHello);
             outgoing.Write(ProtocolVersion);
             outgoing.Write(BuildMetadata.BuildHash);
-            outgoing.Write(_clientNonce);
+            outgoing.Write(remote.ClientNonce);
             outgoing.Write(proof);
             outgoing.Write(_localMachineId);
-            SendReliable(outgoing);
-            Status = protocolMatches && buildMatches
+            SendReliable(remote, outgoing);
+            Status = serverProtocol == ProtocolVersion &&
+                     BuildHashesMatch(serverBuildHash, BuildMetadata.BuildHash)
                 ? "Authenticating"
                 : "Version mismatch; waiting for rejection";
         }
 
-        private void ReceiveClientHello(NetIncomingMessage message)
+        private void ReceiveClientHello(FrpPeer remote, NetIncomingMessage message)
         {
             var clientProtocol = message.ReadInt32();
             var clientBuildHash = message.ReadString();
             var clientNonce = message.ReadString();
             var suppliedProof = message.ReadString();
             var clientMachineId = NormalizeMachineId(message.ReadString());
-            var protocolMatches = clientProtocol == ProtocolVersion;
-            var buildMatches = BuildHashesMatch(clientBuildHash, BuildMetadata.BuildHash);
             var expectedProof = ComputePasswordProof(
                 _roomPassword,
-                _challenge,
+                remote.Challenge,
                 clientNonce,
                 clientMachineId,
                 _localMachineId,
@@ -626,207 +720,199 @@ namespace BroforceOnlineDiagnostics
                 clientBuildHash,
                 ProtocolVersion,
                 BuildMetadata.BuildHash);
-            var authenticationMatches = FixedTimeEquals(suppliedProof, expectedProof);
-
-            DiagnosticLog.Info(
-                "FRP_DIRECT received client handshake; localProtocol=" + ProtocolVersion +
-                "; remoteProtocol=" + clientProtocol +
-                "; protocolMatch=" + protocolMatches +
-                "; localBuildHash=" + BuildMetadata.BuildHash +
-                "; remoteBuildHash=" + SafeBuildHash(clientBuildHash) +
-                "; buildHashMatch=" + buildMatches +
-                "; authenticationMatch=" + authenticationMatches + ".");
-
-            var accepted = protocolMatches && buildMatches && authenticationMatches &&
-                           !string.IsNullOrEmpty(clientMachineId);
+            var duplicateMachineId = _peers.Exists(
+                item => item != remote && item.HandshakeComplete &&
+                        string.Equals(item.MachineId, clientMachineId, StringComparison.Ordinal));
+            var accepted = clientProtocol == ProtocolVersion &&
+                           BuildHashesMatch(clientBuildHash, BuildMetadata.BuildHash) &&
+                           FixedTimeEquals(suppliedProof, expectedProof) &&
+                           !string.IsNullOrEmpty(clientMachineId) &&
+                           !duplicateMachineId;
             var reason = accepted
                 ? "accepted"
-                : (!protocolMatches
+                : (clientProtocol != ProtocolVersion
                     ? "protocol_mismatch"
-                    : (!buildMatches
+                    : (!BuildHashesMatch(clientBuildHash, BuildMetadata.BuildHash)
                         ? "build_hash_mismatch"
-                        : (!authenticationMatches ? "authentication_failed" : "invalid_machine_id")));
-            SendHandshakeResult(accepted, reason);
-            if (accepted)
+                        : (!FixedTimeEquals(suppliedProof, expectedProof)
+                            ? "authentication_failed"
+                            : (duplicateMachineId ? "duplicate_machine_id" : "invalid_machine_id"))));
+
+            SendHandshakeResult(remote, accepted, reason);
+            if (!accepted)
             {
-                _remoteMachineId = clientMachineId;
-                _handshakeComplete = true;
-                _lastHeartbeatAtUtc = DateTime.UtcNow;
-                Status = "Handshake complete; heartbeat active";
-                DiagnosticLog.Info("FRP_DIRECT host accepted the client handshake; heartbeat monitoring started.");
-                Raise(HandshakeCompleted, "handshake completion");
+                DiagnosticLog.Warning(
+                    "FRP_DIRECT host rejected the client handshake; reason=" + reason + ".");
+                return;
             }
-            else
-            {
-                Status = "Client rejected: " + reason;
-                DiagnosticLog.Warning("FRP_DIRECT host rejected the client handshake; reason=" + reason + ".");
-            }
+
+            remote.MachineId = clientMachineId;
+            remote.HandshakeComplete = true;
+            remote.LastHeartbeatAtUtc = DateTime.UtcNow;
+            UpdateHostStatus();
+            DiagnosticLog.Info(
+                "FRP_DIRECT host accepted a client handshake; remoteMachineId=" +
+                SafeMachineId(clientMachineId) + ".");
+            Raise(HandshakeCompleted, remote.MachineId, "handshake completion");
         }
 
-        private void SendHandshakeResult(bool accepted, string reason)
+        private void SendHandshakeResult(FrpPeer remote, bool accepted, string reason)
         {
             var outgoing = CreateControlMessage(ControlMessageKind.HandshakeResult);
             outgoing.Write(accepted);
             outgoing.Write(reason);
             outgoing.Write(ProtocolVersion);
             outgoing.Write(BuildMetadata.BuildHash);
-            SendReliable(outgoing);
+            SendReliable(remote, outgoing);
         }
 
-        private void ReceiveHandshakeResult(NetIncomingMessage message)
+        private void ReceiveHandshakeResult(FrpPeer remote, NetIncomingMessage message)
         {
             var accepted = message.ReadBoolean();
-            var reason = message.ReadString();
+            var reason = SafeReason(message.ReadString());
             var serverProtocol = message.ReadInt32();
             var serverBuildHash = message.ReadString();
-            if (!accepted)
+            if (!accepted || serverProtocol != ProtocolVersion ||
+                !BuildHashesMatch(serverBuildHash, BuildMetadata.BuildHash) ||
+                string.IsNullOrEmpty(remote.MachineId))
             {
                 _fatalConnectionError = true;
-                Status = "Handshake rejected: " + SafeReason(reason);
+                Status = "Handshake rejected: " + reason;
                 DiagnosticLog.Warning(
-                    "FRP_DIRECT client handshake rejected; reason=" + SafeReason(reason) +
-                    "; localBuildHash=" + BuildMetadata.BuildHash +
-                    "; remoteBuildHash=" + SafeBuildHash(serverBuildHash) + ".");
-                if (_connection != null)
-                {
-                    DisconnectCurrent("FRP Direct handshake rejected");
-                }
+                    "FRP_DIRECT client handshake rejected; reason=" + reason + ".");
+                Disconnect(remote, "FRP Direct handshake rejected");
                 return;
             }
 
-            if (serverProtocol != ProtocolVersion || !BuildHashesMatch(serverBuildHash, BuildMetadata.BuildHash))
-            {
-                _fatalConnectionError = true;
-                Status = "Invalid host handshake result";
-                DiagnosticLog.Error("FRP_DIRECT host accepted a handshake with inconsistent version metadata.");
-                if (_connection != null)
-                {
-                    DisconnectCurrent("FRP Direct inconsistent handshake");
-                }
-                return;
-            }
-
-            _handshakeComplete = true;
-            _lastHeartbeatAtUtc = DateTime.UtcNow;
-            _nextHeartbeatAtUtc = DateTime.UtcNow;
+            remote.HandshakeComplete = true;
+            remote.LastHeartbeatAtUtc = DateTime.UtcNow;
+            remote.NextHeartbeatAtUtc = DateTime.UtcNow;
             Status = "Handshake complete; heartbeat active";
             DiagnosticLog.Info("FRP_DIRECT client handshake accepted; heartbeat monitoring started.");
-            if (string.IsNullOrEmpty(_remoteMachineId))
-            {
-                _fatalConnectionError = true;
-                DisconnectCurrent("FRP Direct invalid host identity");
-                return;
-            }
-            Raise(HandshakeCompleted, "handshake completion");
+            Raise(HandshakeCompleted, remote.MachineId, "handshake completion");
         }
 
-        private void ReceiveRoomState(NetIncomingMessage message)
+        private void ReceiveRoomState(FrpPeer remote, NetIncomingMessage message)
         {
             var hasRoom = message.ReadBoolean();
-            var encodedRoom = message.ReadString();
-            if (Encoding.UTF8.GetByteCount(encodedRoom ?? string.Empty) > MaxRoomStateBytes)
+            var encodedRoom = message.ReadString() ?? string.Empty;
+            if (Encoding.UTF8.GetByteCount(encodedRoom) > MaxRoomStateBytes)
             {
                 throw new InvalidOperationException("Room state exceeds the protocol limit.");
             }
-            Raise(RoomStateReceived, hasRoom, encodedRoom ?? string.Empty, "room state");
+            Raise(RoomStateReceived, remote.MachineId, hasRoom, encodedRoom, "room state");
         }
 
-        private void ReceiveGameData(NetIncomingMessage message)
+        private void ReceiveJoinAccepted(FrpPeer remote, NetIncomingMessage message)
         {
-            var length = message.ReadInt32();
-            if (length <= 0 || length > MaxGameDataBytes)
-            {
-                throw new InvalidOperationException("Game data length is invalid.");
-            }
-            Raise(GameDataReceived, message.ReadBytes(length), "game data");
-        }
-
-        private void ReceiveJoinAccepted(NetIncomingMessage message)
-        {
-            var encodedRoom = message.ReadString();
-            if (Encoding.UTF8.GetByteCount(encodedRoom ?? string.Empty) > MaxRoomStateBytes)
+            var encodedRoom = message.ReadString() ?? string.Empty;
+            if (Encoding.UTF8.GetByteCount(encodedRoom) > MaxRoomStateBytes)
             {
                 throw new InvalidOperationException("Join room state exceeds the protocol limit.");
             }
-            Raise(JoinAcceptedReceived, encodedRoom ?? string.Empty, "join accepted");
+            Raise(JoinAcceptedReceived, remote.MachineId, encodedRoom, "join accepted");
         }
 
-        private void SendHeartbeat(DateTime now)
+        private void ReceiveGameData(FrpPeer remote, NetIncomingMessage message)
         {
-            _heartbeatSequence++;
-            var outgoing = CreateControlMessage(ControlMessageKind.Heartbeat);
-            outgoing.Write(_heartbeatSequence);
-            SendReliable(outgoing);
-            _nextHeartbeatAtUtc = now.AddSeconds(HeartbeatIntervalSeconds);
+            var route = NormalizeRoute(message.ReadString());
+            var length = message.ReadInt32();
+            if (route == null || length <= 0 || length > MaxGameDataBytes)
+            {
+                throw new InvalidOperationException("Game data envelope is invalid.");
+            }
+            Raise(
+                GameDataReceived,
+                remote.MachineId,
+                route,
+                message.ReadBytes(length),
+                "game data");
         }
 
-        private void ReceiveHeartbeat(NetIncomingMessage message)
+        private void ReceiveMemberLeft(NetIncomingMessage message)
+        {
+            var departedMachineId = NormalizeMachineId(message.ReadString());
+            if (string.IsNullOrEmpty(departedMachineId))
+            {
+                throw new InvalidOperationException("Departed machine ID is invalid.");
+            }
+            Raise(MemberLeftReceived, departedMachineId, "member left");
+        }
+
+        private void SendHeartbeat(FrpPeer remote, DateTime now)
+        {
+            remote.HeartbeatSequence++;
+            var outgoing = CreateControlMessage(ControlMessageKind.Heartbeat);
+            outgoing.Write(remote.HeartbeatSequence);
+            SendReliable(remote, outgoing);
+            remote.NextHeartbeatAtUtc = now.AddSeconds(HeartbeatIntervalSeconds);
+        }
+
+        private void ReceiveHeartbeat(FrpPeer remote, NetIncomingMessage message)
         {
             var sequence = message.ReadInt32();
-            _lastHeartbeatAtUtc = DateTime.UtcNow;
+            remote.LastHeartbeatAtUtc = DateTime.UtcNow;
             var outgoing = CreateControlMessage(ControlMessageKind.HeartbeatAck);
             outgoing.Write(sequence);
-            SendReliable(outgoing);
+            SendReliable(remote, outgoing);
         }
 
-        private void ReceiveHeartbeatAck(NetIncomingMessage message)
+        private void ReceiveHeartbeatAck(FrpPeer remote, NetIncomingMessage message)
         {
             var sequence = message.ReadInt32();
-            if (sequence <= 0 || sequence > _heartbeatSequence)
+            if (sequence <= 0 || sequence > remote.HeartbeatSequence)
             {
                 return;
             }
 
-            _lastHeartbeatAtUtc = DateTime.UtcNow;
+            remote.LastHeartbeatAtUtc = DateTime.UtcNow;
             Status = "Connected; heartbeat " + sequence;
         }
 
         private void UpdateTimers(DateTime now)
         {
-            if (_role == FrpRole.Client && _connection == null && !_fatalConnectionError &&
+            if (_role == FrpRole.Client && _peers.Count == 0 && !_fatalConnectionError &&
                 _remoteEndpoint != null && now >= _nextConnectAtUtc)
             {
                 ConnectClient();
                 return;
             }
 
-            if (_connection == null)
+            foreach (var remote in new List<FrpPeer>(_peers))
             {
-                return;
-            }
-
-            if (_disconnectRequested)
-            {
-                return;
-            }
-
-            if (!_handshakeComplete)
-            {
-                if ((now - _connectedAtUtc).TotalSeconds >= HandshakeTimeoutSeconds)
+                if (remote.DisconnectRequested)
                 {
-                    DiagnosticLog.Warning("FRP_DIRECT application handshake timed out.");
-                    DisconnectCurrent("FRP Direct handshake timeout");
+                    continue;
                 }
-                return;
-            }
 
-            if (_role == FrpRole.Client && now >= _nextHeartbeatAtUtc)
-            {
-                SendHeartbeat(now);
-            }
+                if (!remote.HandshakeComplete)
+                {
+                    if ((now - remote.ConnectedAtUtc).TotalSeconds >= HandshakeTimeoutSeconds)
+                    {
+                        DiagnosticLog.Warning("FRP_DIRECT application handshake timed out.");
+                        Disconnect(remote, "FRP Direct handshake timeout");
+                    }
+                    continue;
+                }
 
-            if ((now - _lastHeartbeatAtUtc).TotalSeconds >= HeartbeatTimeoutSeconds)
-            {
-                DiagnosticLog.Warning(
-                    "FRP_DIRECT heartbeat timed out; role=" + RoleName(_role) + ".");
-                Status = "Heartbeat timed out";
-                DisconnectCurrent("FRP Direct heartbeat timeout");
+                if (_role == FrpRole.Client && now >= remote.NextHeartbeatAtUtc)
+                {
+                    SendHeartbeat(remote, now);
+                }
+
+                if ((now - remote.LastHeartbeatAtUtc).TotalSeconds >= HeartbeatTimeoutSeconds)
+                {
+                    DiagnosticLog.Warning(
+                        "FRP_DIRECT heartbeat timed out; remoteMachineId=" +
+                        SafeMachineId(remote.MachineId) + ".");
+                    Disconnect(remote, "FRP Direct heartbeat timeout");
+                }
             }
         }
 
         private void HandleMainThreadStall(DateTime now)
         {
-            if (!_handshakeComplete || _lastUpdateAtUtc == DateTime.MinValue)
+            if (_lastUpdateAtUtc == DateTime.MinValue)
             {
                 return;
             }
@@ -837,28 +923,76 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            // Unity does not update this component while a blocking scene load is in progress.
-            // Resume the liveness window instead of treating that local pause as peer failure.
-            _lastHeartbeatAtUtc = now;
-            if (_role == FrpRole.Client)
+            foreach (var remote in _peers)
             {
-                _nextHeartbeatAtUtc = now;
+                if (!remote.HandshakeComplete)
+                {
+                    continue;
+                }
+
+                remote.LastHeartbeatAtUtc = now;
+                if (_role == FrpRole.Client)
+                {
+                    remote.NextHeartbeatAtUtc = now;
+                }
             }
             DiagnosticLog.Warning(
-                "FRP_DIRECT main-thread update paused for " +
-                ((int)stalledSeconds) +
-                " seconds; heartbeat timeout window resumed after scene loading.");
+                "FRP_DIRECT main-thread update paused for " + (int)stalledSeconds +
+                " seconds; heartbeat timeout windows resumed.");
         }
 
-        private void DisconnectCurrent(string reason)
+        private void Disconnect(FrpPeer remote, string reason)
         {
-            if (_connection == null || _disconnectRequested)
+            if (remote == null || remote.DisconnectRequested)
             {
                 return;
             }
 
-            _disconnectRequested = true;
-            _connection.Disconnect(reason);
+            remote.DisconnectRequested = true;
+            remote.Connection.Disconnect(reason);
+        }
+
+        private void ConnectClient()
+        {
+            if (_peer == null || _remoteEndpoint == null || _fatalConnectionError)
+            {
+                return;
+            }
+
+            try
+            {
+                var connection = _peer.Connect(_remoteEndpoint);
+                var remote = new FrpPeer(connection);
+                remote.ConnectedAtUtc = DateTime.UtcNow;
+                remote.LastHeartbeatAtUtc = remote.ConnectedAtUtc;
+                _peers.Add(remote);
+                _nextConnectAtUtc = remote.ConnectedAtUtc.AddSeconds(ReconnectDelaySeconds);
+                Status = "Connecting";
+                DiagnosticLog.Info("FRP_DIRECT client connection attempt started.");
+            }
+            catch (Exception exception)
+            {
+                _nextConnectAtUtc = DateTime.UtcNow.AddSeconds(ReconnectDelaySeconds);
+                Status = "Connect failed; retrying";
+                DiagnosticLog.Warning(
+                    "FRP_DIRECT client connection attempt failed; error=" +
+                    exception.GetType().Name + ".");
+            }
+        }
+
+        private void UpdateHostStatus()
+        {
+            var readyCount = 0;
+            foreach (var remote in _peers)
+            {
+                if (remote.HandshakeComplete)
+                {
+                    readyCount++;
+                }
+            }
+            Status = readyCount == 0
+                ? "Listening on UDP " + (_peer == null ? 0 : _peer.Port)
+                : "Authenticated clients: " + readyCount + "/" + MaxRemoteConnections;
         }
 
         private void LogInvalidControlPacket(Exception exception)
@@ -876,7 +1010,6 @@ namespace BroforceOnlineDiagnostics
                     "FRP_DIRECT suppressed " + _suppressedInvalidPackets +
                     " additional invalid control packets.");
             }
-
             _suppressedInvalidPackets = 0;
             _nextInvalidPacketLogAtUtc = now.AddSeconds(5);
             DiagnosticLog.Warning(
@@ -884,29 +1017,31 @@ namespace BroforceOnlineDiagnostics
                 exception.GetType().Name + ".");
         }
 
-        private void ConnectClient()
+        private FrpPeer FindPeer(NetConnection connection)
         {
-            if (_peer == null || _remoteEndpoint == null || _fatalConnectionError)
-            {
-                return;
-            }
+            return _peers.Find(item => item.Connection == connection);
+        }
 
-            try
+        private FrpPeer FindPeer(string machineId)
+        {
+            if (string.IsNullOrEmpty(machineId))
             {
-                _connection = _peer.Connect(_remoteEndpoint);
-                _connectedAtUtc = DateTime.UtcNow;
-                _nextConnectAtUtc = _connectedAtUtc.AddSeconds(ReconnectDelaySeconds);
-                Status = "Connecting";
-                DiagnosticLog.Info("FRP_DIRECT client connection attempt started.");
+                return _role == FrpRole.Client && _peers.Count == 1 ? _peers[0] : null;
             }
-            catch (Exception exception)
+            return _peers.Find(
+                item => string.Equals(item.MachineId, machineId, StringComparison.Ordinal));
+        }
+
+        private IEnumerable<FrpPeer> SelectPeers(string targetMachineId, bool broadcast)
+        {
+            foreach (var remote in _peers)
             {
-                _connection = null;
-                _nextConnectAtUtc = DateTime.UtcNow.AddSeconds(ReconnectDelaySeconds);
-                Status = "Connect failed; retrying";
-                DiagnosticLog.Warning(
-                    "FRP_DIRECT client connection attempt failed; error=" +
-                    exception.GetType().Name + ".");
+                if (!broadcast && !string.IsNullOrEmpty(targetMachineId) &&
+                    !string.Equals(remote.MachineId, targetMachineId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                yield return remote;
             }
         }
 
@@ -918,31 +1053,45 @@ namespace BroforceOnlineDiagnostics
             return outgoing;
         }
 
-        private bool SendEmptyControlMessage(ControlMessageKind kind)
+        private bool SendEmptyControlMessage(ControlMessageKind kind, string targetMachineId)
         {
-            if (!CanSendApplicationMessage())
+            var sent = false;
+            foreach (var remote in SelectPeers(targetMachineId, false))
             {
-                return false;
+                if (!CanSendApplicationMessage(remote))
+                {
+                    continue;
+                }
+                SendReliable(remote, CreateControlMessage(kind));
+                sent = true;
             }
-
-            SendReliable(CreateControlMessage(kind));
-            return true;
+            return sent;
         }
 
-        private bool CanSendApplicationMessage()
+        private bool CanSendApplicationMessage(FrpPeer remote)
         {
-            return _peer != null && _connection != null && _handshakeComplete &&
-                   !_disconnectRequested;
+            return _peer != null && remote != null && remote.Connection != null &&
+                   remote.HandshakeComplete && !remote.DisconnectRequested;
         }
 
-        private void SendReliable(NetOutgoingMessage message)
+        private static void SendReliable(FrpPeer remote, NetOutgoingMessage message)
         {
-            if (_connection == null)
+            if (remote == null || remote.Connection == null)
             {
                 return;
             }
+            remote.Connection.SendMessage(message, NetDeliveryMethod.ReliableOrdered, 0);
+        }
 
-            _connection.SendMessage(message, NetDeliveryMethod.ReliableOrdered, 0);
+        private static string NormalizeRoute(string value)
+        {
+            value = value ?? string.Empty;
+            if (value.Length == 0 || string.Equals(value, "*", StringComparison.Ordinal))
+            {
+                return value;
+            }
+            var machineId = NormalizeMachineId(value);
+            return string.IsNullOrEmpty(machineId) ? null : machineId;
         }
 
         private static string ComputePasswordProof(
@@ -1000,8 +1149,7 @@ namespace BroforceOnlineDiagnostics
 
         private static bool BuildHashesMatch(string left, string right)
         {
-            return !string.IsNullOrEmpty(left) &&
-                   !string.IsNullOrEmpty(right) &&
+            return !string.IsNullOrEmpty(left) && !string.IsNullOrEmpty(right) &&
                    string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -1021,7 +1169,10 @@ namespace BroforceOnlineDiagnostics
 
         private static FrpRole ParseRole(string value)
         {
-            return string.Equals((value ?? string.Empty).Trim(), "client", StringComparison.OrdinalIgnoreCase)
+            return string.Equals(
+                (value ?? string.Empty).Trim(),
+                "client",
+                StringComparison.OrdinalIgnoreCase)
                 ? FrpRole.Client
                 : FrpRole.Host;
         }
@@ -1029,28 +1180,6 @@ namespace BroforceOnlineDiagnostics
         private static string RoleName(FrpRole role)
         {
             return role == FrpRole.Client ? "client" : "host";
-        }
-
-        private static string SafeBuildHash(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return "missing";
-            }
-
-            var builder = new StringBuilder();
-            for (var index = 0; index < value.Length && index < 128; index++)
-            {
-                var current = value[index];
-                if ((current >= 'a' && current <= 'z') ||
-                    (current >= 'A' && current <= 'Z') ||
-                    (current >= '0' && current <= '9') ||
-                    current == '-' || current == '_')
-                {
-                    builder.Append(current);
-                }
-            }
-            return builder.Length == 0 ? "invalid" : builder.ToString();
         }
 
         private static string SafeReason(string value)
@@ -1070,6 +1199,12 @@ namespace BroforceOnlineDiagnostics
                 }
             }
             return builder.Length == 0 ? "unknown" : builder.ToString();
+        }
+
+        private static string SafeMachineId(string value)
+        {
+            var normalized = NormalizeMachineId(value);
+            return string.IsNullOrEmpty(normalized) ? "unknown" : normalized;
         }
 
         private static string NormalizeMachineId(string value)
@@ -1099,7 +1234,6 @@ namespace BroforceOnlineDiagnostics
             {
                 return;
             }
-
             try
             {
                 callback();
@@ -1116,7 +1250,6 @@ namespace BroforceOnlineDiagnostics
             {
                 return;
             }
-
             try
             {
                 callback(value);
@@ -1137,10 +1270,30 @@ namespace BroforceOnlineDiagnostics
             {
                 return;
             }
-
             try
             {
                 callback(first, second);
+            }
+            catch (Exception exception)
+            {
+                LogCallbackFailure(operation, exception);
+            }
+        }
+
+        private static void Raise<T1, T2, T3>(
+            Action<T1, T2, T3> callback,
+            T1 first,
+            T2 second,
+            T3 third,
+            string operation)
+        {
+            if (callback == null)
+            {
+                return;
+            }
+            try
+            {
+                callback(first, second, third);
             }
             catch (Exception exception)
             {
@@ -1153,6 +1306,25 @@ namespace BroforceOnlineDiagnostics
             DiagnosticLog.Error(
                 "FRP_DIRECT " + operation + " callback failed; error=" +
                 exception.GetType().Name + ".");
+        }
+
+        private sealed class FrpPeer
+        {
+            internal FrpPeer(NetConnection connection)
+            {
+                Connection = connection;
+            }
+
+            internal readonly NetConnection Connection;
+            internal string MachineId = string.Empty;
+            internal string Challenge = string.Empty;
+            internal string ClientNonce = string.Empty;
+            internal DateTime ConnectedAtUtc;
+            internal DateTime LastHeartbeatAtUtc;
+            internal DateTime NextHeartbeatAtUtc;
+            internal bool HandshakeComplete;
+            internal bool DisconnectRequested;
+            internal int HeartbeatSequence;
         }
 
         private enum FrpRole
@@ -1174,7 +1346,8 @@ namespace BroforceOnlineDiagnostics
             JoinAccepted = 9,
             JoinRejected = 10,
             GameData = 11,
-            LeaveNotice = 12
+            LeaveNotice = 12,
+            MemberLeft = 13
         }
 
         private sealed class FrpDirectConfiguration
@@ -1189,6 +1362,7 @@ namespace BroforceOnlineDiagnostics
             internal string ServerAddress { get; private set; }
             internal int ServerPort { get; private set; }
             internal string RoomPassword { get; private set; }
+            internal int PlayerLimit { get; private set; }
             internal string ConfigurationKey { get; private set; }
 
             internal static FrpDirectConfiguration FromSettings(DiagnosticSettings settings)
@@ -1224,6 +1398,8 @@ namespace BroforceOnlineDiagnostics
                 configuration.RoomPassword = settings == null
                     ? string.Empty
                     : settings.FrpDirectRoomPassword ?? string.Empty;
+                configuration.PlayerLimit = NormalizePlayerLimit(
+                    settings == null ? 4 : settings.FrpDirectPlayerLimit);
                 configuration.ConfigurationKey = HashConfigurationKey(
                     string.Join(
                         "|",
@@ -1261,7 +1437,6 @@ namespace BroforceOnlineDiagnostics
                     {
                         return false;
                     }
-
                     address = value.Substring(1, closingBracket - 1).Trim();
                     portText = value.Substring(closingBracket + 2).Trim();
                 }
@@ -1273,7 +1448,6 @@ namespace BroforceOnlineDiagnostics
                     {
                         return false;
                     }
-
                     address = value.Substring(0, separator).Trim();
                     portText = value.Substring(separator + 1).Trim();
                 }
@@ -1285,7 +1459,6 @@ namespace BroforceOnlineDiagnostics
                     address = string.Empty;
                     return false;
                 }
-
                 port = parsedPort;
                 return true;
             }
@@ -1303,6 +1476,11 @@ namespace BroforceOnlineDiagnostics
             {
                 return value >= 1 && value <= 65535 ? value : 27045;
             }
+        }
+
+        private static int NormalizePlayerLimit(int value)
+        {
+            return global::System.Math.Max(1, global::System.Math.Min(4, value));
         }
     }
 }
