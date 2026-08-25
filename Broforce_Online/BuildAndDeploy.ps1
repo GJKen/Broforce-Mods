@@ -46,6 +46,7 @@ $requiredPaths = @(
     (Join-Path $broforceManagedPath 'UnityEngine.dll'),
     (Join-Path $broforceManagedPath 'UnityEngine.CoreModule.dll'),
     (Join-Path $broforceManagedPath 'UnityEngine.IMGUIModule.dll'),
+    (Join-Path $broforceManagedPath 'UnityEngine.TextRenderingModule.dll'),
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
     (Join-Path $unityModManagerPath '0Harmony.dll'),
     (Join-Path $broforceManagedPath 'Assembly-CSharp.dll')
@@ -75,6 +76,7 @@ $references = @(
     (Join-Path $broforceManagedPath 'UnityEngine.dll'),
     (Join-Path $broforceManagedPath 'UnityEngine.CoreModule.dll'),
     (Join-Path $broforceManagedPath 'UnityEngine.IMGUIModule.dll'),
+    (Join-Path $broforceManagedPath 'UnityEngine.TextRenderingModule.dll'),
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
     (Join-Path $unityModManagerPath '0Harmony.dll'),
     (Join-Path $broforceManagedPath 'Assembly-CSharp.dll')

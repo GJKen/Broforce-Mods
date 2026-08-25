@@ -6,6 +6,20 @@ using UnityModManagerNet;
 
 namespace BroforceOnlineDiagnostics
 {
+    [Flags]
+    internal enum DiagnosticLogCategory
+    {
+        LobbyAndNetwork = 1,
+        Workshop = 2,
+        PlayerLifecycle = 4,
+        Afk = 8,
+        LevelOutcome = 16,
+        WorkshopObjects = 32,
+        FrpDirect = 64,
+        OptionalMod = 128,
+        HarmonyTrace = 256
+    }
+
     internal static class DiagnosticLog
     {
         private const int FlushIntervalMilliseconds = 750;
@@ -24,9 +38,26 @@ namespace BroforceOnlineDiagnostics
         public static string SessionId { get; private set; }
         public static string Role { get; private set; }
 
+        internal static DiagnosticLogCategory AllCategories
+        {
+            get
+            {
+                return DiagnosticLogCategory.LobbyAndNetwork |
+                       DiagnosticLogCategory.Workshop |
+                       DiagnosticLogCategory.PlayerLifecycle |
+                       DiagnosticLogCategory.Afk |
+                       DiagnosticLogCategory.LevelOutcome |
+                       DiagnosticLogCategory.WorkshopObjects |
+                       DiagnosticLogCategory.FrpDirect |
+                       DiagnosticLogCategory.OptionalMod |
+                       DiagnosticLogCategory.HarmonyTrace;
+            }
+        }
+
         public static void Initialize(UnityModManager.ModEntry modEntry)
         {
             _modEntry = modEntry;
+            EnsureCategoryDefaults();
             try
             {
                 _directory = Path.Combine(Application.persistentDataPath, "BroforceOnlineDiagnostics");
@@ -126,6 +157,239 @@ namespace BroforceOnlineDiagnostics
             Write("TRACE", message, true, false);
         }
 
+        internal static bool IsCategoryEnabled(DiagnosticLogCategory category)
+        {
+            var settings = Plugin.Settings;
+            if (settings == null)
+            {
+                return true;
+            }
+
+            switch (category)
+            {
+                case DiagnosticLogCategory.LobbyAndNetwork:
+                    return settings.LogLobbyAndNetwork;
+                case DiagnosticLogCategory.Workshop:
+                    return settings.LogWorkshop;
+                case DiagnosticLogCategory.PlayerLifecycle:
+                    return settings.LogPlayerLifecycle;
+                case DiagnosticLogCategory.Afk:
+                    return settings.LogAfk;
+                case DiagnosticLogCategory.LevelOutcome:
+                    return settings.LogLevelOutcome;
+                case DiagnosticLogCategory.WorkshopObjects:
+                    return settings.LogWorkshopObjects;
+                case DiagnosticLogCategory.FrpDirect:
+                    return settings.LogFrpDirect;
+                case DiagnosticLogCategory.OptionalMod:
+                    return settings.LogOptionalMod;
+                case DiagnosticLogCategory.HarmonyTrace:
+                    return settings.LogHarmonyTrace;
+                default:
+                    return true;
+            }
+        }
+
+        internal static void SetCategoryEnabled(DiagnosticLogCategory category, bool enabled)
+        {
+            var settings = Plugin.Settings;
+            if (settings == null)
+            {
+                return;
+            }
+
+            switch (category)
+            {
+                case DiagnosticLogCategory.LobbyAndNetwork:
+                    settings.LogLobbyAndNetwork = enabled;
+                    break;
+                case DiagnosticLogCategory.Workshop:
+                    settings.LogWorkshop = enabled;
+                    break;
+                case DiagnosticLogCategory.PlayerLifecycle:
+                    settings.LogPlayerLifecycle = enabled;
+                    break;
+                case DiagnosticLogCategory.Afk:
+                    settings.LogAfk = enabled;
+                    break;
+                case DiagnosticLogCategory.LevelOutcome:
+                    settings.LogLevelOutcome = enabled;
+                    break;
+                case DiagnosticLogCategory.WorkshopObjects:
+                    settings.LogWorkshopObjects = enabled;
+                    break;
+                case DiagnosticLogCategory.FrpDirect:
+                    settings.LogFrpDirect = enabled;
+                    break;
+                case DiagnosticLogCategory.OptionalMod:
+                    settings.LogOptionalMod = enabled;
+                    break;
+                case DiagnosticLogCategory.HarmonyTrace:
+                    settings.LogHarmonyTrace = enabled;
+                    break;
+            }
+
+            settings.DiagnosticLogPreset = "custom";
+        }
+
+        internal static void ApplyPreset(string preset)
+        {
+            var settings = Plugin.Settings;
+            if (settings == null)
+            {
+                return;
+            }
+
+            var normalized = (preset ?? string.Empty).Trim().ToLowerInvariant();
+            var categories = DiagnosticLogCategory.LobbyAndNetwork;
+            switch (normalized)
+            {
+                case "basic":
+                    categories = DiagnosticLogCategory.LobbyAndNetwork |
+                                 DiagnosticLogCategory.PlayerLifecycle;
+                    break;
+                case "join":
+                case "rejoin":
+                    categories = DiagnosticLogCategory.LobbyAndNetwork |
+                                 DiagnosticLogCategory.Workshop |
+                                 DiagnosticLogCategory.PlayerLifecycle;
+                    break;
+                case "afk":
+                    categories = DiagnosticLogCategory.LobbyAndNetwork |
+                                 DiagnosticLogCategory.PlayerLifecycle |
+                                 DiagnosticLogCategory.Afk |
+                                 DiagnosticLogCategory.LevelOutcome;
+                    break;
+                case "workshop":
+                    categories = DiagnosticLogCategory.LobbyAndNetwork |
+                                 DiagnosticLogCategory.Workshop |
+                                 DiagnosticLogCategory.WorkshopObjects |
+                                 DiagnosticLogCategory.PlayerLifecycle;
+                    break;
+                case "full":
+                case "complete":
+                    categories = AllCategories;
+                    normalized = "full";
+                    break;
+                default:
+                    categories = AllCategories;
+                    normalized = "full";
+                    break;
+            }
+
+            SetCategories(settings, categories);
+            settings.DiagnosticLogPreset = normalized;
+        }
+
+        internal static string GetEnabledCategoryList()
+        {
+            var enabled = new StringBuilder();
+            var categories = new[]
+            {
+                DiagnosticLogCategory.LobbyAndNetwork,
+                DiagnosticLogCategory.Workshop,
+                DiagnosticLogCategory.PlayerLifecycle,
+                DiagnosticLogCategory.Afk,
+                DiagnosticLogCategory.LevelOutcome,
+                DiagnosticLogCategory.WorkshopObjects,
+                DiagnosticLogCategory.FrpDirect,
+                DiagnosticLogCategory.OptionalMod,
+                DiagnosticLogCategory.HarmonyTrace
+            };
+            foreach (var category in categories)
+            {
+                if (!IsCategoryEnabled(category))
+                {
+                    continue;
+                }
+
+                if (enabled.Length > 0)
+                {
+                    enabled.Append(",");
+                }
+
+                enabled.Append(GetCategoryKey(category));
+            }
+
+            return enabled.Length == 0 ? "none" : enabled.ToString();
+        }
+
+        internal static string GetCategoryKey(DiagnosticLogCategory category)
+        {
+            switch (category)
+            {
+                case DiagnosticLogCategory.LobbyAndNetwork:
+                    return "lobby-network";
+                case DiagnosticLogCategory.Workshop:
+                    return "workshop";
+                case DiagnosticLogCategory.PlayerLifecycle:
+                    return "player-lifecycle";
+                case DiagnosticLogCategory.Afk:
+                    return "afk-dropout";
+                case DiagnosticLogCategory.LevelOutcome:
+                    return "level-outcome";
+                case DiagnosticLogCategory.WorkshopObjects:
+                    return "workshop-objects";
+                case DiagnosticLogCategory.FrpDirect:
+                    return "frp-direct";
+                case DiagnosticLogCategory.OptionalMod:
+                    return "optional-mod";
+                case DiagnosticLogCategory.HarmonyTrace:
+                    return "harmony-trace";
+                default:
+                    return "unknown";
+            }
+        }
+
+        internal static void DrawSettingsGui()
+        {
+            var settings = Plugin.Settings;
+            if (settings == null)
+            {
+                return;
+            }
+
+            GUILayout.Label("Diagnostic log preset");
+            var preset = (settings.DiagnosticLogPreset ?? string.Empty).ToLowerInvariant();
+            var presetIndex = preset == "basic" ? 0 :
+                preset == "join" || preset == "rejoin" ? 1 :
+                preset == "afk" ? 2 : preset == "workshop" ? 3 :
+                preset == "full" || preset == "complete" ? 4 : -1;
+            var nextPresetIndex = GUILayout.SelectionGrid(
+                presetIndex,
+                new[] { "Basic", "Join / Rejoin", "AFK / Failure", "Workshop", "Full" },
+                3,
+                GUILayout.Width(540f));
+            if (nextPresetIndex != presetIndex)
+            {
+                ApplyPreset(nextPresetIndex == 0 ? "basic" :
+                    nextPresetIndex == 1 ? "join" :
+                    nextPresetIndex == 2 ? "afk" :
+                    nextPresetIndex == 3 ? "workshop" : "full");
+            }
+
+            GUILayout.Label("Diagnostic categories");
+            DrawCategoryToggle(DiagnosticLogCategory.LobbyAndNetwork, "Lobby and network session");
+            DrawCategoryToggle(DiagnosticLogCategory.Workshop, "Workshop download/load/scenes");
+            DrawCategoryToggle(DiagnosticLogCategory.PlayerLifecycle, "Player join/spawn/dropout");
+            DrawCategoryToggle(DiagnosticLogCategory.Afk, "AFK and Dropout");
+            DrawCategoryToggle(DiagnosticLogCategory.LevelOutcome, "Lives/failure/level outcome");
+            DrawCategoryToggle(DiagnosticLogCategory.WorkshopObjects, "Workshop items and object sync");
+            DrawCategoryToggle(DiagnosticLogCategory.FrpDirect, "FRP Direct transport");
+            DrawCategoryToggle(DiagnosticLogCategory.OptionalMod, "Optional Mod compatibility");
+            DrawCategoryToggle(DiagnosticLogCategory.HarmonyTrace, "Harmony detailed tracing");
+        }
+
+        private static void DrawCategoryToggle(DiagnosticLogCategory category, string label)
+        {
+            var current = IsCategoryEnabled(category);
+            var next = GUILayout.Toggle(current, label);
+            if (next != current)
+            {
+                SetCategoryEnabled(category, next);
+            }
+        }
+
         public static void Close()
         {
             lock (Sync)
@@ -163,15 +427,22 @@ namespace BroforceOnlineDiagnostics
         {
             var safeMessage = SanitizeUtf16(message);
             var line = string.Empty;
+            var written = false;
             try
             {
                 lock (Sync)
                 {
                     line = FormatLine(level, safeMessage);
+                    if (!ShouldWrite(level, InferCategory(safeMessage, trace)))
+                    {
+                        return;
+                    }
+
                     WriteLineLocked(level, safeMessage, trace);
+                    written = true;
                 }
 
-                if (writeToUnity)
+                if (writeToUnity && written)
                 {
                     Debug.Log("[BroforceOnlineDiagnostics] " + line);
                 }
@@ -181,6 +452,128 @@ namespace BroforceOnlineDiagnostics
                 Debug.LogError(
                     "[BroforceOnlineDiagnostics] Cannot write diagnostic file: " +
                     SanitizeUtf16(exception.ToString()));
+            }
+        }
+
+        private static bool ShouldWrite(string level, DiagnosticLogCategory category)
+        {
+            return string.Equals(level, "WARN", StringComparison.Ordinal) ||
+                   string.Equals(level, "ERROR", StringComparison.Ordinal) ||
+                   IsCategoryEnabled(category);
+        }
+
+        private static DiagnosticLogCategory InferCategory(string message, bool trace)
+        {
+            var value = (message ?? string.Empty).ToUpperInvariant();
+            // HarmonyDiagnostics.TracePrefix marks method traces with TRACE #.
+            // Check this before payload words such as PLAYER or JOIN so the
+            // dedicated Harmony category can actually suppress those traces.
+            if (trace && value.StartsWith("TRACE #", StringComparison.Ordinal))
+            {
+                return DiagnosticLogCategory.HarmonyTrace;
+            }
+
+            if (value.IndexOf("AFK_", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("PLAYER_DROPOUT", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("DROPOUT", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.Afk;
+            }
+
+            if (value.IndexOf("LEVEL_OUTCOME", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("LEVEL FINISH", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("REMOVE LIFE", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.LevelOutcome;
+            }
+
+            if (value.IndexOf("FRP_DIRECT", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("FRP DIRECT", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.FrpDirect;
+            }
+
+            if (value.IndexOf("OPTIONAL_BRO_MOD", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("SWAP BROS", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("OPTIONAL MOD", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.OptionalMod;
+            }
+
+            if (value.IndexOf("PICKUP", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("COLLECT", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("AMMO", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("DETERMINISTIC", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("WORKSHOP OBJECT", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("ITEM", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("PROP", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.WorkshopObjects;
+            }
+
+            if (value.IndexOf("PLAYER", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("HERO", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("JOIN", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("PID", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("SLOT", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("CONTROLLER", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("SPAWN", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("REGISTER", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.PlayerLifecycle;
+            }
+
+            if (value.IndexOf("WORKSHOP", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("CAMPAIGN", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("SCENE", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("LEVEL LOAD", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.Workshop;
+            }
+
+            if (trace || value.IndexOf("HARMONY", StringComparison.Ordinal) >= 0 ||
+                value.IndexOf("TRACE", StringComparison.Ordinal) >= 0)
+            {
+                return DiagnosticLogCategory.HarmonyTrace;
+            }
+
+            return DiagnosticLogCategory.LobbyAndNetwork;
+        }
+
+        private static void SetCategories(DiagnosticSettings settings, DiagnosticLogCategory categories)
+        {
+            settings.LogLobbyAndNetwork = (categories & DiagnosticLogCategory.LobbyAndNetwork) != 0;
+            settings.LogWorkshop = (categories & DiagnosticLogCategory.Workshop) != 0;
+            settings.LogPlayerLifecycle = (categories & DiagnosticLogCategory.PlayerLifecycle) != 0;
+            settings.LogAfk = (categories & DiagnosticLogCategory.Afk) != 0;
+            settings.LogLevelOutcome = (categories & DiagnosticLogCategory.LevelOutcome) != 0;
+            settings.LogWorkshopObjects = (categories & DiagnosticLogCategory.WorkshopObjects) != 0;
+            settings.LogFrpDirect = (categories & DiagnosticLogCategory.FrpDirect) != 0;
+            settings.LogOptionalMod = (categories & DiagnosticLogCategory.OptionalMod) != 0;
+            settings.LogHarmonyTrace = (categories & DiagnosticLogCategory.HarmonyTrace) != 0;
+        }
+
+        private static void EnsureCategoryDefaults()
+        {
+            var settings = Plugin.Settings;
+            if (settings == null)
+            {
+                return;
+            }
+
+            // Old UMM XML does not contain new bool fields. Detect that shape and retain the old all-on behavior.
+            if (string.IsNullOrEmpty(settings.DiagnosticLogPreset))
+            {
+                var anyEnabled = settings.LogLobbyAndNetwork || settings.LogWorkshop ||
+                    settings.LogPlayerLifecycle || settings.LogAfk || settings.LogLevelOutcome ||
+                    settings.LogWorkshopObjects || settings.LogFrpDirect || settings.LogOptionalMod ||
+                    settings.LogHarmonyTrace;
+                if (!anyEnabled)
+                {
+                    SetCategories(settings, AllCategories);
+                }
+
+                settings.DiagnosticLogPreset = "full";
             }
         }
 
@@ -225,6 +618,9 @@ namespace BroforceOnlineDiagnostics
                 "; scope=source-and-build-inputs";
             WriteLineLocked("INFO", buildInfo, false);
             WriteLineLocked("TRACE", buildInfo, true);
+            var categoryInfo = "DIAGNOSTIC_CATEGORIES enabled=" + GetEnabledCategoryList();
+            WriteLineLocked("INFO", categoryInfo, false);
+            WriteLineLocked("TRACE", categoryInfo, true);
         }
 
         private static string GetConfiguredValue(string kind)

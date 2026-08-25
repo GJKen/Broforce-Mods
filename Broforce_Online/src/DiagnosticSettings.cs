@@ -20,6 +20,21 @@ namespace BroforceOnlineDiagnostics
         public string FrpDirectServerAddress;
         public int FrpDirectServerPort;
         public string FrpDirectRoomPassword;
+        // UI-only section state; these do not enable or disable any feature.
+        public bool WorkshopSettingsExpanded;
+        public bool DiagnosticSettingsExpanded;
+        public bool FrpDirectSettingsExpanded;
+        // Diagnostic output categories. These only filter log writes; they never gate patches or game behavior.
+        public bool LogLobbyAndNetwork;
+        public bool LogWorkshop;
+        public bool LogPlayerLifecycle;
+        public bool LogAfk;
+        public bool LogLevelOutcome;
+        public bool LogWorkshopObjects;
+        public bool LogFrpDirect;
+        public bool LogOptionalMod;
+        public bool LogHarmonyTrace;
+        public string DiagnosticLogPreset;
         public int DiagnosticSettingsVersion;
 
         public DiagnosticSettings()
@@ -39,6 +54,19 @@ namespace BroforceOnlineDiagnostics
             FrpDirectServerAddress = string.Empty;
             FrpDirectServerPort = 27045;
             FrpDirectRoomPassword = string.Empty;
+            WorkshopSettingsExpanded = true;
+            DiagnosticSettingsExpanded = false;
+            FrpDirectSettingsExpanded = false;
+            LogLobbyAndNetwork = true;
+            LogWorkshop = true;
+            LogPlayerLifecycle = true;
+            LogAfk = true;
+            LogLevelOutcome = true;
+            LogWorkshopObjects = true;
+            LogFrpDirect = true;
+            LogOptionalMod = true;
+            LogHarmonyTrace = true;
+            DiagnosticLogPreset = "full";
             DiagnosticSettingsVersion = 0;
         }
     }
