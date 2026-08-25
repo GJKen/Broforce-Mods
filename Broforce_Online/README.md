@@ -10,8 +10,8 @@
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=0915020604a45c80f6cb8b465368fde880bfd5ff00938a135dcce7d878a26caf` |
-| DLL SHA-256 | `792177CB5ECE13EF50AEE967B32F18C3AA30804FD824667AF1468721EAFE4AE9` |
+| 当前分发构建 | `buildHash=caf775d4805d39773b9a6b00c0569366e5a693607323133e0401033e6322e2da` |
+| DLL SHA-256 | `08FFC24B5FFE1E2284DA28244360B3C95D3415ECC8E3B5C75C6594D1B153BB9A` |
 | Steam 联机 | 默认路径；已验证双方能通过官方大厅进入同一张第三方 Workshop 地图 |
 | FRP Direct | 默认关闭的实验路径；已验证公共 FRP UDP 双端正常游玩及 `Esc` 双方玩家名显示 |
 
@@ -25,6 +25,8 @@
 当前构建已实现 Workshop 联机道具同步和重复拾取防护：普通弹药箱不再由各端按本地随机状态转换成不同特殊道具，远程角色镜像不再扫描本机道具，已消费道具的重复 `Collect` 会被忽略，弹药已满时只在本机显示原生反馈而不持续广播拾取 RPC。`test003` 已通过 FRP Direct 双端实测，原有的重复动画、重复音效和不可见道具问题未再出现；日志确认双方构建一致、普通箱确定性和满弹药抑制均实际生效。
 
 当前构建还新增四类只读兼容性诊断：`LEVEL_OUTCOME` 记录联机关卡结束和扣命前后的生命、场景、切关及房间状态；`WORKSHOP_GAME_MODE_COMPARE` 比较下载到的 Workshop Campaign、`GameState` 和 `RoomInfo` 的 `gameMode`，不主动改写任何模式；`OPTIONAL_BRO_MOD` 通过可选公开 API 记录 Swap Bros 的版本、API 能力、有序角色表指纹和本地选择指纹；`AFK_TIMER`、`AFK_STATE` 和 `PLAYER_DROPOUT` 记录本机角色的原生 AFK 倒计时、35 秒超时和玩家槽位移除前后状态。这些诊断借鉴 Utility Mod 使用原生完成事件、状态入口和弱依赖 API 的方式，但不引入 RocketLib、不复制调试菜单，也不控制角色切换或更改原生 AFK 规则；代码已通过 .NET 3.5 标准构建，尚待游戏内双端触发验收。
+
+UMM 设置页现在按 `Workshop 联机`、`FRP Direct`、`诊断日志` 的顺序显示三个可折叠分组，展开状态会保存。三个标题使用不同颜色，右向三角图标表示收起、下向三角图标表示展开，不再使用 `+`/`-` 文本。诊断日志支持大厅网络、Workshop、玩家生命周期、AFK、关卡结果、Workshop 对象、FRP、可选 Mod 和 Harmony 追踪九类独立开关，并以三列两行的宽布局提供 `Basic`、`Join / Rejoin`、`AFK / Failure`、`Workshop` 和 `Full` 预设；关闭某类只减少诊断输出，不改变联机行为。每个会话仍会保留 `BUILD_INFO`、会话边界、类别清单、Warning、Error 和 Unity 异常。
 
 当前仍需继续验证：新增诊断在真实双端会话中的日志内容，尤其是 AFK 触发后房主是否仍把已移除槽位计入存活人数；道具修复在官方 Steam 大厅 Workshop 会话中的独立复测、重复退出/重入、多地图兼容、高延迟和长期稳定性。部分 Workshop 地图还可能在 `GeneratePole.Awake`、`BroBase` 或特效销毁流程抛出自身运行错误。详细实现、测试边界和历史证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
 
@@ -76,6 +78,8 @@ Diagnostic session ID: test001
 两端的 Workshop ID 必须完全一致。`Diagnostic session ID` 可以留空；需要关联双方日志时再填写相同值。保存双方 UMM 设置后，再开启线上地图注入。
 
 填写或修改设置后，请点击 UMM 设置面板的保存按钮；正常切换 Mod 或退出游戏时也会尝试自动保存。
+
+需要精简日志时，展开“诊断日志”分组选择预设，再按问题需要逐项调整类别。双方排查同一问题时原则上选择相同类别，以便对齐日志；旧版本配置升级后日志类别默认恢复为完整诊断。
 
 如果旧配置中的 `Custom level scene` 为空，插件加载时会自动补回默认值 `Test Evan2`；已经填写其它场景名的配置不会被覆盖。
 
@@ -184,6 +188,7 @@ modinfo.json                 UMM Mod 清单模板
 LocalBroforcePath.props.example   本机路径配置示例
 docs/DEVELOPMENT.md          开发、逆向、测试和故障排查记录
 issues/                      历史问题、测试证据、验收结果和方案记录
+umm-settings-preview.html   UMM 折叠分组和日志预设的交互式界面预览
 ```
 
 ## 文档

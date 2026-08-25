@@ -8,7 +8,7 @@
 
 当前版本为实验性的 `0.5.0`，尚未达到稳定发布状态。
 
-当前分发构建为 `buildHash=0915020604a45c80f6cb8b465368fde880bfd5ff00938a135dcce7d878a26caf`，DLL SHA-256 为 `792177CB5ECE13EF50AEE967B32F18C3AA30804FD824667AF1468721EAFE4AE9`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。当前构建新增关卡结果、Workshop `gameMode` 一致性、可选 Swap Bros 指纹和原生 AFK 流程诊断；代码与双端部署已验证，游戏内双端触发尚待验收。更早的构建与失败修复时间线只保留在对应 issue 中。
+当前分发构建为 `buildHash=caf775d4805d39773b9a6b00c0569366e5a693607323133e0401033e6322e2da`，DLL SHA-256 为 `08FFC24B5FFE1E2284DA28244360B3C95D3415ECC8E3B5C75C6594D1B153BB9A`。默认传输仍是 `SteamLayer` 和官方 Steam Lobby；默认关闭的 `FRP Direct` 已完成公共 FRP UDP 基础双端游戏和在线玩家名单验收，但尚未覆盖断线重入、多地图、高延迟和长期稳定性，因此仍属于实验功能。当前构建新增关卡结果、Workshop `gameMode` 一致性、可选 Swap Bros 指纹和原生 AFK 流程诊断；代码与双端部署已验证，游戏内双端触发尚待验收。更早的构建与失败修复时间线只保留在对应 issue 中。
 
 所有玩家必须：
 
@@ -29,6 +29,9 @@
 - 默认关闭的 `FRP Direct` 已通过公共 FRP UDP 端点完成双端正常游玩实测；FRP 负责房间、PID 和游戏 RPC，Steam 仅负责 Workshop 内容下载。
 - 当前分发构建已通过 FRP 双方游戏名显示验收；`Esc` 在线玩家列表会显示本机和仍在线的远端玩家。
 - 当前分发构建已实现 Workshop 联机道具确定性和重复拾取防护，`test003` 已通过 FRP Direct 双端实测验收；官方 Steam 大厅中的 Workshop 路径使用同一补丁判定，但尚待独立复测。
+- UMM 设置页已按 `Workshop 联机`、`FRP Direct`、`诊断日志` 的顺序分为三个可持久化折叠组，诊断日志位于最下方；默认展开 Workshop，另外两组默认收起。
+- 分组标题使用绿色、橙色和蓝色区分，右向/下向三角图标表示收起/展开，不使用 `+`/`-` 文本；诊断预设使用三列两行宽布局，完整显示 `Join / Rejoin` 和 `AFK / Failure`。
+- 诊断日志已支持九类独立开关和 `Basic`、`Join / Rejoin`、`AFK / Failure`、`Workshop`、`Full` 预设。预设可继续逐项调整；默认保持完整诊断。
 
 ## 双端测试
 
@@ -127,6 +130,7 @@ UMM 选项 `Disable automatic AFK spectator mode in online games` 由每台客�
 | `Custom level scene` | 默认 `Test Evan2`。它是游戏通用场景名，不是地图名称；地图使用其它场景时再修改。 |
 | `Diagnostic session ID` | 单轮测试可以留空；多轮测试建议每轮使用不同值，例如 `test001`、`test002`。双端必须一致。 |
 | `Diagnostic label (optional)` | 只作为日志文件名和关联信息的标签，可留空；不参与联机行为。 |
+| `Diagnostic log preset/categories` | 在“诊断日志”折叠组中选择预设或逐项勾选大厅网络、Workshop、玩家生命周期、AFK、关卡结果、Workshop 对象、FRP、可选 Mod 和 Harmony 追踪类别。 |
 | `Inject configured workshop map into online level switching` | 默认关闭。确认配置和地图一致后再开启。 |
 | `Enable FRP Direct transport prototype` | 默认关闭。只启用独立 UDP 握手原型，不改变 Steam 游戏传输。 |
 | `Route Broforce rooms and RPC through FRP Direct (experimental)` | 默认关闭。必须与传输原型开关同时开启，才会让 FRP Direct 接管房间、PID 和游戏 RPC。 |
@@ -147,7 +151,7 @@ Diagnostic session ID: test001
 
 填写或修改设置后，点击 UMM 设置面板的保存按钮。正常切换 Mod 或退出游戏时插件也会尝试保存；原生崩溃或强制终止进程时无法保证保存。旧配置中的场景名为空时，插件加载时会自动补回 `Test Evan2`，已经填写其它场景名的配置不会被覆盖。
 
-升级旧版本配置时，插件会清理旧版本遗留的测试默认值；已经填写的其它自定义值不会被覆盖。旧设置字段仍保留以兼容已有配置，但它只作为日志标签；任意一端都可以创建大厅，实际网络角色由游戏大厅流程决定。
+升级旧版本配置时，插件会清理旧版本遗留的测试默认值；已经填写的其它自定义值不会被覆盖。旧设置字段仍保留以兼容已有配置，但它只作为日志标签；旧配置中的新增日志类别会自动恢复为完整诊断。任意一端都可以创建大厅，实际网络角色由游戏大厅流程决定。
 
 ### 多轮测试
 
@@ -303,8 +307,8 @@ Mod 在确认当前是有效 Workshop 线上会话、暂停状态为 `MenuPause`
 ### 代码职责
 
 - `src/Plugin.cs`：UMM 加载、设置界面、保存和启用/禁用入口。
-- `src/DiagnosticSettings.cs`：Workshop、会话和日志标签配置；新配置默认场景为 `Test Evan2`，其它测试字段为空。
-- `src/DiagnosticLog.cs`：会话日志和 Harmony 追踪日志的创建、写入、刷新和清理。
+- `src/DiagnosticSettings.cs`：Workshop、会话、日志标签、折叠状态和日志类别配置；新配置默认场景为 `Test Evan2`，日志类别默认全开。
+- `src/DiagnosticLog.cs`：会话日志和 Harmony 追踪日志的创建、分类过滤、刷新和清理；核心构建/会话标记、Warning 和 Error 永远保留。
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：线上房间、Steam Lobby、关卡切换、Workshop 加载和英雄请求追踪/注入。
 - `src/HarmonyDiagnostics.WorkshopPickup.cs`：Workshop 道具生成确定性、拾取所有权、重复调用幂等和弹药已满退避。
@@ -341,6 +345,8 @@ diagnostics-host-<session>-<utc-time>.trace.log
 普通 `.log` 记录关键联机事件，`.trace.log` 记录详细 Harmony 调用。每行包含 UTC 时间、会话相对时间、会话 ID、日志标签和日志级别；会话开始事件还会记录实际网络角色。普通日志约每 750ms 刷新一次，警告、错误和会话结束时立即刷新。
 
 新增的 `LEVEL_OUTCOME`、`AFK_TIMER`、`AFK_STATE` 和 `PLAYER_DROPOUT` 同时写普通日志和 `.trace.log`；`WORKSHOP_GAME_MODE_COMPARE` 和 `OPTIONAL_BRO_MOD` 写普通日志。`OPTIONAL_BRO_MOD` 在诊断启用和每个网络会话开始时各采集一次，网络问题分析以对应会话文件中的第二次快照为准。
+
+诊断设置中的九类日志开关只过滤诊断输出，不关闭 Harmony 补丁、不改变联机流程或游戏规则。日志类别由事件标记和消息内容集中推断；明确的 Harmony 方法追踪使用 `TRACE #` 标记归入 Harmony 类别，普通事件复制到 `.trace.log` 时仍按自身类别过滤。每个会话开头都会写入 `DIAGNOSTIC_CATEGORIES enabled=...`。无论类别如何选择，`BUILD_INFO`、`SESSION_BEGIN`、`SESSION_END`、类别清单、Warning、Error 和 Unity 异常都必须保留。
 
 `SteamLayer.JoinLobby` 内部可能先调用一次 `LeaveMatch` 清理旧大厅；该调用不再被诊断系统当成正式离开，因此不会提前关闭客户端的加入会话日志。
 
@@ -380,7 +386,8 @@ diagnostics-host-<session>-<utc-time>.trace.log
 1. 复制 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props`。
 2. 将 `BroforceManagedPath` 设置为 Broforce 的 `Broforce_beta_Data/Managed` 目录。
 3. 将 `UnityModManagerPath` 设置为包含 `UnityModManager.dll` 和 `0Harmony.dll` 的 UMM 核心目录。
-4. 必须使用兼容 `.NET Framework 3.5` 的编译器和 Broforce/UMM 程序集引用。当前已验证系统自带的：
+4. `BroforceManagedPath` 还必须包含 `UnityEngine.TextRenderingModule.dll`；标准构建脚本会检查并引用它，以支持设置分组标题的左对齐样式。
+5. 必须使用兼容 `.NET Framework 3.5` 的编译器和 Broforce/UMM 程序集引用。当前已验证系统自带的：
 
 ```text
 C:\Windows\Microsoft.NET\Framework64\v3.5\csc.exe
