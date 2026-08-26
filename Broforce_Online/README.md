@@ -4,7 +4,7 @@
 
 官方 Steam 大厅和 FRP Direct 的 Esc 在线名单都会显示彩色延迟与动态渐变房主名。Steam 使用游戏原生 `PID.Ping`，FRP 使用 Lidgren RTT；显示效果只要求当前查看名单的机器安装本 Mod。
 
-所有参与联机的玩家必须安装相同构建的 Mod，并订阅、下载相同的 Workshop 地图。排查版本时以双方日志中的 `BUILD_INFO buildHash` 为准。
+只使用官方 Steam 大厅的彩色延迟名单时，仅查看名单的一方需要安装本 Mod。使用 Workshop 地图注入或 FRP Direct 时，所有参与联机的玩家必须安装相同构建的 Mod，并订阅、下载相同的 Workshop 地图；排查版本时以各端日志中的 `BUILD_INFO buildHash` 为准。
 
 ## 当前状态
 

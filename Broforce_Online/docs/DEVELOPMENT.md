@@ -10,7 +10,7 @@
 - FRP 代码支持房主加最多三台远端机器，但多客户端尚未完成实机验收，也不支持主机迁移；多地图、高延迟、异常断网和长期稳定性尚未完整覆盖。
 - 当前版本、分发 `buildHash`、DLL SHA-256 和用户侧限制以 [README 当前状态](../README.md#当前状态) 为唯一来源，避免多处维护。
 
-所有参与端必须使用相同构建并下载相同 Workshop 地图。双端版本只以日志中的 `BUILD_INFO buildHash` 判断，不能依赖文件名、时间或大小。
+只使用官方 Steam 大厅彩色名单时，显示补丁只需安装在查看方。使用 Workshop 地图注入或 FRP Direct 时，所有参与端必须使用相同构建并下载相同 Workshop 地图；各端版本只以日志中的 `BUILD_INFO buildHash` 判断，不能依赖文件名、时间或大小。
 
 ## 架构与代码职责
 
@@ -25,6 +25,7 @@
 - `src/HarmonyDiagnostics.WorkshopLevelEnd.cs`：Workshop 关卡结束动作防重入保护。
 - `src/OptionalBroModDiagnostics.cs`：Swap Bros 公开 API、版本和角色指纹的只读弱依赖诊断。
 - `src/ReflectionProbe.cs`：只读扫描 `Assembly-CSharp` 中的相关类型。
+- `src/OnlinePlayerListFormatter.cs`：统一处理 Steam/FRP 在线名单的延迟颜色、动态房主渐变、Rich Text 转义和秒到毫秒换算。
 - `src/FrpDirectTransport.cs`：Lidgren UDP、多连接握手、认证、心跳、重连和可靠字节路由。
 - `src/FrpDirectRoomInfo.cs`：FRP 房间信息和 Workshop 阶段元数据。
 - `src/FrpDirectLayer.cs`：复用原生 PID、ServerID、RPCBatcher 和 `RecieveBytes`，并按机器路由多客户端 RPC。
