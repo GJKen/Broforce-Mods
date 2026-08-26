@@ -224,6 +224,14 @@ MainMenu
 <Application.persistentDataPath>/BroforceOnlineDiagnostics/
 ```
 
+当前内网加入方的 Windows 用户数据目录已通过 SMB 共享，可直接从开发机读取：
+
+```text
+\\192.168.1.181\Users\5700G\AppData\LocalLow\Free Lives\Broforce\BroforceOnlineDiagnostics
+```
+
+该 UNC 路径对应加入方本机的 `Application.persistentDataPath\BroforceOnlineDiagnostics`。分析双端会话时从这里读取加入方日志；不要在 `\\192.168.1.181\Epan\...\UMM\Mods` DLL 部署目录中查找诊断日志。
+
 插件加载时创建启动日志；`SteamLayer` 或 `FrpDirectLayer` 的 `CreateMatch`/`JoinLobby` 创建新会话。每个会话有普通事件日志和 Harmony 追踪日志：
 
 ```text
