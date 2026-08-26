@@ -46,7 +46,7 @@
 
 ### 多客户端传输
 
-- `src/FrpDirectTransport.cs` 的协议版本为 v3，Host 最多保持三台已认证远端连接。
+- `src/FrpDirectTransport.cs` 当前协议版本为 v4，Host 最多保持三台已认证远端连接。多客户端功能首次实现时使用 v3；后续为同步房主 RTT 快照升级到 v4，旧协议构建会因版本不匹配而拒绝连接。
 - 每条远端连接独立维护握手、心跳、超时和机器 ID。
 - 支持按机器 ID 定向游戏数据、广播、成员离开通知和重复机器 ID 拒绝。
 - Client 到 Client 的游戏数据由 Host 中继。
