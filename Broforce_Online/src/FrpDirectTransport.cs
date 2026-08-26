@@ -12,9 +12,10 @@ namespace BroforceOnlineDiagnostics
     {
         private const string ApplicationIdentifier = "BroforceOnlineDiagnostics.FrpDirect.v1";
         private const string ProtocolMagic = "BFOD-FRP";
-        private const int ProtocolVersion = 3;
+        private const int ProtocolVersion = 4;
         private const int MaxRemoteConnections = 3;
         private const int HeartbeatIntervalSeconds = 5;
+        private const int LatencySnapshotIntervalSeconds = 1;
         private const int HandshakeTimeoutSeconds = 15;
         private const int HeartbeatTimeoutSeconds = 60;
         private const int MainThreadStallThresholdSeconds = 10;
@@ -23,6 +24,8 @@ namespace BroforceOnlineDiagnostics
         private const int MaxGameDataBytes = 2097152;
 
         private readonly List<FrpPeer> _peers = new List<FrpPeer>();
+        private readonly Dictionary<string, int> _hostReportedLatencies =
+            new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly string _localMachineId;
         private NetPeer _peer;
         private NetPeer _retiringPeer;
@@ -32,6 +35,7 @@ namespace BroforceOnlineDiagnostics
         private string _configurationKey = string.Empty;
         private DateTime _nextConnectAtUtc;
         private DateTime _lastUpdateAtUtc;
+        private DateTime _nextLatencySnapshotAtUtc;
         private bool _fatalConnectionError;
         private bool _disposed;
         private int _suppressedInvalidPackets;
@@ -95,6 +99,31 @@ namespace BroforceOnlineDiagnostics
         {
             var remote = FindPeer(machineId);
             return remote != null && remote.HandshakeComplete && !remote.DisconnectRequested;
+        }
+
+        internal int GetRoundTripTimeMilliseconds(string machineId)
+        {
+            machineId = NormalizeMachineId(machineId);
+            if (string.IsNullOrEmpty(machineId))
+            {
+                return -1;
+            }
+
+            if (_role == FrpRole.Host)
+            {
+                return GetConnectionRoundTripTimeMilliseconds(FindPeer(machineId));
+            }
+
+            if (string.Equals(machineId, _localMachineId, StringComparison.Ordinal) ||
+                string.Equals(machineId, RemoteMachineId, StringComparison.Ordinal))
+            {
+                return GetConnectionRoundTripTimeMilliseconds(FindPeer(string.Empty));
+            }
+
+            int latencyMilliseconds;
+            return _hostReportedLatencies.TryGetValue(machineId, out latencyMilliseconds)
+                ? latencyMilliseconds
+                : -1;
         }
 
         internal bool RequestRoomState()
@@ -338,6 +367,7 @@ namespace BroforceOnlineDiagnostics
             _roomPassword = settings.RoomPassword;
             PlayerLimit = settings.PlayerLimit;
             _fatalConnectionError = false;
+            _nextLatencySnapshotAtUtc = DateTime.UtcNow;
 
             try
             {
@@ -435,11 +465,13 @@ namespace BroforceOnlineDiagnostics
 
             _peer = null;
             _peers.Clear();
+            _hostReportedLatencies.Clear();
             _remoteEndpoint = null;
             _roomPassword = string.Empty;
             _fatalConnectionError = false;
             _suppressedInvalidPackets = 0;
             _nextInvalidPacketLogAtUtc = DateTime.MinValue;
+            _nextLatencySnapshotAtUtc = DateTime.MinValue;
             foreach (var machineId in disconnectedMachineIds)
             {
                 Raise(RemoteDisconnected, machineId, "remote disconnect");
@@ -659,6 +691,12 @@ namespace BroforceOnlineDiagnostics
                         ReceiveMemberLeft(message);
                     }
                     break;
+                case ControlMessageKind.LatencySnapshot:
+                    if (_role == FrpRole.Client && remote.HandshakeComplete)
+                    {
+                        ReceiveLatencySnapshot(message);
+                    }
+                    break;
             }
         }
 
@@ -839,6 +877,69 @@ namespace BroforceOnlineDiagnostics
             Raise(MemberLeftReceived, departedMachineId, "member left");
         }
 
+        private void SendLatencySnapshot(DateTime now)
+        {
+            var latencies = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var remote in _peers)
+            {
+                if (!remote.HandshakeComplete || remote.DisconnectRequested ||
+                    string.IsNullOrEmpty(remote.MachineId))
+                {
+                    continue;
+                }
+
+                latencies[remote.MachineId] =
+                    GetConnectionRoundTripTimeMilliseconds(remote);
+            }
+
+            foreach (var remote in _peers)
+            {
+                if (!CanSendApplicationMessage(remote))
+                {
+                    continue;
+                }
+
+                var outgoing = CreateControlMessage(ControlMessageKind.LatencySnapshot);
+                outgoing.Write(latencies.Count);
+                foreach (var pair in latencies)
+                {
+                    outgoing.Write(pair.Key);
+                    outgoing.Write(pair.Value);
+                }
+                SendReliable(remote, outgoing);
+            }
+
+            _nextLatencySnapshotAtUtc = now.AddSeconds(LatencySnapshotIntervalSeconds);
+        }
+
+        private void ReceiveLatencySnapshot(NetIncomingMessage message)
+        {
+            var count = message.ReadInt32();
+            if (count < 0 || count > MaxRemoteConnections)
+            {
+                throw new InvalidOperationException("Latency snapshot entry count is invalid.");
+            }
+
+            var latencies = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var index = 0; index < count; index++)
+            {
+                var machineId = NormalizeMachineId(message.ReadString());
+                var latencyMilliseconds = message.ReadInt32();
+                if (string.IsNullOrEmpty(machineId) ||
+                    latencyMilliseconds < -1 || latencyMilliseconds > 9999)
+                {
+                    throw new InvalidOperationException("Latency snapshot entry is invalid.");
+                }
+                latencies[machineId] = latencyMilliseconds;
+            }
+
+            _hostReportedLatencies.Clear();
+            foreach (var pair in latencies)
+            {
+                _hostReportedLatencies.Add(pair.Key, pair.Value);
+            }
+        }
+
         private void SendHeartbeat(FrpPeer remote, DateTime now)
         {
             remote.HeartbeatSequence++;
@@ -907,6 +1008,11 @@ namespace BroforceOnlineDiagnostics
                         SafeMachineId(remote.MachineId) + ".");
                     Disconnect(remote, "FRP Direct heartbeat timeout");
                 }
+            }
+
+            if (_role == FrpRole.Host && now >= _nextLatencySnapshotAtUtc)
+            {
+                SendLatencySnapshot(now);
             }
         }
 
@@ -1030,6 +1136,18 @@ namespace BroforceOnlineDiagnostics
             }
             return _peers.Find(
                 item => string.Equals(item.MachineId, machineId, StringComparison.Ordinal));
+        }
+
+        private static int GetConnectionRoundTripTimeMilliseconds(FrpPeer remote)
+        {
+            if (remote == null || remote.Connection == null ||
+                !remote.HandshakeComplete || remote.DisconnectRequested)
+            {
+                return -1;
+            }
+
+            return OnlinePlayerListFormatter.SecondsToMilliseconds(
+                remote.Connection.AverageRoundtripTime);
         }
 
         private IEnumerable<FrpPeer> SelectPeers(string targetMachineId, bool broadcast)
@@ -1347,7 +1465,8 @@ namespace BroforceOnlineDiagnostics
             JoinRejected = 10,
             GameData = 11,
             LeaveNotice = 12,
-            MemberLeft = 13
+            MemberLeft = 13,
+            LatencySnapshot = 14
         }
 
         private sealed class FrpDirectConfiguration

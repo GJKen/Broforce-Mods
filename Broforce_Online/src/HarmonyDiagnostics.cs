@@ -336,6 +336,7 @@ namespace BroforceOnlineDiagnostics
             PatchWorkshopJoinPromptSuppression();
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
+            PatchOnlinePlayerListDisplay();
             PatchLevelOutcomeDiagnostics();
             PatchWorkshopLevelEndReentryGuard();
             PatchMainMenuInitializationPostfix();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace BroforceOnlineDiagnostics
 {
@@ -19,6 +20,7 @@ namespace BroforceOnlineDiagnostics
         private bool _roomReady;
         private bool _roomQueryPending;
         private bool _disposed;
+        private float _nextOnlinePlayerListUpdateAt;
 
         internal FrpDirectLayer(FrpDirectTransport transport)
         {
@@ -178,6 +180,12 @@ namespace BroforceOnlineDiagnostics
         public override void Update()
         {
             base.Update();
+            var now = Time.unscaledTime;
+            if (now < _nextOnlinePlayerListUpdateAt)
+            {
+                return;
+            }
+            _nextOnlinePlayerListUpdateAt = now + OnlinePlayerListFormatter.RefreshSeconds;
             UpdateOnlinePlayerList();
         }
 
@@ -185,7 +193,10 @@ namespace BroforceOnlineDiagnostics
         {
             var names = new List<string>();
             var localName = Connect.PlayerName;
-            names.Add(string.IsNullOrEmpty(localName) ? "Local Player" : localName);
+            localName = string.IsNullOrEmpty(localName) ? "Local Player" : localName;
+            names.Add(IsHost
+                ? OnlinePlayerListFormatter.FormatHost(localName)
+                : FormatLatencyPlayerName(localName, _transport.LocalMachineId));
 
             var remotePids = new List<PID>();
             foreach (var pair in PlayerIDPairs)
@@ -204,11 +215,24 @@ namespace BroforceOnlineDiagnostics
             foreach (var remotePid in remotePids)
             {
                 var remoteName = remotePid.PlayerName;
-                names.Add(string.IsNullOrEmpty(remoteName)
+                remoteName = string.IsNullOrEmpty(remoteName)
                     ? "FRP Direct Player"
-                    : remoteName);
+                    : remoteName;
+                var machineId = GetMachineId(GetPIDWrapper(remotePid));
+                names.Add(!IsHost && string.Equals(
+                        machineId,
+                        _transport.RemoteMachineId,
+                        StringComparison.Ordinal)
+                    ? OnlinePlayerListFormatter.FormatHost(remoteName)
+                    : FormatLatencyPlayerName(remoteName, machineId));
             }
             return names.ToArray();
+        }
+
+        private string FormatLatencyPlayerName(string playerName, string machineId)
+        {
+            var latencyMilliseconds = _transport.GetRoundTripTimeMilliseconds(machineId);
+            return OnlinePlayerListFormatter.FormatLatency(playerName, latencyMilliseconds);
         }
 
         public override void SendData(PID target, byte[] bytes)
@@ -720,6 +744,7 @@ namespace BroforceOnlineDiagnostics
 
         private void ResetRoomState()
         {
+            _nextOnlinePlayerListUpdateAt = 0f;
             _clientJoined = false;
             _roomReady = false;
             _roomQueryPending = false;

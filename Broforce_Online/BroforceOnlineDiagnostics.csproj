@@ -66,6 +66,7 @@
     <Compile Include="src\OptionalBroModDiagnostics.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
     <Compile Include="src\BuildMetadata.cs" />
+    <Compile Include="src\OnlinePlayerListFormatter.cs" />
     <Compile Include="src\FrpDirectTransport.cs" />
     <Compile Include="src\FrpDirectRoomInfo.cs" />
     <Compile Include="src\FrpDirectLayer.cs" />
