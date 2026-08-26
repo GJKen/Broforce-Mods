@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <BroforceManagedPath>C:\Path\To\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
+    <UnityModManagerPath>C:\Path\To\Broforce\UMM\Core</UnityModManagerPath>
+  </PropertyGroup>
+</Project>
