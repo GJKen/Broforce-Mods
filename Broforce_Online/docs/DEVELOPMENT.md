@@ -123,7 +123,7 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 - 官方 Steam 大厅和 FRP Direct 都复用原生 `Interface.OnlinePlayerList`，显示 `xxxms | 玩家名`。首个样本尚未产生时显示灰色 `--ms`；`0-80ms` 为绿色、`81-150ms` 为黄色、`151ms` 以上为红色。
 - 房主由 `PID.ServerID` 或 FRP Host 身份识别，显示 `HOST | 房主名`；房主名使用 4 秒一轮的动态暖色到青色渐变。名字中的尖括号会转义，避免注入 Unity Rich Text。
-- Steam 使用游戏原生 `PingController` 暴露的 `PID.Ping`，按秒换算为毫秒。名单按 PID 映射而不是玩家名关联；PID 尚未齐全时回退原生 Steam 大厅名单，避免进房短窗口漏人。
+- Steam 使用游戏原生 `PingController` 暴露的 `PID.Ping`，按秒换算为毫秒。名单按 PID 映射而不是玩家名关联；核心 PID 尚未建立时回退原生 Steam 大厅名单，远端 PID 同步期间则持续格式化已有成员并在后续刷新补齐。名单不再用可能滞后的 `Room.PlayerCount` 判断是否回退，避免成员离开后短暂恢复原生样式。
 - Steam 名单格式结果缓存 0.1 秒，原生 `SteamLayer.Update` 仍每帧请求名单，因此渐变以 10 FPS 更新而不会每帧重新分配富文本。Steam 显示是本地 UI 改动，不需要额外协议，也不要求其他玩家安装 Mod。
 - FRP RTT 表示每台机器到房主的往返时间；Steam Ping 是当前机器通过游戏原生采样得到的对应 PID 延迟，不同玩家视角的数值可能不同。
 
