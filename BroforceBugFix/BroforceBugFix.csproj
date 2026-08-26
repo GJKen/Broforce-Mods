@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>BroforceBugFix</RootNamespace>
+    <AssemblyName>BroforceBugFix</AssemblyName>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceBugFix</LocalBroforceModPath>
+    <NetworkBroforceModPath>\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceBugFix</NetworkBroforceModPath>
+    <PackageModPath>$(MSBuildProjectDirectory)\BroforceBugFix</PackageModPath>
+    <OutputPath>$(PackageModPath)\</OutputPath>
+  </PropertyGroup>
+
+  <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityModManager">
+      <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(UnityModManagerPath)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(BroforceManagedPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="src\Plugin.cs" />
+    <Compile Include="src\BugFixSettings.cs" />
+    <Compile Include="src\DoodadCrateReentryFix.cs" />
+  </ItemGroup>
+
+  <Target Name="DeployBroforceBugFix" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
+    <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath);$(NetworkBroforceModPath)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(NetworkBroforceModPath)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(NetworkBroforceModPath)\Info.json" />
+  </Target>
+</Project>
