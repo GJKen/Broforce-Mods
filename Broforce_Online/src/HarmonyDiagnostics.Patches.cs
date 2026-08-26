@@ -13,6 +13,222 @@ namespace BroforceOnlineDiagnostics
     // Harmony 补丁安装与 IL 织入：各目标方法的 Patch 注册和 transpiler。
     internal static partial class HarmonyDiagnostics
     {
+        private static FieldInfo _onlinePlayerNameTextField;
+        private static PropertyInfo _onlinePlayerRichTextProperty;
+        private static SteamLayer _cachedSteamOnlinePlayerLayer;
+        private static string[] _cachedSteamOnlinePlayerNames;
+        private static float _nextSteamOnlinePlayerNamesAt;
+
+        private static void PatchOnlinePlayerListDisplay()
+        {
+            ClearSteamOnlinePlayerNamesCache();
+            var itemType = AccessTools.TypeByName("Interface.OnlinePlayerListItem");
+            var nameProperty = itemType == null
+                ? null
+                : itemType.GetProperty(
+                    "Name",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var setter = nameProperty == null ? null : nameProperty.GetSetMethod(true);
+            _onlinePlayerNameTextField = itemType == null
+                ? null
+                : itemType.GetField(
+                    "m_NameText",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            _onlinePlayerRichTextProperty = _onlinePlayerNameTextField == null
+                ? null
+                : _onlinePlayerNameTextField.FieldType.GetProperty(
+                    "supportRichText",
+                    BindingFlags.Public | BindingFlags.Instance);
+            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "OnlinePlayerListItemNamePrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var steamNamesMethod = typeof(SteamLayer).GetMethod(
+                "GetAllOnlinePlayerNames",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var steamNamesPrefix = typeof(HarmonyDiagnostics).GetMethod(
+                "SteamOnlinePlayerNamesPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (setter == null || _onlinePlayerNameTextField == null ||
+                _onlinePlayerRichTextProperty == null || prefixMethod == null ||
+                steamNamesMethod == null || steamNamesPrefix == null)
+            {
+                DiagnosticLog.Warning(
+                    "Online player latency display could not resolve the native player-list hooks.");
+                return;
+            }
+
+            try
+            {
+                _harmony.Patch(setter, new HarmonyMethod(prefixMethod), null, null, null);
+                _harmony.Patch(
+                    steamNamesMethod,
+                    new HarmonyMethod(steamNamesPrefix),
+                    null,
+                    null,
+                    null);
+                DiagnosticLog.Info(
+                    "FRP and Steam online player latency colors and host gradient enabled.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Online player latency display patch failed: " + exception);
+            }
+        }
+
+        private static void OnlinePlayerListItemNamePrefix(object __instance)
+        {
+            var layer = Connect.Layer;
+            if (__instance == null ||
+                (!(layer is FrpDirectLayer) && !(layer is SteamLayer)) ||
+                _onlinePlayerNameTextField == null ||
+                _onlinePlayerRichTextProperty == null)
+            {
+                return;
+            }
+
+            var nameText = _onlinePlayerNameTextField.GetValue(__instance);
+            if (nameText != null)
+            {
+                _onlinePlayerRichTextProperty.SetValue(nameText, true, null);
+            }
+        }
+
+        private static bool SteamOnlinePlayerNamesPrefix(
+            SteamLayer __instance,
+            ref string[] __result)
+        {
+            if (__instance == null || Connect.Layer != __instance || __instance.Room == null ||
+                !PID.MyIdHasBeenSet || !PID.ServerHasBeenSet ||
+                PID.MyID == null || PID.ServerID == null)
+            {
+                ClearSteamOnlinePlayerNamesCache();
+                return true;
+            }
+
+            var playerIdPairs = __instance.PlayerIDPairs;
+            if (playerIdPairs == null || playerIdPairs.Count == 0)
+            {
+                ClearSteamOnlinePlayerNamesCache();
+                return true;
+            }
+
+            var now = Time.unscaledTime;
+            if (_cachedSteamOnlinePlayerLayer == __instance &&
+                _cachedSteamOnlinePlayerNames != null &&
+                now < _nextSteamOnlinePlayerNamesAt)
+            {
+                __result = _cachedSteamOnlinePlayerNames;
+                return false;
+            }
+
+            var playerPids = new List<PID>();
+            foreach (var pair in playerIdPairs)
+            {
+                if (!IsOnlinePlayerPid(pair.Key) || pair.Value == null ||
+                    (!pair.Value.Connected && pair.Key != PID.MyID))
+                {
+                    continue;
+                }
+                playerPids.Add(pair.Key);
+            }
+            if (!playerPids.Contains(PID.MyID))
+            {
+                playerPids.Add(PID.MyID);
+            }
+            if (!playerPids.Contains(PID.ServerID))
+            {
+                playerPids.Add(PID.ServerID);
+            }
+            if (__instance.Room.PlayerCount > playerPids.Count)
+            {
+                ClearSteamOnlinePlayerNamesCache();
+                return true;
+            }
+
+            playerPids.Sort(delegate(PID left, PID right)
+            {
+                if (left == PID.ServerID)
+                {
+                    return right == PID.ServerID ? 0 : -1;
+                }
+                if (right == PID.ServerID)
+                {
+                    return 1;
+                }
+                if (left == PID.MyID)
+                {
+                    return right == PID.MyID ? 0 : -1;
+                }
+                if (right == PID.MyID)
+                {
+                    return 1;
+                }
+                return left.AsByte.CompareTo(right.AsByte);
+            });
+
+            var names = new List<string>();
+            foreach (var playerPid in playerPids)
+            {
+                var playerName = playerPid.PlayerName;
+                if (string.IsNullOrEmpty(playerName) && playerPid == PID.MyID)
+                {
+                    playerName = Connect.PlayerName;
+                }
+                if (playerPid == PID.ServerID)
+                {
+                    names.Add(OnlinePlayerListFormatter.FormatHost(playerName));
+                    continue;
+                }
+
+                var latencyPid = playerPid == PID.MyID ? PID.ServerID : playerPid;
+                names.Add(OnlinePlayerListFormatter.FormatLatency(
+                    playerName,
+                    GetSteamPingMilliseconds(latencyPid)));
+            }
+
+            if (names.Count == 0)
+            {
+                ClearSteamOnlinePlayerNamesCache();
+                return true;
+            }
+            _cachedSteamOnlinePlayerLayer = __instance;
+            _cachedSteamOnlinePlayerNames = names.ToArray();
+            _nextSteamOnlinePlayerNamesAt = now + OnlinePlayerListFormatter.RefreshSeconds;
+            __result = _cachedSteamOnlinePlayerNames;
+            return false;
+        }
+
+        private static void ClearSteamOnlinePlayerNamesCache()
+        {
+            _cachedSteamOnlinePlayerLayer = null;
+            _cachedSteamOnlinePlayerNames = null;
+            _nextSteamOnlinePlayerNamesAt = 0f;
+        }
+
+        private static bool IsOnlinePlayerPid(PID pid)
+        {
+            return pid != null && pid != PID.NoID && pid != PID.MatchMakingServer &&
+                   pid != PID.TargetAll && pid != PID.TargetOthers &&
+                   pid != PID.TargetServer;
+        }
+
+        private static int GetSteamPingMilliseconds(PID pid)
+        {
+            if (pid == null)
+            {
+                return -1;
+            }
+            try
+            {
+                return OnlinePlayerListFormatter.SecondsToMilliseconds(pid.Ping);
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
         private static bool HasValidWorkshopInjectionConfiguration()
         {
             var settings = Plugin.Settings;

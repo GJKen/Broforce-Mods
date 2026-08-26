@@ -108,15 +108,24 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 - Host 固定监听配置的 UDP 端口，默认 27045；设置页用 `1`、`2`、`3`、`4` 四个按钮选择房间总角色上限。`1` 只允许房主，`4` 允许房主加最多三台远端，不突破 Broforce 原生四人上限。按钮在地图内点击后立即生效，不重启传输。
 - Client 使用临时端口连接完整 `host:port`，普通断线后每 5 秒重试。
 - 每条连接独立维护握手、心跳和超时。Lidgren 建连后 Host 发随机挑战；Client 用密码、挑战、协议版本和双方 `buildHash` 计算 HMAC-SHA256。Host 同时验证三者和机器 ID 唯一性；失败后 Client 不自动重试。
-- 协议 v3 提供房间查询/状态、加入确认/拒绝、离开通知、成员离开通知和带机器路由的 `GameData`。v2 与 v3 构建会因协议不匹配而拒绝连接。
+- 协议 v4 提供房间查询/状态、加入确认/拒绝、离开通知、成员离开通知、带机器路由的 `GameData` 和房主 RTT 快照。旧协议构建会因协议不匹配而拒绝连接。
 - Host 通过原生 `GeneratePlayerID` 和 `BroadcastPlayerID` 为每台已加入机器分配 PID，并把已有映射定向同步给新客户端。`RPCBatcher` 展开的具体 PID 按机器直发；客户端之间的数据经 Host 中继，目标不是 Host 时不会在 Host 本地重复执行。
 - 房主创建房间及地图内调整人数时把所选上限写入原生房间 `capacity`，再向 Client 推送最新房间信息。传输层仍可保持最多三台已认证连接，实际加入人数由房间层按 `capacity - 1` 拒绝，因而满房客户端仍可查询房间状态。降低上限不会删除现有机器或 PID；只要当前成员数仍大于等于新上限，新的加入和退出后的重入都会被拒绝。
 - 单个 Client 离开或断线时只清理该机器的 PID，并通知其余 Client；剩余成员和房间状态继续保留。Host 离开仍会结束所有 Client 的房间，当前不支持主机迁移。
-- 在线玩家名来自原生 `Connect.SetPlayerName` 建立的 PID 名字表，不显示 FRP 机器 ID 或公网端点。
+- 在线玩家名来自原生 `Connect.SetPlayerName` 建立的 PID 名字表，不显示 FRP 机器 ID 或公网端点。Esc 在线名单显示 `xxxms | 玩家名`；RTT 未产生首个样本时显示 `--ms`，`0-80ms` 为绿色、`81-150ms` 为黄色、`151ms` 以上为红色。房主行显示 `HOST | 房主名`，房主名使用 4 秒一轮的动态暖色到青色渐变。
+- RTT 表示每台机器到房主的往返时间。房主直接读取每条 Lidgren 连接的 `AverageRoundtripTime`，并每秒向 Client 同步所有已认证机器的 RTT 快照；Client 之间仍不建立直连。
 - 连接层对内容来源报告 `LayerType.Steam`，仅用于继续下载 Workshop；房间和 RPC 仍走 FRP。
 - Client 每 5 秒发送应用层心跳；正常 Update 下 60 秒无有效心跳才断开。主线程加载停顿超过 10 秒时恢复心跳窗口。
 
 密码只保护握手，不加密后续 UDP 内容；UMM 会把密码保存在本机设置文件中。完整限制和验收时间线见 [FRP Direct 实施与验收记录](../issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
+
+### 在线玩家延迟名单
+
+- 官方 Steam 大厅和 FRP Direct 都复用原生 `Interface.OnlinePlayerList`，显示 `xxxms | 玩家名`。首个样本尚未产生时显示灰色 `--ms`；`0-80ms` 为绿色、`81-150ms` 为黄色、`151ms` 以上为红色。
+- 房主由 `PID.ServerID` 或 FRP Host 身份识别，显示 `HOST | 房主名`；房主名使用 4 秒一轮的动态暖色到青色渐变。名字中的尖括号会转义，避免注入 Unity Rich Text。
+- Steam 使用游戏原生 `PingController` 暴露的 `PID.Ping`，按秒换算为毫秒。名单按 PID 映射而不是玩家名关联；PID 尚未齐全时回退原生 Steam 大厅名单，避免进房短窗口漏人。
+- Steam 名单格式结果缓存 0.1 秒，原生 `SteamLayer.Update` 仍每帧请求名单，因此渐变以 10 FPS 更新而不会每帧重新分配富文本。Steam 显示是本地 UI 改动，不需要额外协议，也不要求其他玩家安装 Mod。
+- FRP RTT 表示每台机器到房主的往返时间；Steam Ping 是当前机器通过游戏原生采样得到的对应 PID 延迟，不同玩家视角的数值可能不同。
 
 ### Esc 返回大厅
 
