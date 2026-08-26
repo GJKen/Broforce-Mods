@@ -107,12 +107,6 @@ namespace BroforceOnlineDiagnostics
             }
 
             var playerIdPairs = __instance.PlayerIDPairs;
-            if (playerIdPairs == null || playerIdPairs.Count == 0)
-            {
-                ClearSteamOnlinePlayerNamesCache();
-                return true;
-            }
-
             var now = Time.unscaledTime;
             if (_cachedSteamOnlinePlayerLayer == __instance &&
                 _cachedSteamOnlinePlayerNames != null &&
@@ -123,14 +117,17 @@ namespace BroforceOnlineDiagnostics
             }
 
             var playerPids = new List<PID>();
-            foreach (var pair in playerIdPairs)
+            if (playerIdPairs != null)
             {
-                if (!IsOnlinePlayerPid(pair.Key) || pair.Value == null ||
-                    (!pair.Value.Connected && pair.Key != PID.MyID))
+                foreach (var pair in playerIdPairs)
                 {
-                    continue;
+                    if (!IsOnlinePlayerPid(pair.Key) || pair.Value == null ||
+                        (!pair.Value.Connected && pair.Key != PID.MyID))
+                    {
+                        continue;
+                    }
+                    playerPids.Add(pair.Key);
                 }
-                playerPids.Add(pair.Key);
             }
             if (!playerPids.Contains(PID.MyID))
             {
@@ -140,12 +137,6 @@ namespace BroforceOnlineDiagnostics
             {
                 playerPids.Add(PID.ServerID);
             }
-            if (__instance.Room.PlayerCount > playerPids.Count)
-            {
-                ClearSteamOnlinePlayerNamesCache();
-                return true;
-            }
-
             playerPids.Sort(delegate(PID left, PID right)
             {
                 if (left == PID.ServerID)
