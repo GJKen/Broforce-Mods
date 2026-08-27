@@ -9,6 +9,7 @@
 - Steam Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名、正常退出后重入和 Workshop 道具防重复已通过当前测试地图验收。
 - FRP 的房主加两台加入方（三机）基础联机已通过用户实测；代码支持最多三台远端，但四机、动态容量边界和主机迁移尚未验收。
 - FRP 单一总开关、Host/Client 角色切换、非当前角色配置隔离和无 Apply 自动应用已通过用户实测。
+- Workshop 注入热关闭及退出房间后的官方地图恢复已通过用户实测。
 - 当前版本、分发 `buildHash`、DLL SHA-256 和用户侧限制以 [README 当前状态](../README.md#当前状态) 为唯一来源，避免多处维护。
 
 只使用官方 Steam 大厅彩色名单时，显示补丁只需安装在查看方。使用 Workshop 地图注入或 FRP Direct 时，所有参与端必须使用相同构建并下载相同 Workshop 地图；各端版本只以日志中的 `BUILD_INFO buildHash` 判断，不能依赖文件名、时间或大小。
@@ -52,6 +53,10 @@
 房间信息同时携带 Workshop ID、场景名、可选战役名和 `loading`/`ready` 阶段。Steam 使用 Lobby 数据，FRP 通过 `FrpDirectRoomInfo` 同步。房主创建房间时发布当前配置，选择地图、新成员加入和主机迁移时重新发布；加入方采用房主地图身份作为本次会话配置，不改写本机持久化设置。从 `JoinLobby` 开始到房主元数据到达前，Client 的配置读取返回空值，不允许回退到本机保存的 ID、场景名或战役名；元数据到达后只使用房主值。这样即使加入方忘记清空旧配置，也不会在最初几帧误加载本机地图。
 
 加入方采用地图身份后枚举 Steam 本机订阅列表。确认未订阅时，屏幕顶部显示中文提示和 Workshop ID，清除待执行的晚加入状态，并阻止指向该房主地图的 `GameState.LoadLevel`；订阅状态无法读取时保持原生下载流程，不误报缺图。订阅或下载不会由 Mod 自动执行，玩家需要在 Steam 创意工坊订阅并等待下载完成后重新加入房间。
+
+关闭注入开关不是简单停止后续 Harmony 注入。此前已经写入的 `_injectedForSession`、`GameState.loadCustomCampaign`、`customLevelID`、`sceneToLoad`、Workshop Lobby 元数据和暂停/切关状态也必须撤销，否则下一次官方选图仍会沿用 `Test Evan2`。当前实现统一通过 `ClearInjectedWorkshopRuntimeState` 清理这些状态，并覆盖三个入口：UMM 中关闭 Workshop 注入、停用或卸载整个 Mod、Steam `LeaveMatch`。热关闭不会主动切换当前场景；它清除待执行状态，使玩家退出当前房间并重新创建官方房间后回到原生选图流程。
+
+`IsWorkshopOnlineSession` 必须同时检查 `EnableOnlineWorkshopInjection`，避免仅凭 `_injectedForSession`、活动场景名或遗留 Lobby phase 在开关关闭后继续启用 Workshop 专用补丁。新建或加入 Steam 房间时，只有注入配置仍有效或运行态确实存在本 Mod 写入的 Workshop 标记，才允许清空 `LevelSelectionController.CurrentCampaign`；普通官方联机会保留原生战役状态。Steam `JoinLobby` 内部可能调用一次清理用 `LeaveMatch`，该阶段继续由 `_joinLobbyInProgress` 和短暂保护窗口排除，不能误判成真实离房。
 
 晚加入客户端根据上述地图身份及阶段并行下载地图，并在场景加载和 `SpawnJoinedPlayers` 都完成后申请本地槽位。缺订阅时的地图身份识别、中文提示和加载阻止已经通过一轮双端实测；加入方保留不同的本地地图配置时，官方 Steam 大厅与 FRP Direct 均已验证能够忽略残留配置、自动采用房主地图并正常加入。
 

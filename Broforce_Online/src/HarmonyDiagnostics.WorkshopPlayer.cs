@@ -314,7 +314,12 @@ namespace BroforceOnlineDiagnostics
 
         private static void ResetStalePauseStateForWorkshopSession(string trigger)
         {
-            if (!HasValidWorkshopInjectionConfiguration())
+            ResetStalePauseStateForWorkshopSession(trigger, false);
+        }
+
+        private static void ResetStalePauseStateForWorkshopSession(string trigger, bool force)
+        {
+            if (!force && !HasValidWorkshopInjectionConfiguration())
             {
                 return;
             }
