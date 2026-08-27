@@ -98,6 +98,14 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 离线、普通线上原版关卡和未启用有效 Workshop 注入的会话保持原生行为。该补丁不依赖 Steam/FRP 层，已通过 FRP 双端实测，官方 Steam 大厅仍需独立复测。测试证据见 [issues 索引](../issues/README.md)。
 
+### Mook 终态与主动引爆
+
+当前实体同步只覆盖普通、非载具、非 Boss 的网络 `PolymorphicAI` Mook 的死亡与尸体终态。拥有端在首次完成死亡时向其它端发送 NID、序列号、冲量、位置和伤害类型；远端用非空 `DamageObject` 补全死亡链。对象停稳或超时后，拥有端再广播最终位置。该模块不持续同步活动 AI，不创建敌方弹体，不处理钱币，也不覆盖坦克/载具。
+
+`DemolitionBro.currentBomb` 和 `McBrover.currentTurkey` 的二次按键主动引爆各有独立 Harmony 转译：拥有端始终立即执行原版 `Projectile.Death()`，并向 `PID.TargetOthers` 发送 NID 与位置；远端按 NID 查找本地副本并以会话内幂等集合处理。`DemolitionBro` 已有用户实测恢复记录。McBrover 残留火鸡已实机确认仍可复现，但发生概率显著降低；尚未形成受控统计，不能视为验收通过，详见 [独立 issue](../issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。普通 `Grenade`、动态敌人、钱币、金色奖励和其它投掷物保持原行为。
+
+当前分发构建已标准构建并部署到项目包、本机和内网端，最终 `buildHash` 与 DLL SHA-256 以 [README 当前状态](../README.md#当前状态) 为准。运行中的 Unity 不会热加载 DLL，双方完全退出并重启后才可验收：普通 Mook 的死亡链和尸体终态应在双方收敛；DemolitionBro 应只发生一次主动爆炸；McBrover 的残留问题仍需继续按 NID 采样。历史动态世界实验见 [历史 issue](../issues/ISSUES-2026-08-27-第三方地图动态世界同步.md)，不代表当前实现。
+
 ### AFK 行为
 
 `Disable automatic AFK spectator mode in online games` 由每台客户端独立控制，只重置本机联机角色的原生 AFK 计时，不处理远程角色，也不拦截手动退出、断线或死亡。要保护双方角色，双方必须分别开启。
@@ -226,7 +234,8 @@ MainMenu
 ### 专项验收
 
 - AFK：启动日志应有 `AFK_DIAGNOSTICS_PATCH playerUpdate=True; dropoutRpc=True`；目标端无输入至少 35 秒，对齐双方 `AFK_TIMER`、`AFK_STATE`、`PLAYER_DROPOUT` 和槽位/存活人数。开启防 AFK 时应有 `prevention-active`，不应有本机 `timeout-triggered`。
-- 道具：双方核对同一位置的数量/类型；满弹药站在箱子上不得持续播放反馈，消耗弹药后可拾取一次；MechDrop、RCCar 等显式特殊箱保持原类型。
+- 道具：双方核对同一位置的数量/类型；满弹药站在箱子上不得持续播放反馈，消耗弹药后可拾取一次；MechDrop、RCCar 等显式特殊箱保持原类型。金色奖励没有当前专项同步实现，不能按稳定键或权威类型作为验收依据。
+- 实体终态与主动引爆：普通网络 Mook 应在双方完成一次死亡链并收敛尸体终态；DemolitionBro 主动引爆应只发生一次；McBrover 火鸡残留仍是开放问题，记录 NID、拥有权、`Death()` 与最终销毁状态。
 - 关卡结果：确认 `Level outcome diagnostics enabled; patched methods=2.`，分别触发扣命、通关和失败，检查 `LEVEL_OUTCOME` 前后快照。
 - 可选 Mod：先比较双方安装/启用状态、版本、`rosterHash` 和 `selectedHash`。指纹不同只证明角色环境不同，不能单独作为英雄生成失败的根因。
 
@@ -276,7 +285,9 @@ diagnostics-host-<session>-<utc-time>.trace.log
 | AFK/失败 | 新诊断待真实双端触发；需确认远端槽位移除后 Host 的存活人数和失败判定 |
 | Workshop 地图 | 缺订阅时的自动识别、中文提示和加载阻止已通过双端实测；加入方残留本地配置隔离及房主地图自动识别已通过官方 Steam 大厅和 FRP Direct 实测；`GeneratePole.Awake`、`BroBase` 或特效可能抛出地图自身异常 |
 | Workshop 切关 | `3715087178` 的重复结束动作保护已实现并构建，普通成功、静默成功、失败重试和最终结算仍待双端复测；`3781818421` 仍作为独立问题保留 |
-| 道具 | FRP 已验收；官方 Steam 大厅和更多地图待复测 |
+| Mook 终态 | 普通网络 `PolymorphicAI` Mook 的死亡事件与尸体终态同步已实现；活动 AI、敌方弹体、钱币和载具不在当前范围，重启后双端验收仍需覆盖 |
+| 主动引爆 | DemolitionBro 已有恢复实测；McBrover 火鸡 NID 同步已实现但残留仍可复现，发生概率已显著降低但根因未闭环；普通 Grenade 保持原行为 |
+| 道具 | 标准弹药箱确定性、远端角色扫描抑制、重复收集抑制和满弹药退避已实现；金色奖励稳定键/权威类型同步不在当前构建，官方 Steam 大厅和更多地图待复测 |
 | 其它 Mod | Swap Bros 只有只读诊断，尚未完成兼容性验收，也不会阻止环境不一致的会话 |
 | FRP Direct | 三机基础联机和静态 `1` 人房满员提示已通过；代码支持地图内动态设置 `1` 至 `4` 人上限并保留现有成员；四机、`2` 至 `4` 人容量边界、降额后重入、多地图、高延迟、长期稳定性和主机迁移仍未专项验收 |
 | 原生崩溃 | 异常与崩溃时间接近不能单独证明因果，必须结合双方诊断、UMM 日志和 `error.log` |
