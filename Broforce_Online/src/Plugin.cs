@@ -42,6 +42,22 @@ namespace BroforceOnlineDiagnostics
             }
         }
 
+        internal static void ShowFrpDirectNotice(string message)
+        {
+            if (_behaviour != null)
+            {
+                _behaviour.ShowFrpDirectNotice(message);
+            }
+        }
+
+        internal static void ClearFrpDirectNotice()
+        {
+            if (_behaviour != null)
+            {
+                _behaviour.ClearFrpDirectNotice();
+            }
+        }
+
         public static bool Load(UnityModManager.ModEntry modEntry)
         {
             try
@@ -301,14 +317,20 @@ namespace BroforceOnlineDiagnostics
 
         private static Texture2D CreateSectionTriangle(bool expanded)
         {
-            const int size = 12;
-            var texture = new Texture2D(size, size, TextureFormat.ARGB32, false);
+            const int triangleSize = 12;
+            const int rightGutter = 4;
+            const int textureWidth = triangleSize + rightGutter;
+            var texture = new Texture2D(
+                textureWidth,
+                triangleSize,
+                TextureFormat.ARGB32,
+                false);
             texture.name = expanded
                 ? "BroforceOnlineSectionExpanded"
                 : "BroforceOnlineSectionCollapsed";
             texture.hideFlags = HideFlags.HideAndDontSave;
             texture.filterMode = FilterMode.Point;
-            var pixels = new Color[size * size];
+            var pixels = new Color[textureWidth * triangleSize];
             var color = new Color(0.92f, 0.92f, 0.92f, 1f);
 
             for (var row = 0; row < 6; row++)
@@ -317,9 +339,9 @@ namespace BroforceOnlineDiagnostics
                 {
                     var x = expanded ? 6 + offset : 8 - row;
                     var y = expanded ? 8 - row : 6 + offset;
-                    if (x >= 0 && x < size && y >= 0 && y < size)
+                    if (x >= 0 && x < triangleSize && y >= 0 && y < triangleSize)
                     {
-                        pixels[y * size + x] = color;
+                        pixels[y * textureWidth + x] = color;
                     }
                 }
             }

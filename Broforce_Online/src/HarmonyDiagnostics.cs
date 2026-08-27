@@ -464,6 +464,8 @@ namespace BroforceOnlineDiagnostics
         {
             try
             {
+                ShowFullFrpRoomNoticeIfNeeded(__originalMethod, __args);
+
                 if (__originalMethod != null &&
                     __originalMethod.DeclaringType != null &&
                     __originalMethod.DeclaringType.Name == "HeroController" &&
@@ -548,6 +550,33 @@ namespace BroforceOnlineDiagnostics
             }
 
             return true;
+        }
+
+        private static void ShowFullFrpRoomNoticeIfNeeded(
+            MethodBase method,
+            object[] args)
+        {
+            if (method == null ||
+                method.DeclaringType == null ||
+                method.DeclaringType.Name != "Lobby" ||
+                method.Name != "TryJoin" ||
+                args == null ||
+                args.Length == 0)
+            {
+                return;
+            }
+
+            var room = args[0] as FrpDirectRoomInfo;
+            if (room == null || room.invalidInfo || room.Capacity <= 0 || room.HasSpace)
+            {
+                return;
+            }
+
+            DiagnosticLog.Warning(
+                "FRP_DIRECT room join is full before the native lobby check; " +
+                "playerCount=" + room.PlayerCount +
+                "; capacity=" + room.Capacity + ".");
+            Plugin.ShowFrpDirectNotice(FrpDirectLayer.RoomFullNotice);
         }
 
         internal static void Update()

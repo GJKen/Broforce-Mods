@@ -6,6 +6,9 @@ namespace BroforceOnlineDiagnostics
 {
     internal sealed class FrpDirectLayer : ConnectionLayer, IDisposable
     {
+        internal const string RoomFullNotice =
+            "房主设置的房间人数已达上限，暂时无法加入。";
+
         private const string MachineIdPrefix = "frp-direct:";
 
         private readonly FrpDirectTransport _transport;
@@ -140,6 +143,7 @@ namespace BroforceOnlineDiagnostics
             string password,
             Action completed)
         {
+            Plugin.ClearFrpDirectNotice();
             var frpRoom = room as FrpDirectRoomInfo;
             if (IsHost || frpRoom == null || !_transport.IsHandshakeComplete)
             {
@@ -159,6 +163,7 @@ namespace BroforceOnlineDiagnostics
 
         public override void LeaveMatch(int controllerId)
         {
+            Plugin.ClearFrpDirectNotice();
             if (Room != null)
             {
                 _transport.SendLeaveNotice();
@@ -561,6 +566,7 @@ namespace BroforceOnlineDiagnostics
             }
 
             hostId.ProcessConnected();
+            Plugin.ClearFrpDirectNotice();
             _clientJoined = true;
             Connect.PlayerLimit = NormalizePlayerLimit(room.Capacity);
             SetNewLobbyRoom(room);
@@ -572,10 +578,15 @@ namespace BroforceOnlineDiagnostics
 
         private void OnJoinRejectedReceived(string machineId, string reason)
         {
+            var roomFull = string.Equals(reason, "room_full", StringComparison.Ordinal);
             ResetRoomState();
             base.LeaveMatch(-1);
             DiagnosticLog.Warning("FRP_DIRECT room join rejected; reason=" + reason + ".");
             OnFailedToJoinGame();
+            if (roomFull)
+            {
+                Plugin.ShowFrpDirectNotice(RoomFullNotice);
+            }
         }
 
         private void OnGameDataReceived(
@@ -655,6 +666,7 @@ namespace BroforceOnlineDiagnostics
 
         private void OnConfigurationChanging()
         {
+            Plugin.ClearFrpDirectNotice();
             if (Room == null)
             {
                 return;
