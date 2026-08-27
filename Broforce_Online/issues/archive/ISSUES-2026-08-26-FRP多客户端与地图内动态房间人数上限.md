@@ -84,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 - .NET Framework 3.5 编译通过。
 - `git diff --check` 通过，仅有 Windows 工作区换行转换提示。
 
-以上哈希保留为本功能首次完成时的历史构建证据，不代表当前分发版本。当前分发构建及 DLL SHA-256 以根目录 [README 当前状态](../README.md#当前状态) 为准。
+以上哈希保留为本功能首次完成时的历史构建证据，不代表当前分发版本。当前分发构建及 DLL SHA-256 以根目录 [README 当前状态](../../README.md#当前状态) 为准。
 
 上述历史构建证据只证明当时源码可编译且产物已部署。此后用户已完成三机基础联机和静态 `1` 人房满员提示实测，但 `2` 至 `4` 人容量边界、动态容量和四机仍需分别验证。测试前所有参与机器必须重启游戏并确认加载同一 `buildHash`。
 
