@@ -342,6 +342,7 @@ namespace BroforceOnlineDiagnostics
             PatchWorkshopLevelEndReentryGuard();
             PatchEntityFinalStateSynchronization();
             PatchDemolitionBroBombDetonationSynchronization();
+            PatchMcBroverTurkeyDetonationSynchronization();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
             PatchLobbyMainMenuReturnPostfix();
@@ -588,6 +589,7 @@ namespace BroforceOnlineDiagnostics
             TryRebroadcastWorkshopSpawns();
             TryApplyPendingEntityFinalStates();
             TrySubmitEntityFinalStates();
+            TryApplyPendingMcBroverTurkeyDetonations();
             TryReturnToWorkshopOnlineLobby();
             TryRecoverWorkshopOnlineLobbyNavigationFailure();
 
