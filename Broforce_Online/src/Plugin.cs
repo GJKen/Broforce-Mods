@@ -144,9 +144,20 @@ namespace BroforceOnlineDiagnostics
             }
             if (Settings.WorkshopSettingsExpanded)
             {
-                Settings.EnableOnlineWorkshopInjection = GUILayout.Toggle(
+                var workshopInjectionEnabled = GUILayout.Toggle(
                     Settings.EnableOnlineWorkshopInjection,
                     "Inject configured workshop map into online level switching");
+                if (workshopInjectionEnabled != Settings.EnableOnlineWorkshopInjection)
+                {
+                    var wasEnabled = Settings.EnableOnlineWorkshopInjection;
+                    Settings.EnableOnlineWorkshopInjection = workshopInjectionEnabled;
+                    SaveSettings(modEntry);
+                    if (wasEnabled && !workshopInjectionEnabled)
+                    {
+                        HarmonyDiagnostics.DisableOnlineWorkshopInjection(
+                            "UMM Workshop injection setting disabled");
+                    }
+                }
                 Settings.DisableOnlineAfkSpectatorMode = GUILayout.Toggle(
                     Settings.DisableOnlineAfkSpectatorMode,
                     "Disable automatic AFK spectator mode in online games");
@@ -563,6 +574,8 @@ namespace BroforceOnlineDiagnostics
 
         private static void StopDiagnostics()
         {
+            HarmonyDiagnostics.DisableOnlineWorkshopInjection(
+                "UMM diagnostics mod disabled or unloaded");
             HarmonyDiagnostics.Stop();
 
             if (_behaviour != null)

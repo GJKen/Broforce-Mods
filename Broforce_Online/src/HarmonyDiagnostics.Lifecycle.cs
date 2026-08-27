@@ -72,6 +72,12 @@ namespace BroforceOnlineDiagnostics
 
         private static bool IsWorkshopOnlineSession()
         {
+            var settings = Plugin.Settings;
+            if (settings == null || !settings.EnableOnlineWorkshopInjection)
+            {
+                return false;
+            }
+
             if (!IsOnline())
             {
                 return false;
@@ -216,10 +222,133 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
-            ClearWorkshopIdentityState();
-            _networkSessionActive = false;
-            _sessionIsHost = false;
+            ClearInjectedWorkshopRuntimeState("SteamLayer.LeaveMatch", true);
             DiagnosticLog.EndSession("SteamLayer.LeaveMatch");
+        }
+
+        internal static void DisableOnlineWorkshopInjection(string trigger)
+        {
+            try
+            {
+                if (_networkSessionActive && _sessionIsHost)
+                {
+                    SetWorkshopLobbyData(WorkshopLobbyIdKey, string.Empty, trigger);
+                    SetWorkshopLobbyData(WorkshopLobbySceneKey, string.Empty, trigger);
+                    SetWorkshopLobbyData(WorkshopLobbyCampaignKey, string.Empty, trigger);
+                    SetWorkshopLobbyReady(false, trigger);
+                    SetWorkshopLobbyPhase(WorkshopLobbyPhaseIdle, trigger);
+                }
+
+                ClearInjectedWorkshopRuntimeState(trigger, false);
+                DiagnosticLog.Info(
+                    "Workshop injection disabled and injected runtime state cleared; trigger=" +
+                    trigger + ". The active scene was not changed.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "Workshop injection disable cleanup failed; trigger=" + trigger +
+                    "; error=" + exception + ".");
+            }
+        }
+
+        private static void ClearInjectedWorkshopRuntimeState(string trigger, bool endNetworkSession)
+        {
+            var hadInjectedState = HasInjectedWorkshopRuntimeState();
+
+            _injectedForSession = false;
+            _workshopCompletionHandledForSession = true;
+            _joinLobbyInProgress = false;
+            _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
+            _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
+            _workshopSpawnRebroadcastPending = false;
+            _workshopSpawnRebroadcastUseCurrentPositions = false;
+            ClearDuplicateWorkshopLoadSuppression();
+            ClearWorkshopLevelNumberOverride();
+            ClearWorkshopOnlineLobbyReturnState();
+            ClearWorkshopLocalJoinRequests();
+            ClearLateJoinState();
+            ClearLifecycleState();
+            ClearWorkshopIdentityState();
+
+            if (endNetworkSession)
+            {
+                _networkSessionActive = false;
+                _sessionIsHost = false;
+            }
+
+            if (!hadInjectedState)
+            {
+                DiagnosticLog.Trace(
+                    "Workshop runtime tracking cleared without changing game state; trigger=" +
+                    trigger + ".");
+                return;
+            }
+
+            var gameModeControllerType = AccessTools.TypeByName("GameModeController");
+            var gameModeControllerField = gameModeControllerType == null
+                ? null
+                : gameModeControllerType.GetField(
+                    "instance",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var gameModeController = gameModeControllerField == null
+                ? null
+                : gameModeControllerField.GetValue(null);
+            if (gameModeController != null)
+            {
+                SetFieldOrProperty(gameModeController, "switchingLevel", false);
+                SetFieldOrProperty(gameModeController, "waitingForAllPlayersToReady", false);
+                SetFieldOrProperty(gameModeController, "levelFinished", false);
+                SetFieldOrProperty(gameModeController, "nextScene", LevelSelectionController.MainMenuScene);
+            }
+
+            var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+            if (state != null)
+            {
+                SetFieldOrProperty(state, "loadCustomCampaign", false);
+                SetFieldOrProperty(state, "immediatelyGoToCustomCampaign", false);
+                SetFieldOrProperty(state, "customLevelID", string.Empty);
+                SetFieldOrProperty(state, "campaignName", string.Empty);
+                SetFieldOrProperty(state, "levelNumber", 0);
+                SetFieldOrProperty(state, "sceneToLoad", LevelSelectionController.MainMenuScene);
+            }
+
+            var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
+            SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
+            SetStaticFieldOrProperty(levelSelectionType, "loadCustomCampaign", false);
+            SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
+            SetStaticFieldOrProperty(levelSelectionType, "shownHelicopterIntro", false);
+            SetStaticFieldOrProperty(levelSelectionType, "currentWorkshopLevel", null);
+            SetStaticFieldOrProperty(levelSelectionType, "campaignToLoad", null);
+            ClearCurrentCampaignForWorkshopLoad();
+            global::Networking.Networking.PauseStream = false;
+            ResetStalePauseStateForWorkshopSession(trigger, true);
+
+            DiagnosticLog.Info(
+                "Cleared injected Workshop game state so subsequent level selection uses the native campaign; " +
+                "trigger=" + trigger + ".");
+        }
+
+        private static bool HasInjectedWorkshopRuntimeState()
+        {
+            if (_injectedForSession || _sessionWorkshopIdentityAdopted)
+            {
+                return true;
+            }
+
+            var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+            if (state == null || !GetBoolFieldOrProperty(state, "loadCustomCampaign"))
+            {
+                return false;
+            }
+
+            var customLevelId = GetStringFieldOrProperty(state, "customLevelID").Trim();
+            var settings = Plugin.Settings;
+            var savedWorkshopId = settings == null
+                ? string.Empty
+                : (settings.WorkshopId ?? string.Empty).Trim();
+            return !string.IsNullOrEmpty(customLevelId) &&
+                string.Equals(customLevelId, savedWorkshopId, StringComparison.Ordinal);
         }
 
         internal static void PrepareFrpDirectRoomExit(string trigger)
@@ -972,8 +1101,13 @@ namespace BroforceOnlineDiagnostics
 
         private static void ResetWorkshopStateForNewSession(string trigger)
         {
+            var shouldClearInjectedGameState =
+                HasInjectedWorkshopRuntimeState() || HasValidWorkshopInjectionConfiguration();
             ClearWorkshopIdentityState();
-            ResetStalePauseStateForWorkshopSession(trigger);
+            if (shouldClearInjectedGameState)
+            {
+                ResetStalePauseStateForWorkshopSession(trigger, true);
+            }
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
             _joinLobbyInProgress = false;
@@ -988,29 +1122,32 @@ namespace BroforceOnlineDiagnostics
 
             try
             {
-                ClearCurrentCampaignForWorkshopLoad();
-
-                var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
-                SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
-                SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
-                SetStaticFieldOrProperty(levelSelectionType, "shownHelicopterIntro", false);
-
-                var gameStateType = AccessTools.TypeByName("GameState");
-                var instanceProperty = gameStateType == null
-                    ? null
-                    : gameStateType.GetProperty(
-                        "Instance",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                var state = instanceProperty == null ? null : instanceProperty.GetValue(null, null);
-                if (state != null)
+                if (shouldClearInjectedGameState)
                 {
-                    SetFieldOrProperty(state, "customLevelID", string.Empty);
-                    SetFieldOrProperty(state, "loadCustomCampaign", false);
-                    SetFieldOrProperty(state, "campaignName", string.Empty);
-                    SetFieldOrProperty(state, "levelNumber", 0);
+                    ClearCurrentCampaignForWorkshopLoad();
+
+                    var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
+                    SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
+                    SetStaticFieldOrProperty(levelSelectionType, "loadCustomCampaign", false);
+                    SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
+                    SetStaticFieldOrProperty(levelSelectionType, "shownHelicopterIntro", false);
+                    SetStaticFieldOrProperty(levelSelectionType, "currentWorkshopLevel", null);
+                    SetStaticFieldOrProperty(levelSelectionType, "campaignToLoad", null);
+
+                    var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+                    if (state != null)
+                    {
+                        SetFieldOrProperty(state, "customLevelID", string.Empty);
+                        SetFieldOrProperty(state, "loadCustomCampaign", false);
+                        SetFieldOrProperty(state, "immediatelyGoToCustomCampaign", false);
+                        SetFieldOrProperty(state, "campaignName", string.Empty);
+                        SetFieldOrProperty(state, "levelNumber", 0);
+                    }
                 }
 
-                DiagnosticLog.Info("Workshop state reset before SteamLayer." + trigger + ".");
+                DiagnosticLog.Info(
+                    "Workshop tracking reset before SteamLayer." + trigger +
+                    "; clearedInjectedGameState=" + shouldClearInjectedGameState + ".");
             }
             catch (Exception exception)
             {

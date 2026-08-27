@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=08ec63b61b11c7063ce6438378243f4082966b2b0470511b5074a0f787be745c` |
-| DLL SHA-256 | `E5890985749EC2671FB49C3C0D5ADA0F4EDBACF0FF314F5DCCE0B5A0B443A4BA` |
+| 当前分发构建 | `buildHash=9520bd6f64881db71fa6fbc6f94d5547c9d216f3b18aaa4fceedfedc87bd1eb9` |
+| DLL SHA-256 | `1B9407952B78C7A1BF97E3704A73C54297F69CD69775C8CFD955DD8CC12AF3B2` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
 
@@ -27,6 +27,7 @@
 - UMM 设置支持 Workshop、FRP Direct、诊断日志三个可持久化折叠面板，以及九类日志开关和五种预设。
 - FRP 设置已收敛为一个总开关和明确的 `Host`/`Client` 角色按钮；角色切换、配置隔离及自动应用已经用户实测，连接设置不再需要手动 Apply。
 - FRP 房主将人数上限设为 `1` 时，加入方点击满员房间会看到“房主设置的房间人数已达上限，暂时无法加入。”；提示在最后一次触发约 5 秒后自动消失，该流程已经双端实测。
+- Workshop 地图注入支持热关闭。关闭 `Inject configured workshop map into online level switching`、停用 Mod 或退出 Steam 房间时会撤销已经写入的 Workshop 会话、地图和切关状态；返回菜单后重新创建官方房间即可正常选择官方地图，该流程已经用户实测。
 
 当前构建还加入了 Workshop 关卡结束动作的防重入保护，用于阻止地图在原生切关已经开始后逐帧重复结束关卡并持续增加关卡号。该修复已由双端日志定位并完成构建部署，仍需游戏内通关复测。
 
@@ -85,6 +86,7 @@ Diagnostic label: 任意标识或留空
 
 ### 常用设置
 
+- `Inject configured workshop map into online level switching` 从开启切换为关闭时会立即保存并清理注入状态，但不会强制中断或切走当前场景。退出当前房间并从菜单重新创建官方房间后，后续选图使用游戏原生战役流程；不需要删除已保存的 Workshop ID。
 - `Diagnostic session ID` 用于关联双方同一轮日志；两端填写相同值。`Diagnostic label` 只影响日志文件名，不参与联机行为。
 - `Disable automatic AFK spectator mode in online games` 默认关闭，由每台客户端独立控制；要保护双方角色，双方必须分别开启。它不拦截手动退出、断线或正常死亡。
 - 诊断日志预设只影响输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
