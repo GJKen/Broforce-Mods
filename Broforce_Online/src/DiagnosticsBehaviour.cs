@@ -10,6 +10,7 @@ namespace BroforceOnlineDiagnostics
         private const float SnapshotIntervalSeconds = 2f;
         private const float HeroFallbackCheckIntervalSeconds = 1f;
         private const float HeroFallbackDelaySeconds = 18f;
+        private const float FrpDirectNoticeDurationSeconds = 5f;
         private const float UnityErrorDuplicateWindowSeconds = 5f;
         private const int MaxUnityErrorStackLength = 4000;
         private const int MaxUnityErrorSignatureLength = 512;
@@ -27,6 +28,8 @@ namespace BroforceOnlineDiagnostics
             new Dictionary<string, UnityErrorState>();
         private FrpDirectTransport _frpDirectTransport;
         private string _workshopNotice;
+        private string _frpDirectNotice;
+        private float _frpDirectNoticeExpiresAt;
         private GUIStyle _workshopNoticeBoxStyle;
         private GUIStyle _workshopNoticeTextStyle;
 
@@ -78,6 +81,12 @@ namespace BroforceOnlineDiagnostics
             }
 
             var now = Time.unscaledTime;
+            if (!string.IsNullOrEmpty(_frpDirectNotice) &&
+                now >= _frpDirectNoticeExpiresAt)
+            {
+                ClearFrpDirectNotice();
+            }
+
             if (now >= _nextSnapshotAt)
             {
                 _nextSnapshotAt = now + SnapshotIntervalSeconds;
@@ -123,9 +132,26 @@ namespace BroforceOnlineDiagnostics
             _workshopNotice = string.Empty;
         }
 
+        internal void ShowFrpDirectNotice(string message)
+        {
+            _frpDirectNotice = message ?? string.Empty;
+            _frpDirectNoticeExpiresAt = string.IsNullOrEmpty(_frpDirectNotice)
+                ? 0f
+                : Time.unscaledTime + FrpDirectNoticeDurationSeconds;
+        }
+
+        internal void ClearFrpDirectNotice()
+        {
+            _frpDirectNotice = string.Empty;
+            _frpDirectNoticeExpiresAt = 0f;
+        }
+
         private void OnGUI()
         {
-            if (string.IsNullOrEmpty(_workshopNotice))
+            var notice = !string.IsNullOrEmpty(_workshopNotice)
+                ? _workshopNotice
+                : _frpDirectNotice;
+            if (string.IsNullOrEmpty(notice))
             {
                 return;
             }
@@ -145,7 +171,7 @@ namespace BroforceOnlineDiagnostics
             GUI.Box(rect, GUIContent.none, _workshopNoticeBoxStyle);
             GUI.Label(
                 new Rect(rect.x + 16f, rect.y + 8f, rect.width - 32f, rect.height - 16f),
-                _workshopNotice,
+                notice,
                 _workshopNoticeTextStyle);
         }
 
