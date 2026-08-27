@@ -168,6 +168,7 @@ namespace BroforceOnlineDiagnostics
 
         private static void LobbyCreatedPostfix()
         {
+            PublishConfiguredWorkshopIdentity("lobby created");
             SetWorkshopLobbyReady(false, "lobby created");
             SetWorkshopLobbyPhase(WorkshopLobbyPhaseIdle, "lobby created");
         }
@@ -180,6 +181,8 @@ namespace BroforceOnlineDiagnostics
                 {
                     return;
                 }
+
+                PublishConfiguredWorkshopIdentity("new member joined");
 
                 var phase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
                 if (!string.IsNullOrEmpty(phase))
@@ -213,6 +216,7 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
+            ClearWorkshopIdentityState();
             _networkSessionActive = false;
             _sessionIsHost = false;
             DiagnosticLog.EndSession("SteamLayer.LeaveMatch");
@@ -359,14 +363,13 @@ namespace BroforceOnlineDiagnostics
 
                     if (settings != null)
                     {
-                        var workshopId = (settings.WorkshopId ?? string.Empty).Trim();
+                        var workshopId = GetConfiguredWorkshopId();
                         if (!string.IsNullOrEmpty(workshopId))
                         {
                             SetFieldOrProperty(state, "customLevelID", workshopId);
                         }
 
-                        var configuredCampaign =
-                            (settings.WorkshopCampaignName ?? string.Empty).Trim();
+                        var configuredCampaign = GetConfiguredWorkshopCampaignName();
                         if (!string.IsNullOrEmpty(configuredCampaign))
                         {
                             campaignName = configuredCampaign;
@@ -399,6 +402,7 @@ namespace BroforceOnlineDiagnostics
                 SetWorkshopLobbyPhase(
                     workshopSceneLoaded ? WorkshopLobbyPhaseReady : WorkshopLobbyPhaseLoading,
                     "host migration");
+                PublishConfiguredWorkshopIdentity("host migration");
                 SetWorkshopLobbyReady(workshopSceneLoaded, "host migration");
                 DiagnosticLog.Info(
                     "Workshop host promotion synchronized authoritative state: activeScene=" +
@@ -422,6 +426,7 @@ namespace BroforceOnlineDiagnostics
                     : null;
                 _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
                 ResetStalePauseStateForWorkshopSession("ConnectionLayer.OnJoinedLobby");
+                TrySynchronizeClientWorkshopIdentity(true, "joined lobby");
                 QueueLateJoin(room);
             }
             catch (Exception exception)
@@ -736,12 +741,6 @@ namespace BroforceOnlineDiagnostics
             public string DisplayValue { get; private set; }
         }
 
-        private static string GetConfiguredWorkshopSceneName()
-        {
-            var settings = Plugin.Settings;
-            return settings == null ? string.Empty : (settings.WorkshopSceneName ?? string.Empty).Trim();
-        }
-
         private static void ClearDuplicateWorkshopLoadSuppression()
         {
             _skipDuplicateWorkshopSceneLoad = false;
@@ -785,9 +784,7 @@ namespace BroforceOnlineDiagnostics
             }
 
             var settings = Plugin.Settings;
-            var configuredWorkshopId = settings == null
-                ? string.Empty
-                : (settings.WorkshopId ?? string.Empty).Trim();
+            var configuredWorkshopId = GetConfiguredWorkshopId();
             var customLevelId = GetStringFieldOrProperty(state, "customLevelID").Trim();
             if (!string.Equals(customLevelId, configuredWorkshopId, StringComparison.Ordinal))
             {
@@ -871,7 +868,7 @@ namespace BroforceOnlineDiagnostics
                     return;
                 }
 
-                var workshopId = (settings.WorkshopId ?? string.Empty).Trim();
+                var workshopId = GetConfiguredWorkshopId();
                 ulong numericId;
                 if (!UInt64.TryParse(workshopId, out numericId) || numericId == 0)
                 {
@@ -907,13 +904,13 @@ namespace BroforceOnlineDiagnostics
                 SetFieldOrProperty(state, "loadCustomCampaign", true);
                 SetFieldOrProperty(state, "levelNumber", 0);
 
-                var sceneName = (settings.WorkshopSceneName ?? string.Empty).Trim();
+                var sceneName = GetConfiguredWorkshopSceneName();
                 if (!string.IsNullOrEmpty(sceneName))
                 {
                     SetFieldOrProperty(state, "sceneToLoad", sceneName);
                 }
 
-                var campaignName = (settings.WorkshopCampaignName ?? string.Empty).Trim();
+                var campaignName = GetConfiguredWorkshopCampaignName();
                 if (!string.IsNullOrEmpty(campaignName))
                 {
                     SetFieldOrProperty(state, "campaignName", campaignName);
@@ -927,6 +924,7 @@ namespace BroforceOnlineDiagnostics
                 _injectedForSession = true;
                 if (_sessionIsHost)
                 {
+                    PublishConfiguredWorkshopIdentity(injectionContext);
                     SetWorkshopLobbyPhase(WorkshopLobbyPhaseLoading, injectionContext);
                 }
                 DiagnosticLog.Info(
@@ -974,6 +972,7 @@ namespace BroforceOnlineDiagnostics
 
         private static void ResetWorkshopStateForNewSession(string trigger)
         {
+            ClearWorkshopIdentityState();
             ResetStalePauseStateForWorkshopSession(trigger);
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;

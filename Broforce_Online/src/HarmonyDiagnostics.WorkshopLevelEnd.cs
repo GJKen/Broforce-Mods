@@ -173,7 +173,7 @@ namespace BroforceOnlineDiagnostics
                 return false;
             }
 
-            var configuredWorkshopId = (settings.WorkshopId ?? string.Empty).Trim();
+            var configuredWorkshopId = GetConfiguredWorkshopId();
             var activeWorkshopId = GetStringFieldOrProperty(state, "customLevelID").Trim();
             return !string.IsNullOrEmpty(configuredWorkshopId) &&
                    string.Equals(

@@ -59,6 +59,7 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopPlayer.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopSpawn.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopLobby.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopIdentity.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopPickup.cs" />
     <Compile Include="src\HarmonyDiagnostics.Afk.cs" />
     <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />

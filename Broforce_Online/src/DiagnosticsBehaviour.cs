@@ -26,6 +26,9 @@ namespace BroforceOnlineDiagnostics
         private readonly Dictionary<string, UnityErrorState> _unityErrorStates =
             new Dictionary<string, UnityErrorState>();
         private FrpDirectTransport _frpDirectTransport;
+        private string _workshopNotice;
+        private GUIStyle _workshopNoticeBoxStyle;
+        private GUIStyle _workshopNoticeTextStyle;
 
         public static DiagnosticsBehaviour Create()
         {
@@ -110,6 +113,42 @@ namespace BroforceOnlineDiagnostics
             return _frpDirectTransport;
         }
 
+        internal void ShowWorkshopNotice(string message)
+        {
+            _workshopNotice = message ?? string.Empty;
+        }
+
+        internal void ClearWorkshopNotice()
+        {
+            _workshopNotice = string.Empty;
+        }
+
+        private void OnGUI()
+        {
+            if (string.IsNullOrEmpty(_workshopNotice))
+            {
+                return;
+            }
+
+            if (_workshopNoticeBoxStyle == null)
+            {
+                _workshopNoticeBoxStyle = new GUIStyle(GUI.skin.box);
+                _workshopNoticeTextStyle = new GUIStyle(GUI.skin.label);
+                _workshopNoticeTextStyle.alignment = TextAnchor.MiddleCenter;
+                _workshopNoticeTextStyle.wordWrap = true;
+                _workshopNoticeTextStyle.fontSize = 18;
+                _workshopNoticeTextStyle.normal.textColor = new Color(1f, 0.86f, 0.28f, 1f);
+            }
+
+            var width = Mathf.Min(760f, Mathf.Max(280f, Screen.width - 32f));
+            var rect = new Rect((Screen.width - width) * 0.5f, 16f, width, 82f);
+            GUI.Box(rect, GUIContent.none, _workshopNoticeBoxStyle);
+            GUI.Label(
+                new Rect(rect.x + 16f, rect.y + 8f, rect.width - 32f, rect.height - 16f),
+                _workshopNotice,
+                _workshopNoticeTextStyle);
+        }
+
         internal string GetFrpDirectStatus()
         {
             return _frpDirectTransport == null ? "Disabled" : _frpDirectTransport.Status;
@@ -118,9 +157,7 @@ namespace BroforceOnlineDiagnostics
         private void RecoverStalledLocalHeroRequests(float now)
         {
             var settings = Plugin.Settings;
-            var configuredScene = settings == null
-                ? string.Empty
-                : (settings.WorkshopSceneName ?? string.Empty).Trim();
+            var configuredScene = HarmonyDiagnostics.GetConfiguredWorkshopSceneName();
             if (settings == null || !settings.EnableOnlineWorkshopInjection ||
                 string.IsNullOrEmpty(configuredScene) ||
                 !string.Equals(SceneManager.GetActiveScene().name, configuredScene, StringComparison.OrdinalIgnoreCase))

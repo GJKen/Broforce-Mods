@@ -370,6 +370,18 @@ namespace BroforceOnlineDiagnostics
             {
                 return room.WorkshopPhase ?? string.Empty;
             }
+            if (string.Equals(key, "GJKen_BroforceOnline_WorkshopId", StringComparison.Ordinal))
+            {
+                return room.WorkshopId ?? string.Empty;
+            }
+            if (string.Equals(key, "GJKen_BroforceOnline_WorkshopScene", StringComparison.Ordinal))
+            {
+                return room.WorkshopScene ?? string.Empty;
+            }
+            if (string.Equals(key, "GJKen_BroforceOnline_WorkshopCampaign", StringComparison.Ordinal))
+            {
+                return room.WorkshopCampaign ?? string.Empty;
+            }
             return string.Empty;
         }
 
@@ -393,6 +405,18 @@ namespace BroforceOnlineDiagnostics
                 StringComparison.Ordinal))
             {
                 room.WorkshopPhase = value ?? string.Empty;
+            }
+            else if (string.Equals(key, "GJKen_BroforceOnline_WorkshopId", StringComparison.Ordinal))
+            {
+                room.WorkshopId = value ?? string.Empty;
+            }
+            else if (string.Equals(key, "GJKen_BroforceOnline_WorkshopScene", StringComparison.Ordinal))
+            {
+                room.WorkshopScene = value ?? string.Empty;
+            }
+            else if (string.Equals(key, "GJKen_BroforceOnline_WorkshopCampaign", StringComparison.Ordinal))
+            {
+                room.WorkshopCampaign = value ?? string.Empty;
             }
             else
             {

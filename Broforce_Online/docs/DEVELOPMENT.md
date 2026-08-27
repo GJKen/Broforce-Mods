@@ -23,6 +23,7 @@
 - `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、超时和槽位移除观测。
 - `src/HarmonyDiagnostics.LevelOutcome.cs`：`LevelFinish`/`RemoveLife` 前后快照。
 - `src/HarmonyDiagnostics.WorkshopLevelEnd.cs`：Workshop 关卡结束动作防重入保护。
+- `src/HarmonyDiagnostics.WorkshopIdentity.cs`：房主地图身份发布、加入方会话配置采用、Steam 订阅检测和缺图加载保护。
 - `src/OptionalBroModDiagnostics.cs`：Swap Bros 公开 API、版本和角色指纹的只读弱依赖诊断。
 - `src/ReflectionProbe.cs`：只读扫描 `Assembly-CSharp` 中的相关类型。
 - `src/OnlinePlayerListFormatter.cs`：统一处理 Steam/FRP 在线名单的延迟颜色、动态房主渐变、Rich Text 转义和秒到毫秒换算。
@@ -46,7 +47,11 @@
 
 当前注入点为 `WorldMapController.EnterMission`、`GameState.LoadLevel`、`GameModeController.SwitchLevel` 和 `SteamController.LevelLoadCompleteEvent`。每个房间只在首次选择任务时注入一次；创建或加入新大厅时清理旧 Workshop 回调、切关和暂停网络状态。
 
-房间信息同时携带 Workshop `loading`/`ready` 阶段。Steam 从 Lobby 数据读取，FRP 通过 `FrpDirectRoomInfo` 同步。晚加入客户端据此并行下载地图，并在场景加载和 `SpawnJoinedPlayers` 都完成后申请本地槽位。
+房间信息同时携带 Workshop ID、场景名、可选战役名和 `loading`/`ready` 阶段。Steam 使用 Lobby 数据，FRP 通过 `FrpDirectRoomInfo` 同步。房主创建房间时发布当前配置，选择地图、新成员加入和主机迁移时重新发布；加入方采用房主地图身份作为本次会话配置，不改写本机持久化设置。从 `JoinLobby` 开始到房主元数据到达前，Client 的配置读取返回空值，不允许回退到本机保存的 ID、场景名或战役名；元数据到达后只使用房主值。这样即使加入方忘记清空旧配置，也不会在最初几帧误加载本机地图。
+
+加入方采用地图身份后枚举 Steam 本机订阅列表。确认未订阅时，屏幕顶部显示中文提示和 Workshop ID，清除待执行的晚加入状态，并阻止指向该房主地图的 `GameState.LoadLevel`；订阅状态无法读取时保持原生下载流程，不误报缺图。订阅或下载不会由 Mod 自动执行，玩家需要在 Steam 创意工坊订阅并等待下载完成后重新加入房间。
+
+晚加入客户端根据上述地图身份及阶段并行下载地图，并在场景加载和 `SpawnJoinedPlayers` 都完成后申请本地槽位。缺订阅时的地图身份识别、中文提示和加载阻止已经通过一轮双端实测；加入方保留不同的本地地图配置时，官方 Steam 大厅与 FRP Direct 均已验证能够忽略残留配置、自动采用房主地图并正常加入。
 
 ### 晚加入与重入
 
@@ -260,7 +265,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 | 英雄回复 | Client 可能丢失原生英雄类型回复；18 秒备用生成只能缓解，不能替代网络同步 |
 | 晚加入/重入 | 当前地图已通过；不同地图、控制器、高延迟、异常断网和长期多轮仍需覆盖 |
 | AFK/失败 | 新诊断待真实双端触发；需确认远端槽位移除后 Host 的存活人数和失败判定 |
-| Workshop 地图 | `GeneratePole.Awake`、`BroBase` 或特效可能抛出地图自身异常 |
+| Workshop 地图 | 缺订阅时的自动识别、中文提示和加载阻止已通过双端实测；加入方残留本地配置隔离及房主地图自动识别已通过官方 Steam 大厅和 FRP Direct 实测；`GeneratePole.Awake`、`BroBase` 或特效可能抛出地图自身异常 |
 | Workshop 切关 | `3715087178` 的重复结束动作保护已实现并构建，普通成功、静默成功、失败重试和最终结算仍待双端复测；`3781818421` 仍作为独立问题保留 |
 | 道具 | FRP 已验收；官方 Steam 大厅和更多地图待复测 |
 | 其它 Mod | Swap Bros 只有只读诊断，尚未完成兼容性验收，也不会阻止环境不一致的会话 |
