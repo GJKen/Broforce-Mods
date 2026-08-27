@@ -24,6 +24,22 @@ namespace BroforceOnlineDiagnostics
             return _behaviour != null && _behaviour.ShouldSkipLateHeroResponse(playerNum);
         }
 
+        internal static void ShowWorkshopNotice(string message)
+        {
+            if (_behaviour != null)
+            {
+                _behaviour.ShowWorkshopNotice(message);
+            }
+        }
+
+        internal static void ClearWorkshopNotice()
+        {
+            if (_behaviour != null)
+            {
+                _behaviour.ClearWorkshopNotice();
+            }
+        }
+
         public static bool Load(UnityModManager.ModEntry modEntry)
         {
             try
@@ -116,7 +132,7 @@ namespace BroforceOnlineDiagnostics
                 Settings.DisableOnlineAfkSpectatorMode = GUILayout.Toggle(
                     Settings.DisableOnlineAfkSpectatorMode,
                     "Disable automatic AFK spectator mode in online games");
-                GUILayout.Label("Workshop ID");
+                GUILayout.Label("Workshop ID (host only; clients ignore saved values and detect the room map)");
                 Settings.WorkshopId = GUILayout.TextField(
                     Settings.WorkshopId ?? string.Empty,
                     GUILayout.Width(260f));

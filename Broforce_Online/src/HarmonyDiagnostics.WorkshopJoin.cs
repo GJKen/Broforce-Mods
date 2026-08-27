@@ -170,6 +170,12 @@ namespace BroforceOnlineDiagnostics
                 return;
             }
 
+            TrySynchronizeClientWorkshopIdentity(true, "late workshop join detection");
+            if (_workshopSubscriptionMissing)
+            {
+                return;
+            }
+
             RefreshWorkshopLobbyDataIfNeeded("late workshop join detected");
             var configuredScene = GetConfiguredWorkshopSceneName();
             var hostScene = GetRoomInfoString(room, "CurrentSceneName");
@@ -188,7 +194,7 @@ namespace BroforceOnlineDiagnostics
             }
 
             ulong workshopId;
-            var configuredWorkshopId = (settings.WorkshopId ?? string.Empty).Trim();
+            var configuredWorkshopId = GetConfiguredWorkshopId();
             if (!UInt64.TryParse(configuredWorkshopId, out workshopId) || workshopId == 0)
             {
                 DiagnosticLog.Warning(

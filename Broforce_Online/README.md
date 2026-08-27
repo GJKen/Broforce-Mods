@@ -4,7 +4,7 @@
 
 官方 Steam 大厅和 FRP Direct 的 Esc 在线名单都会显示彩色延迟与动态渐变房主名。Steam 使用游戏原生 `PID.Ping`，FRP 使用 Lidgren RTT；显示效果只要求当前查看名单的机器安装本 Mod。
 
-只使用官方 Steam 大厅的彩色延迟名单时，仅查看名单的一方需要安装本 Mod。使用 Workshop 地图注入或 FRP Direct 时，所有参与联机的玩家必须安装相同构建的 Mod，并订阅、下载相同的 Workshop 地图；排查版本时以各端日志中的 `BUILD_INFO buildHash` 为准。
+只使用官方 Steam 大厅的彩色延迟名单时，仅查看名单的一方需要安装本 Mod。使用 Workshop 地图注入或 FRP Direct 时，所有参与联机的玩家必须安装相同构建的 Mod，并订阅、下载相同的 Workshop 地图；排查版本时以各端日志中的 `BUILD_INFO buildHash` 为准。加入方会读取房主发布的 Workshop ID、场景名和战役名，不再需要手工填写与房主相同的地图配置。
 
 ## 当前状态
 
@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=1ec0487aded5158b15f0ebad4fd640ad304d29e6f97a88a472397b17e37b24dc` |
-| DLL SHA-256 | `0077DCB0BA16B9F72C4FC0C2EB3B067F5645DC2CAA4ACE3ED08A27D47D23C39A` |
+| 当前分发构建 | `buildHash=ba4ac58c6302b99f80f3d438fb1ddc2e699ac6babbb37aa95763be807e444dab` |
+| DLL SHA-256 | `B5B5AA5F5302395BBD8C2659AD30617708DCDC53AB580C6B9DDAE5363541E46E` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭的实验路径；双端已验证，代码支持房主加最多三台远端 |
 
@@ -27,6 +27,10 @@
 - UMM 设置支持 Workshop、FRP Direct、诊断日志三个可持久化折叠面板，以及九类日志开关和五种预设。
 
 当前构建还加入了 Workshop 关卡结束动作的防重入保护，用于阻止地图在原生切关已经开始后逐帧重复结束关卡并持续增加关卡号。该修复已由双端日志定位并完成构建部署，仍需游戏内通关复测。
+
+房主地图自动识别已完成代码和双端部署。房主创建房间及选择地图时会通过 Steam Lobby 或 FRP 房间信息发布 Workshop 地图身份；加入方自动采用该身份。若本机 Steam 订阅列表中没有房主地图，加入方会在屏幕顶部看到中文提示和 Workshop ID，并停止自动进入该地图，避免在内容缺失时继续加载。
+
+缺少订阅时的地图识别、中文提示和加载阻止已由用户完成一轮双端实测。加入方本机即使保留了以前填写的 Workshop ID、场景名或战役名，本次加入也会从进入房间开始完全忽略这些保存值，只使用房主发布的地图身份；保存值不会被删除，之后该机器自己创建房间时仍可使用。官方 Steam 大厅与 FRP Direct 均已验证加入方能够忽略残留配置并自动识别、进入房主地图。
 
 仍需继续覆盖：AFK 诊断在真实双端会话中的内容、官方 Steam 大厅下的道具修复、多地图兼容、异常断网、高延迟和长期多轮退出/重入。FRP 已实现房主加最多三台远端，但尚未完成三台或四台机器的实机验收，也不支持主机迁移。部分 Workshop 地图可能有自身的 `GeneratePole.Awake`、`BroBase` 或特效销毁异常。详细实现和证据见 [开发与测试文档](docs/DEVELOPMENT.md)、[问题记录索引](issues/README.md)。
 
@@ -61,12 +65,12 @@
 
 3. 将项目内安装包 `BroforceOnlineDiagnostics` 下的 `BroforceOnlineDiagnostics.dll` 和 `Info.json` 复制到 profile 的 `UMM\Mods\GJKen-BroforceOnlineDiagnostics`。目录名必须是 `GJKen-BroforceOnlineDiagnostics`。运行 `BuildAndDeploy.ps1` 后，构建者的安装包和配置的测试部署目标会自动更新。
 4. 重启 r2modman，在 UMM 中确认 `Broforce Online Diagnostics 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
-5. 双方订阅并下载相同 Workshop 地图，在 UMM 填写相同的 Workshop ID。战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改；确认配置后开启线上地图注入。
+5. 双方仍需订阅并下载相同 Workshop 地图。只需房主在 UMM 填写 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改。加入方开启线上地图注入后会自动采用房主发布的地图配置；即使忘记清空以前填写的 ID、场景名或战役名，这些保存值也不会参与本次加入。如果加入方没有订阅房主地图，屏幕顶部会提示缺少的 Workshop ID；订阅并等待 Steam 下载完成后重新加入房间。
 
 首次测试建议：
 
 ```text
-Workshop ID: <Workshop 页面 URL 中 id= 后的数字>
+Workshop ID: 房主填写 <Workshop 页面 URL 中 id= 后的数字>；加入方可留空
 Workshop campaign name: 留空
 Custom level scene: Test Evan2
 Diagnostic session ID: test001（可留空）

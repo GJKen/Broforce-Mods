@@ -229,7 +229,7 @@ namespace BroforceOnlineDiagnostics
             }
 
             ulong workshopId;
-            return UInt64.TryParse((settings.WorkshopId ?? string.Empty).Trim(), out workshopId) &&
+            return UInt64.TryParse(GetConfiguredWorkshopId(), out workshopId) &&
                    workshopId != 0;
         }
 
@@ -581,6 +581,14 @@ namespace BroforceOnlineDiagnostics
             try
             {
                 PrepareWorkshopOnlineLobbyMainMenuLoad(nextScene);
+                TrySynchronizeClientWorkshopIdentity(true, "before GameState.LoadLevel");
+                if (ShouldBlockMissingWorkshopLoad(nextScene))
+                {
+                    DiagnosticLog.Warning(
+                        "Blocked Workshop GameState.LoadLevel because the host map is not subscribed locally: " +
+                        "id=" + GetConfiguredWorkshopId() + "; nextScene=" + (nextScene ?? string.Empty) + ".");
+                    return false;
+                }
 
                 if (_skipDuplicateWorkshopSceneLoad &&
                     DateTime.UtcNow <= _skipDuplicateWorkshopSceneLoadUntilUtc &&

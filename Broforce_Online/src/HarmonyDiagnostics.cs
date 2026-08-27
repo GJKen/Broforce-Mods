@@ -213,6 +213,7 @@ namespace BroforceOnlineDiagnostics
             ClearDuplicateWorkshopLoadSuppression();
             ClearWorkshopLocalJoinRequests();
             ClearLateJoinState();
+            ClearWorkshopIdentityState();
             ClearLifecycleState();
             SubscribeWorkshopCompletion();
             var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
@@ -387,6 +388,7 @@ namespace BroforceOnlineDiagnostics
                 ClearDuplicateWorkshopLoadSuppression();
                 ClearWorkshopLocalJoinRequests();
                 ClearLateJoinState();
+                ClearWorkshopIdentityState();
                 ClearLifecycleState();
                 lock (Sync)
                 {
@@ -551,6 +553,7 @@ namespace BroforceOnlineDiagnostics
         internal static void Update()
         {
             ObserveOnlineHostRole();
+            TrySynchronizeClientWorkshopIdentity(false, "periodic room check");
             TryRebroadcastWorkshopSpawns();
             TryReturnToWorkshopOnlineLobby();
             TryRecoverWorkshopOnlineLobbyNavigationFailure();
