@@ -341,6 +341,7 @@ namespace BroforceOnlineDiagnostics
             PatchLevelOutcomeDiagnostics();
             PatchWorkshopLevelEndReentryGuard();
             PatchEntityFinalStateSynchronization();
+            PatchDemolitionBroBombDetonationSynchronization();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
             PatchLobbyMainMenuReturnPostfix();
