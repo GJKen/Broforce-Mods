@@ -3,3 +3,7 @@
 
 # Local reverse-engineering reference; never publish extracted game source.
 /Broforce_src/Broforce-Source/
+
+# Keep the trimmed MCP source only; the upstream working copy and archive stay local.
+/Broforce_src/unity-inspector-mcp2/
+/Broforce_src/unity-inspector-mcp.zip
