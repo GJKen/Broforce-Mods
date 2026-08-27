@@ -1,2 +1,5 @@
 # Machine-specific Broforce Bug Fix build paths.
 /BroforceBugFix/LocalBroforcePath.props
+
+# Local reverse-engineering reference; never publish extracted game source.
+/Broforce_src/Broforce-Source/
