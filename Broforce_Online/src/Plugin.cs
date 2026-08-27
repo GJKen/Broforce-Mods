@@ -6,7 +6,8 @@ namespace BroforceOnlineDiagnostics
 {
     public static class Plugin
     {
-        private const int CurrentDiagnosticSettingsVersion = 6;
+        private const int CurrentDiagnosticSettingsVersion = 7;
+        private const float FrpSettingsApplyDelaySeconds = 0.75f;
         private const float SectionHeaderWidth = 540f;
         private const float SectionHeaderHeight = 30f;
         private static UnityModManager.ModEntry _modEntry;
@@ -16,6 +17,7 @@ namespace BroforceOnlineDiagnostics
         private static GUIStyle _workshopSectionStyle;
         private static GUIStyle _frpSectionStyle;
         private static GUIStyle _diagnosticSectionStyle;
+        private static float _frpSettingsApplyAt = -1f;
 
         internal static DiagnosticSettings Settings { get; private set; }
 
@@ -156,23 +158,35 @@ namespace BroforceOnlineDiagnostics
             }
             if (Settings.FrpDirectSettingsExpanded)
             {
-                Settings.EnableFrpDirectPrototype = GUILayout.Toggle(
-                    Settings.EnableFrpDirectPrototype,
-                    "Enable FRP Direct transport prototype");
-                Settings.EnableFrpDirectGameLayer = GUILayout.Toggle(
-                    Settings.EnableFrpDirectGameLayer,
-                    "Route Broforce rooms and RPC through FRP Direct (experimental)");
+                var frpEnabled = GUILayout.Toggle(
+                    Settings.EnableFrpDirect,
+                    "Enable FRP Direct networking");
+                if (frpEnabled != Settings.EnableFrpDirect)
+                {
+                    SetFrpDirectEnabled(frpEnabled);
+                    ApplyFrpDirectSettingsImmediately(modEntry);
+                }
                 GUILayout.Label("FRP Direct role");
-                var roleIndex = string.Equals(
+                var previousRoleIndex = string.Equals(
                     Settings.FrpDirectRole,
                     "client",
                     StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+                var roleIndex = previousRoleIndex;
                 roleIndex = GUILayout.Toolbar(roleIndex, new[] { "Host", "Client" }, GUILayout.Width(260f));
-                Settings.FrpDirectRole = roleIndex == 1 ? "client" : "host";
+                if (roleIndex != previousRoleIndex)
+                {
+                    Settings.FrpDirectRole = roleIndex == 1 ? "client" : "host";
+                    ApplyFrpDirectSettingsImmediately(modEntry);
+                }
                 if (roleIndex == 0)
                 {
                     GUILayout.Label("Local UDP listen port");
-                    Settings.FrpDirectLocalPort = DrawPortField(Settings.FrpDirectLocalPort);
+                    var localPort = DrawPortField(Settings.FrpDirectLocalPort);
+                    if (localPort != Settings.FrpDirectLocalPort)
+                    {
+                        Settings.FrpDirectLocalPort = localPort;
+                        ScheduleFrpDirectSettingsApply();
+                    }
                     GUILayout.Label("FRP room player limit (applies immediately)");
                     var currentPlayerLimit = global::System.Math.Max(
                         1,
@@ -193,21 +207,32 @@ namespace BroforceOnlineDiagnostics
                 else
                 {
                     GUILayout.Label("FRP server endpoint (host:port)");
-                    Settings.FrpDirectServerEndpoint = GUILayout.TextField(
+                    var serverEndpoint = GUILayout.TextField(
                         Settings.FrpDirectServerEndpoint ?? string.Empty,
                         GUILayout.Width(260f));
+                    if (!string.Equals(
+                            serverEndpoint,
+                            Settings.FrpDirectServerEndpoint ?? string.Empty,
+                            StringComparison.Ordinal))
+                    {
+                        Settings.FrpDirectServerEndpoint = serverEndpoint;
+                        ScheduleFrpDirectSettingsApply();
+                    }
                 }
                 GUILayout.Label("FRP room password (optional)");
-                Settings.FrpDirectRoomPassword = GUILayout.PasswordField(
+                var roomPassword = GUILayout.PasswordField(
                     Settings.FrpDirectRoomPassword ?? string.Empty,
                     '*',
                     GUILayout.Width(260f));
-                GUILayout.Label("FRP Direct status: " + GetFrpDirectStatus());
-                if (GUILayout.Button("Apply connection settings / restart", GUILayout.Width(260f)))
+                if (!string.Equals(
+                        roomPassword,
+                        Settings.FrpDirectRoomPassword ?? string.Empty,
+                        StringComparison.Ordinal))
                 {
-                    SaveSettings(modEntry);
-                    ApplyFrpDirectSettings(true);
+                    Settings.FrpDirectRoomPassword = roomPassword;
+                    ScheduleFrpDirectSettingsApply();
                 }
+                GUILayout.Label("FRP Direct status: " + GetFrpDirectStatus());
             }
 
             if (DrawSectionHeader(
@@ -230,6 +255,7 @@ namespace BroforceOnlineDiagnostics
                     GUILayout.Width(260f));
                 DiagnosticLog.DrawSettingsGui();
             }
+            ApplyPendingFrpDirectSettings(modEntry);
             GUILayout.Label("Changes are saved when UMM settings are saved, the Mod is toggled, or the game exits normally.");
         }
 
@@ -323,8 +349,38 @@ namespace BroforceOnlineDiagnostics
 
         private static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
+            _frpSettingsApplyAt = -1f;
             SaveSettings(modEntry);
             ApplyFrpDirectSettings(false);
+        }
+
+        private static void SetFrpDirectEnabled(bool enabled)
+        {
+            Settings.EnableFrpDirect = enabled;
+            Settings.EnableFrpDirectPrototype = enabled;
+            Settings.EnableFrpDirectGameLayer = enabled;
+        }
+
+        private static void ApplyFrpDirectSettingsImmediately(UnityModManager.ModEntry modEntry)
+        {
+            _frpSettingsApplyAt = -1f;
+            SaveSettings(modEntry);
+            ApplyFrpDirectSettings(false);
+        }
+
+        private static void ScheduleFrpDirectSettingsApply()
+        {
+            _frpSettingsApplyAt = Time.realtimeSinceStartup + FrpSettingsApplyDelaySeconds;
+        }
+
+        private static void ApplyPendingFrpDirectSettings(UnityModManager.ModEntry modEntry)
+        {
+            if (_frpSettingsApplyAt < 0f || Time.realtimeSinceStartup < _frpSettingsApplyAt)
+            {
+                return;
+            }
+
+            ApplyFrpDirectSettingsImmediately(modEntry);
         }
 
         private static int DrawPortField(int value)
@@ -360,8 +416,7 @@ namespace BroforceOnlineDiagnostics
             get
             {
                 return Settings != null &&
-                       Settings.EnableFrpDirectPrototype &&
-                       Settings.EnableFrpDirectGameLayer;
+                       Settings.EnableFrpDirect;
             }
         }
 
@@ -379,6 +434,8 @@ namespace BroforceOnlineDiagnostics
 
             try
             {
+                Settings.EnableFrpDirectPrototype = Settings.EnableFrpDirect;
+                Settings.EnableFrpDirectGameLayer = Settings.EnableFrpDirect;
                 UnityModManager.ModSettings.Save(Settings, modEntry);
             }
             catch (Exception exception)
@@ -393,6 +450,14 @@ namespace BroforceOnlineDiagnostics
             {
                 return;
             }
+
+            if (settings.DiagnosticSettingsVersion < 7)
+            {
+                settings.EnableFrpDirect = settings.EnableFrpDirectPrototype &&
+                                           settings.EnableFrpDirectGameLayer;
+            }
+            settings.EnableFrpDirectPrototype = settings.EnableFrpDirect;
+            settings.EnableFrpDirectGameLayer = settings.EnableFrpDirect;
 
             if (string.Equals((settings.WorkshopId ?? string.Empty).Trim(), "456121589", StringComparison.Ordinal))
             {

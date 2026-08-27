@@ -11,6 +11,8 @@ namespace BroforceOnlineDiagnostics
         public string WorkshopSceneName;
         public string DiagnosticSessionId;
         public string DiagnosticRole;
+        public bool EnableFrpDirect;
+        // Retained for migration from settings version 6 and downgrade compatibility.
         public bool EnableFrpDirectPrototype;
         public bool EnableFrpDirectGameLayer;
         public string FrpDirectRole;
@@ -47,6 +49,7 @@ namespace BroforceOnlineDiagnostics
             WorkshopSceneName = DefaultWorkshopSceneName;
             DiagnosticSessionId = string.Empty;
             DiagnosticRole = string.Empty;
+            EnableFrpDirect = false;
             EnableFrpDirectPrototype = false;
             EnableFrpDirectGameLayer = false;
             FrpDirectRole = "host";

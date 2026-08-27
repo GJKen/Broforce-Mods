@@ -1487,7 +1487,7 @@ namespace BroforceOnlineDiagnostics
             internal static FrpDirectConfiguration FromSettings(DiagnosticSettings settings)
             {
                 var configuration = new FrpDirectConfiguration();
-                configuration.Enabled = settings != null && settings.EnableFrpDirectPrototype;
+                configuration.Enabled = settings != null && settings.EnableFrpDirect;
                 configuration.Role = ParseRole(settings == null ? null : settings.FrpDirectRole);
                 configuration.LocalPort = NormalizePort(
                     settings == null ? 27045 : settings.FrpDirectLocalPort);
@@ -1519,6 +1519,10 @@ namespace BroforceOnlineDiagnostics
                     : settings.FrpDirectRoomPassword ?? string.Empty;
                 configuration.PlayerLimit = NormalizePlayerLimit(
                     settings == null ? 4 : settings.FrpDirectPlayerLimit);
+                var roleEndpoint = configuration.Role == FrpRole.Host
+                    ? configuration.LocalPort.ToString(CultureInfo.InvariantCulture)
+                    : configuration.ServerAddress + "|" +
+                      configuration.ServerPort.ToString(CultureInfo.InvariantCulture);
                 configuration.ConfigurationKey = HashConfigurationKey(
                     string.Join(
                         "|",
@@ -1526,9 +1530,7 @@ namespace BroforceOnlineDiagnostics
                         {
                             configuration.Enabled.ToString(),
                             RoleName(configuration.Role),
-                            configuration.LocalPort.ToString(CultureInfo.InvariantCulture),
-                            configuration.ServerAddress,
-                            configuration.ServerPort.ToString(CultureInfo.InvariantCulture),
+                            roleEndpoint,
                             configuration.RoomPassword
                         }));
                 return configuration;
