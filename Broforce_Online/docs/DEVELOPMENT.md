@@ -100,11 +100,9 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 ### Mook 终态与主动引爆
 
-当前实体同步只覆盖普通、非载具、非 Boss 的网络 `PolymorphicAI` Mook 的死亡与尸体终态。拥有端在首次完成死亡时向其它端发送 NID、序列号、冲量、位置和伤害类型；远端用非空 `DamageObject` 补全死亡链。对象停稳或超时后，拥有端再广播最终位置。该模块不持续同步活动 AI，不创建敌方弹体，不处理钱币，也不覆盖坦克/载具。
+实体同步只覆盖普通、非载具、非 Boss 的网络 `PolymorphicAI` Mook：拥有端广播首次死亡事件和最终停稳位置，远端用非空 `DamageObject` 补全死亡链。活动 AI、敌方弹体、钱币和载具不在范围内。
 
-`DemolitionBro.currentBomb` 和 `McBrover.currentTurkey` 的二次按键主动引爆各有独立 Harmony 转译：拥有端始终立即执行原版 `Projectile.Death()`，并向 `PID.TargetOthers` 发送 NID 与位置；远端按 NID 查找本地副本并以会话内幂等集合处理。`DemolitionBro` 已有用户实测恢复记录。McBrover 残留火鸡已实机确认仍可复现，但发生概率显著降低；尚未形成受控统计，不能视为验收通过，详见 [独立 issue](../issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。普通 `Grenade`、动态敌人、钱币、金色奖励和其它投掷物保持原行为。
-
-当前分发构建已标准构建并部署到项目包、本机和内网端，最终 `buildHash` 与 DLL SHA-256 以 [README 当前状态](../README.md#当前状态) 为准。运行中的 Unity 不会热加载 DLL，双方完全退出并重启后才可验收：普通 Mook 的死亡链和尸体终态应在双方收敛；DemolitionBro 应只发生一次主动爆炸；McBrover 的残留问题仍需继续按 NID 采样。历史动态世界实验见 [历史 issue](../issues/ISSUES-2026-08-27-第三方地图动态世界同步.md)，不代表当前实现。
+`DemolitionBro.currentBomb` 与 `McBrover.currentTurkey` 的二次按键各有独立 Harmony 转译：拥有端立即执行原版 `Projectile.Death()` 并发送 NID 与位置，远端按 NID 以会话内幂等集合处理。DemolitionBro 已有恢复实测；McBrover 残留仍可复现但概率显著降低，详见 [独立 issue](../issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。其它投掷物保持原行为。
 
 ### AFK 行为
 
@@ -124,23 +122,15 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 ### FRP Direct 网络层
 
-`FrpDirectTransport` 复用 `Assembly-CSharp.dll` 的 Lidgren，应用标识为 `BroforceOnlineDiagnostics.FrpDirect.v1`。单一 `EnableFrpDirect` 设置同时控制传输和独立游戏连接层；旧版的传输原型与游戏层字段只为设置迁移和降级兼容而保留，不再独立控制运行行为。Host/Client 由明确的角色按钮选择：Host 配置键只包含本地监听端口，Client 配置键只包含公网服务端地址，因此非当前角色的保存值不会触发重启或影响连接。角色和总开关立即应用；连接文本参数由 UMM 界面防抖后自动保存并重启，不再需要 Apply 按钮。
+`FrpDirectTransport` 复用 Lidgren，应用标识为 `BroforceOnlineDiagnostics.FrpDirect.v1`。`EnableFrpDirect` 同时控制传输和游戏连接层；Host/Client 配置隔离，角色、总开关和连接文本自动应用，无 Apply 按钮。
 
-- Host 固定监听配置的 UDP 端口，默认 27045；设置页用 `1`、`2`、`3`、`4` 四个按钮选择房间总角色上限。`1` 只允许房主，`4` 允许房主加最多三台远端，不突破 Broforce 原生四人上限。按钮在地图内点击后立即生效，不重启传输。
-- Client 使用临时端口连接完整 `host:port`，普通断线后每 5 秒重试。
-- 每条连接独立维护握手、心跳和超时。Lidgren 建连后 Host 发随机挑战；Client 用密码、挑战、协议版本和双方 `buildHash` 计算 HMAC-SHA256。Host 同时验证三者和机器 ID 唯一性；失败后 Client 不自动重试。
-- 协议 v4 提供房间查询/状态、加入确认/拒绝、离开通知、成员离开通知、带机器路由的 `GameData` 和房主 RTT 快照。旧协议构建会因协议不匹配而拒绝连接。
-- Host 通过原生 `GeneratePlayerID` 和 `BroadcastPlayerID` 为每台已加入机器分配 PID，并把已有映射定向同步给新客户端。`RPCBatcher` 展开的具体 PID 按机器直发；客户端之间的数据经 Host 中继，目标不是 Host 时不会在 Host 本地重复执行。
-- 房主创建房间及地图内调整人数时把所选上限写入原生房间 `capacity`，再向 Client 推送最新房间信息。传输层仍可保持最多三台已认证连接，实际加入人数由房间层按 `capacity - 1` 拒绝，因而满房客户端仍可查询房间状态。降低上限不会删除现有机器或 PID；只要当前成员数仍大于等于新上限，新的加入和退出后的重入都会被拒绝。
-- 原生 `Lobby.TryJoin` 会在房间元数据已经满员时先于 `FrpDirectLayer.JoinLobby` 返回，因此 Client 在该入口仅对有效的 `FrpDirectRoomInfo` 检查 `HasSpace`；已满时在原生返回前显示“房主设置的房间人数已达上限，暂时无法加入。”，不跳过或替代原生满房处理。如果列表仍显示有空位、请求到达 Host 时才满员，则收到 `room_full` 后显示同一提示；其它大厅和拒绝原因不会误报。满房提示使用 `Time.unscaledTime` 独立计时，在最后一次触发 5 秒后清除，反复触发只刷新到期时间；即使被优先级更高的 Workshop 缺少订阅提示遮挡，也会正常到期。Workshop 提示不设置自动清除。
-- 用户已完成 `1` 人房双端实测：房主独占房间时，加入方点击房间会被阻止并显示上述文案，约 5 秒后自动消失。该结果只验证静态 `1` 人房，不代表 `2` 至 `4` 人边界或地图内动态调整已经验收。
-- 单个 Client 离开或断线时只清理该机器的 PID，并通知其余 Client；剩余成员和房间状态继续保留。Host 离开仍会结束所有 Client 的房间，当前不支持主机迁移。
-- 在线玩家名来自原生 `Connect.SetPlayerName` 建立的 PID 名字表，不显示 FRP 机器 ID 或公网端点。Esc 在线名单显示 `xxxms | 玩家名`；RTT 未产生首个样本时显示 `--ms`，`0-80ms` 为绿色、`81-150ms` 为黄色、`151ms` 以上为红色。房主行显示 `HOST | 房主名`，房主名使用 4 秒一轮的动态暖色到青色渐变。
-- RTT 表示每台机器到房主的往返时间。房主直接读取每条 Lidgren 连接的 `AverageRoundtripTime`，并每秒向 Client 同步所有已认证机器的 RTT 快照；Client 之间仍不建立直连。
-- 连接层对内容来源报告 `LayerType.Steam`，仅用于继续下载 Workshop；房间和 RPC 仍走 FRP。
-- Client 每 5 秒发送应用层心跳；正常 Update 下 60 秒无有效心跳才断开。主线程加载停顿超过 10 秒时恢复心跳窗口。
+- Host 监听配置的 UDP 端口（默认 27045），可在地图内设置 `1` 至 `4` 人总上限；Client 以临时端口连接 `host:port`，普通断线后每 5 秒重试。
+- Host 以挑战、密码、协议版本、双方 `buildHash` 和机器 ID 完成 HMAC-SHA256 握手。协议 v4 提供房间、加入/离开、机器路由 `GameData` 和 RTT 快照；协议不匹配或认证失败会拒绝连接。
+- Host 使用原生 PID 分配与定向映射同步；客户端数据经 Host 中继，目标非 Host 的 RPC 不在 Host 重复执行。房间层按 `capacity - 1` 拒绝新加入，降额不移除既有成员或 PID。
+- Client 离开或断线只清理该机器的 PID；Host 离开会结束房间，不支持主机迁移。RTT 为各机器至 Host 的往返时间，Esc 名单使用 PID 名字表、彩色延迟和动态房主名。
+- Workshop 内容仍从 Steam 下载，房间和 RPC 走 FRP；密码只保护握手，不加密后续 UDP。Client 每 5 秒心跳，正常情况下 60 秒无有效心跳才断开。
 
-密码只保护握手，不加密后续 UDP 内容；UMM 会把密码保存在本机设置文件中。完整限制和验收时间线见 [FRP Direct 实施与验收记录](../issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
+三机基础联机与静态 `1` 人房满员提示已实测；四机、`2` 至 `4` 人边界、动态容量和主机迁移仍待验收。完整历史证据见 [FRP Direct 实施与验收记录](../issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
 
 ### 在线玩家延迟名单
 
@@ -200,42 +190,23 @@ MainMenu
 
 不得仅凭单端画面或日志断定网络根因。若远端只能提供部分日志，先核对 `buildHash`，并在结论中明确缺少 MCP、UMM 日志或 `error.log` 的证据边界。额外进入公开房间但未成功加载 Mod/地图的成员不计入相关结论。
 
-### MCP 快速检查
+### MCP 受控观测
 
-`Broforce_src/unity-inspector-mcp` 可读取关卡、玩家、GameObject、截图和日志。快速检查包括连通性、单次状态、截图或指定日志读取：
+`Broforce_src/unity-inspector-mcp` 用于单次检查和持续复现观测。默认同时连接本次参与会话的房主与加入方；端点不可用时只报告实际错误，不扩展成端口或配置扫描。`Game process died` 需用同一端点 `ping`，必要时用 `game_state` 复核，不能单独作为退出或崩溃结论。
 
-1. 直接并行调用本次可用端点的 `ping`；不要先扫描配置、枚举工具或探测 TCP 端口。
-2. 按需调用 `game_state`、`inspect_player`、`take_screenshot`、`query_gameobjects`/`inspect_gameobject` 或日志读取。
-3. 立即返回结果，不发送倒计时提示，也不扩展成 40 秒监控。
+需要复现问题时，先执行受限基线：确认双方 `ping`、场景、地图、传输方式和会话一致；重置增量日志读取游标但不清理磁盘日志；仅记录相关玩家、NID、所有权、状态和日志位置。随后必须明确告知用户：**“观测已准备好，请按本轮复现步骤操作。”** McBrover 火鸡问题使用：**“观测已准备好，请手动投掷并主动引爆火鸡。”** 未获明确请求不得模拟输入。
 
-默认端点可命名为 `unity_inspector` 和 `unity_inspector_remote`，但必须以本次实际参与测试的客户端和日志来源为准。工具未加载或 `ping` 报错时，报告实际错误；除非用户要求，不追加端口和配置诊断。
+持续监控以每次用户操作为一个样本，记录序号和时间点，只跟踪已知的相关对象与 NID。对主动引爆等生命周期问题，在触发前、触发后立即、约 0.5 秒、约 2 秒和预计自然超时点读取双方受限状态及新增 `.log`/`.trace.log`；记录生成、注册、所有权、`Death()`、效果、销毁和必要的地形结果。不得宽泛枚举整个场景、所有投掷物或无关对象。
 
-单次请求返回 `Game process died` 不能证明游戏已退出。应立即用同一端点 `ping`，必要时再用 `game_state` 复核；只有连接持续失败并有进程、UMM 日志或 `error.log` 等独立证据时，才判断客户端退出或崩溃。
+持续到取得多个正常与异常样本、根因证据足够，或用户要求停止；不使用固定倒计时，也不重复读取无变化的完整状态。证据不足时只提出一个关键缺失字段或一次受控复现要求。客户端连接消失后停止向该端发送运行时指令，待其恢复后重新确认基线和日志。
 
-### MCP 正式监控
-
-只有需要复现并持续观察事件时才进入正式监控：
-
-1. 开始前发送“倒计时开始了!!!”。
-2. 可用端点依次执行 `ping`、`game_state`、`inspect_player`，记录当前诊断日志及读取位置。
-3. 固定观察 40 秒。窗口内只采样运行时状态和诊断事件，不分析、不总结、不询问、不修改代码，也不中途发送进度；场景切换、角色消失或短暂连接异常均不提前结束。
-4. 结束后发送“倒计时结束了!!!”，再统一读取日志和分析。
-
-双端 MCP 可用时默认同时观测。每轮必须同时覆盖运行时状态与当前会话 `.log`/`.trace.log`，不能只轮询最终玩家数量或只读取 UMM 日志。玩家加入问题至少对齐 Client 的 `AddLocalPlayer`、`RequestHeroTypeFromMaster`、`Player.Start`、`SpawnHero`、`SetPlayerCharacter`，以及 Host 的 `RequestJoinGame`、`AddPlayer`。
-
-持续调试可由多个 40 秒窗口组成；窗口之间允许分析和运行时验证。等待用户执行退出、重入或其它复现步骤时保持本轮排查，不提前结束。任一客户端连接消失时停止向该端发送运行时指令，通知用户重启并给出复现步骤；恢复后继续同一轮并检查三类日志。后续不再需要游戏保持打开时发送“游戏可以关闭了!!!”。
-
-### 运行时调试授权
-
-在上述联机稳定性目标处于测试或修复阶段时，AI 已持续获得双端日志读取、MCP 监控和安全运行时调试授权，无需逐项征求同意。范围包括传送、修改血量/生命、调整速度、切换或重启关卡、模拟输入、执行安全运行时代码和注入用于验证根因的临时修复。
-
-每次操作必须记录目标、具体指令、前后状态，并区分临时运行时修改与源码中的正式修复。授权不包括删除存档、清理用户文件或修改与本 Mod 无关的系统状态；用户要求停止或客户端不可用时立即停止。
+MCP 默认只读。传送、修改生命或速度、切换关卡、模拟输入、执行运行时代码和临时注入都必须获得当次明确授权，并记录目标、指令与前后状态；不得把临时运行时修改混同为正式源码修复。
 
 ### 专项验收
 
 - AFK：启动日志应有 `AFK_DIAGNOSTICS_PATCH playerUpdate=True; dropoutRpc=True`；目标端无输入至少 35 秒，对齐双方 `AFK_TIMER`、`AFK_STATE`、`PLAYER_DROPOUT` 和槽位/存活人数。开启防 AFK 时应有 `prevention-active`，不应有本机 `timeout-triggered`。
 - 道具：双方核对同一位置的数量/类型；满弹药站在箱子上不得持续播放反馈，消耗弹药后可拾取一次；MechDrop、RCCar 等显式特殊箱保持原类型。金色奖励没有当前专项同步实现，不能按稳定键或权威类型作为验收依据。
-- 实体终态与主动引爆：普通网络 Mook 应在双方完成一次死亡链并收敛尸体终态；DemolitionBro 主动引爆应只发生一次；McBrover 火鸡残留仍是开放问题，记录 NID、拥有权、`Death()` 与最终销毁状态。
+- 实体终态与主动引爆：Mook 应在双方完成一次死亡链并收敛尸体终态；DemolitionBro 应只发生一次主动爆炸；McBrover 按其 [独立 issue](../issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md) 的 NID、`Death()` 与最终销毁条件验收。
 - 关卡结果：确认 `Level outcome diagnostics enabled; patched methods=2.`，分别触发扣命、通关和失败，检查 `LEVEL_OUTCOME` 前后快照。
 - 可选 Mod：先比较双方安装/启用状态、版本、`rosterHash` 和 `selectedHash`。指纹不同只证明角色环境不同，不能单独作为英雄生成失败的根因。
 
