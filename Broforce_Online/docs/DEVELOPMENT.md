@@ -7,7 +7,8 @@
 - 项目是面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod，目标框架为 .NET Framework 3.5。
 - 默认网络路径是官方 Steam Lobby/P2P；`FRP Direct` 默认关闭，启用后接管房间、PID 和游戏 RPC，Steam 只负责 Workshop 内容下载。
 - Steam Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名、正常退出后重入和 Workshop 道具防重复已通过当前测试地图验收。
-- FRP 代码支持房主加最多三台远端机器，但多客户端尚未完成实机验收，也不支持主机迁移；多地图、高延迟、异常断网和长期稳定性尚未完整覆盖。
+- FRP 的房主加两台加入方（三机）基础联机已通过用户实测；代码支持最多三台远端，但四机、动态容量边界和主机迁移尚未验收。
+- FRP 单一总开关、Host/Client 角色切换、非当前角色配置隔离和无 Apply 自动应用已通过用户实测。
 - 当前版本、分发 `buildHash`、DLL SHA-256 和用户侧限制以 [README 当前状态](../README.md#当前状态) 为唯一来源，避免多处维护。
 
 只使用官方 Steam 大厅彩色名单时，显示补丁只需安装在查看方。使用 Workshop 地图注入或 FRP Direct 时，所有参与端必须使用相同构建并下载相同 Workshop 地图；各端版本只以日志中的 `BUILD_INFO buildHash` 判断，不能依赖文件名、时间或大小。
@@ -109,7 +110,7 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 ### FRP Direct 网络层
 
-`FrpDirectTransport` 复用 `Assembly-CSharp.dll` 的 Lidgren，应用标识为 `BroforceOnlineDiagnostics.FrpDirect.v1`。只有同时开启传输原型和游戏层开关，`FrpDirectNetworkManager` 才返回独立连接层。
+`FrpDirectTransport` 复用 `Assembly-CSharp.dll` 的 Lidgren，应用标识为 `BroforceOnlineDiagnostics.FrpDirect.v1`。单一 `EnableFrpDirect` 设置同时控制传输和独立游戏连接层；旧版的传输原型与游戏层字段只为设置迁移和降级兼容而保留，不再独立控制运行行为。Host/Client 由明确的角色按钮选择：Host 配置键只包含本地监听端口，Client 配置键只包含公网服务端地址，因此非当前角色的保存值不会触发重启或影响连接。角色和总开关立即应用；连接文本参数由 UMM 界面防抖后自动保存并重启，不再需要 Apply 按钮。
 
 - Host 固定监听配置的 UDP 端口，默认 27045；设置页用 `1`、`2`、`3`、`4` 四个按钮选择房间总角色上限。`1` 只允许房主，`4` 允许房主加最多三台远端，不突破 Broforce 原生四人上限。按钮在地图内点击后立即生效，不重启传输。
 - Client 使用临时端口连接完整 `host:port`，普通断线后每 5 秒重试。
@@ -269,7 +270,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 | Workshop 切关 | `3715087178` 的重复结束动作保护已实现并构建，普通成功、静默成功、失败重试和最终结算仍待双端复测；`3781818421` 仍作为独立问题保留 |
 | 道具 | FRP 已验收；官方 Steam 大厅和更多地图待复测 |
 | 其它 Mod | Swap Bros 只有只读诊断，尚未完成兼容性验收，也不会阻止环境不一致的会话 |
-| FRP Direct | 代码支持地图内动态设置 `1` 至 `4` 人上限并保留现有成员；各容量档位、降额后重入、三/四机、异常断网、多地图、高延迟、长期稳定性和主机迁移仍未实机验收 |
+| FRP Direct | 三机基础联机已通过；代码支持地图内动态设置 `1` 至 `4` 人上限并保留现有成员；四机、各容量档位、降额后重入、多地图、高延迟、长期稳定性和主机迁移仍未专项验收 |
 | 原生崩溃 | 异常与崩溃时间接近不能单独证明因果，必须结合双方诊断、UMM 日志和 `error.log` |
 
 ## 构建与部署
