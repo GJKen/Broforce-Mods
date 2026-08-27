@@ -340,6 +340,7 @@ namespace BroforceOnlineDiagnostics
             PatchOnlinePlayerListDisplay();
             PatchLevelOutcomeDiagnostics();
             PatchWorkshopLevelEndReentryGuard();
+            PatchEntityFinalStateSynchronization();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
             PatchLobbyMainMenuReturnPostfix();
@@ -584,6 +585,8 @@ namespace BroforceOnlineDiagnostics
             ObserveOnlineHostRole();
             TrySynchronizeClientWorkshopIdentity(false, "periodic room check");
             TryRebroadcastWorkshopSpawns();
+            TryApplyPendingEntityFinalStates();
+            TrySubmitEntityFinalStates();
             TryReturnToWorkshopOnlineLobby();
             TryRecoverWorkshopOnlineLobbyNavigationFailure();
 

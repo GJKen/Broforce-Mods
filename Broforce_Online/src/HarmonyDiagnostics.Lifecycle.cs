@@ -117,6 +117,7 @@ namespace BroforceOnlineDiagnostics
         {
             ClearAfkDiagnosticsState();
             ClearWorkshopPickupSynchronizationState();
+            ClearEntityFinalStateSynchronizationState();
             PendingSpawnPositions.Clear();
             LocalWorkshopSpawnPositions.Clear();
             SnappedRemoteWorkshopCharacters.Clear();
@@ -568,6 +569,7 @@ namespace BroforceOnlineDiagnostics
         {
             try
             {
+                ClearEntityFinalStateSynchronizationState();
                 var configuredScene = GetConfiguredWorkshopSceneName();
                 if (string.Equals(scene.name, WorkshopVictorySceneName, StringComparison.OrdinalIgnoreCase) &&
                     _injectedForSession && IsOnline() && IsEscReturnPauseState())
