@@ -118,6 +118,7 @@ namespace BroforceOnlineDiagnostics
             ClearAfkDiagnosticsState();
             ClearWorkshopPickupSynchronizationState();
             ClearEntityFinalStateSynchronizationState();
+            ClearDemolitionBroBombDetonationState();
             PendingSpawnPositions.Clear();
             LocalWorkshopSpawnPositions.Clear();
             SnappedRemoteWorkshopCharacters.Clear();
@@ -570,6 +571,7 @@ namespace BroforceOnlineDiagnostics
             try
             {
                 ClearEntityFinalStateSynchronizationState();
+                ClearDemolitionBroBombDetonationState();
                 var configuredScene = GetConfiguredWorkshopSceneName();
                 if (string.Equals(scene.name, WorkshopVictorySceneName, StringComparison.OrdinalIgnoreCase) &&
                     _injectedForSession && IsOnline() && IsEscReturnPauseState())
@@ -1106,6 +1108,7 @@ namespace BroforceOnlineDiagnostics
             var shouldClearInjectedGameState =
                 HasInjectedWorkshopRuntimeState() || HasValidWorkshopInjectionConfiguration();
             ClearWorkshopIdentityState();
+            ClearDemolitionBroBombDetonationState();
             if (shouldClearInjectedGameState)
             {
                 ResetStalePauseStateForWorkshopSession(trigger, true);
