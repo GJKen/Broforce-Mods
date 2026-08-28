@@ -11,6 +11,7 @@
 
 ## 项目
 
-- `CustomMapMultiplayer`：第三方 Workshop 地图联机、FRP Direct。
-- `BroforceBugFix`：独立的原版游戏缺陷修复插件；首个修复处理 `DoodadCrate` 爆炸递归栈溢出。
+- [`CustomMapMultiplayer`](CustomMapMultiplayer/README.md)：第三方 Workshop 地图联机、FRP Direct。
+- [`BroforceBugFix`](BroforceBugFix/readme.md)：独立的原版游戏缺陷修复插件；首个修复处理 `DoodadCrate` 爆炸递归栈溢出。
 - [`UnityInspectorMod`](UnityInspectorMod/README.md)：为 Broforce 提供 TCP 检查与运行时调试接口，供 `unity-inspector-mcp` 连接。
+- [`Broforce_src`](Broforce_src/unity-inspector-mcp/README.md)：Broforce 源码参考和 Unity Inspector MCP 工具；工具的安装、配置和使用方式见 [`unity-inspector-mcp/README.md`](Broforce_src/unity-inspector-mcp/README.md)。
