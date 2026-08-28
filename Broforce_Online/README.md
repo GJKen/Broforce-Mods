@@ -149,6 +149,5 @@ umm-settings-preview.html         UMM 设置界面预览
 
 - [开发与测试文档](docs/DEVELOPMENT.md)
 - [问题记录索引](issues/README.md)
-- [Utility Mod 借鉴与 AFK 诊断记录](issues/ISSUES-2026-08-25-Utility-Mod代码借鉴方案与AFK诊断改进.md)
 - [BroforceMods Wiki](https://github.com/alexneargarder/BroforceMods/wiki)
 - [Viewing Broforce's Code](https://github.com/alexneargarder/BroforceMods/wiki/Viewing-Broforce's-Code)
