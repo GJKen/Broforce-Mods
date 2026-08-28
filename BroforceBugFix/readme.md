@@ -38,13 +38,13 @@ UMM 的 Mod 启用状态是最外层开关。插件面板内还有两级持久�
 
 ## 构建
 
-项目面向 .NET Framework 3.5。复制 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props`，填写 Broforce `Managed` 和 UMM `Core` 目录，然后运行：
+项目面向 .NET Framework 3.5。复制 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props`，填写 Broforce `Managed` 和 UMM `Core` 目录。`TestDeployModPath` 是可选的额外测试部署目录，留空时只部署到本机 UMM；该本机配置文件已被 Git 忽略，不应提交。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
-脚本会更新项目内可复制安装包，并部署到配置的本机和内网测试端。
+脚本会更新项目内可复制安装包并部署到本机 UMM；仅在本机配置了 `TestDeployModPath` 时才会额外部署到该测试目录。
 
 ## 项目结构与文档
 

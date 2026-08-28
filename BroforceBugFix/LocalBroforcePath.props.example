@@ -1,6 +1,10 @@
 <Project>
   <PropertyGroup>
+    <!-- Replace these placeholders with paths on the local machine. -->
     <BroforceManagedPath>C:\Path\To\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
     <UnityModManagerPath>C:\Path\To\Broforce\UMM\Core</UnityModManagerPath>
+
+    <!-- Optional additional test deployment target; leave empty for local-only deployment. -->
+    <TestDeployModPath></TestDeployModPath>
   </PropertyGroup>
 </Project>

@@ -64,16 +64,19 @@ Prefix 使用引用相等的集合记录当前正在执行 `ActuallyCollapse` �
 
 ## 构建与部署
 
-路径配置与 `BroforceCustomMapMultiplayer` 相同，使用 `LocalBroforcePath.props`：
+路径配置使用未提交的 `LocalBroforcePath.props`：
 
 ```xml
 <Project>
   <PropertyGroup>
     <BroforceManagedPath>...\Broforce_beta_Data\Managed</BroforceManagedPath>
     <UnityModManagerPath>...\UMM\Core</UnityModManagerPath>
+    <TestDeployModPath></TestDeployModPath>
   </PropertyGroup>
 </Project>
 ```
+
+`TestDeployModPath` 是可选的额外测试部署目录，留空时只部署本机 UMM。该文件包含机器或内网专用路径，已由仓库根 `.gitignore` 忽略，不能提交。
 
 标准构建命令：
 
@@ -85,7 +88,7 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 
 - `BroforceBugFix/BroforceBugFix.dll`；
 - 本机 `UMM\Mods\GJKen-BroforceBugFix` 部署副本；
-- 内网测试端同名 UMM 目录部署副本；
+- 配置了 `TestDeployModPath` 时，额外测试目录中的同名部署副本；
 - 构建脚本输出的 DLL SHA-256。
 
 ## 复测要求

@@ -7,13 +7,15 @@
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceBugFix</LocalBroforceModPath>
-    <NetworkBroforceModPath>\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceBugFix</NetworkBroforceModPath>
     <PackageModPath>$(MSBuildProjectDirectory)\BroforceBugFix</PackageModPath>
     <OutputPath>$(PackageModPath)\</OutputPath>
   </PropertyGroup>
 
   <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
+
+  <PropertyGroup>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceBugFix</LocalBroforceModPath>
+  </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="UnityEngine">
@@ -49,10 +51,14 @@
   </ItemGroup>
 
   <Target Name="DeployBroforceBugFix" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
-    <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath);$(NetworkBroforceModPath)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(NetworkBroforceModPath)" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(NetworkBroforceModPath)\Info.json" />
+    <MakeDir Directories="$(PackageModPath)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(PackageModPath)\Info.json" />
+    <ItemGroup>
+      <DeployBroforceBugFixPath Include="$(LocalBroforceModPath)" Condition="'$(LocalBroforceModPath)' != ''" />
+      <DeployBroforceBugFixPath Include="$(TestDeployModPath)" Condition="'$(TestDeployModPath)' != ''" />
+    </ItemGroup>
+    <MakeDir Directories="@(DeployBroforceBugFixPath)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="%(DeployBroforceBugFixPath.Identity)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="%(DeployBroforceBugFixPath.Identity)\Info.json" />
   </Target>
 </Project>
