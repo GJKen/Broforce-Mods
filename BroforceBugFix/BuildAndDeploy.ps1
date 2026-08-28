@@ -17,6 +17,7 @@ $propertyGroup = @($propsXml.Project.PropertyGroup) |
     Select-Object -First 1
 $broforceManagedPath = [string]$propertyGroup.BroforceManagedPath
 $unityModManagerPath = [string]$propertyGroup.UnityModManagerPath
+$testDeployModPath = [string]$propertyGroup.TestDeployModPath
 
 if ([string]::IsNullOrWhiteSpace($broforceManagedPath) -or
     [string]::IsNullOrWhiteSpace($unityModManagerPath)) {
@@ -78,8 +79,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-BroforceBugFix'
-$networkModPath = '\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceBugFix'
-foreach ($deploymentPath in @($localModPath, $networkModPath)) {
+$deploymentPaths = @($localModPath)
+if (-not [string]::IsNullOrWhiteSpace($testDeployModPath)) {
+    $deploymentPaths += $testDeployModPath.Trim()
+}
+$deploymentPaths = @($deploymentPaths | Select-Object -Unique)
+foreach ($deploymentPath in $deploymentPaths) {
     New-Item -ItemType Directory -Force -Path $deploymentPath | Out-Null
     Copy-Item -LiteralPath $outputPath -Destination (Join-Path $deploymentPath 'BroforceBugFix.dll') -Force
     Copy-Item -LiteralPath $infoSourcePath -Destination (Join-Path $deploymentPath 'Info.json') -Force
