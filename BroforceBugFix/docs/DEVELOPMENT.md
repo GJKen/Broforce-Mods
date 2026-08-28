@@ -22,7 +22,7 @@
 GJKen.BroforceBugFix.DoodadCrateReentry
 ```
 
-卸载本插件时只移除该 ID 的补丁，不影响 `Broforce_Online` 或其它 Mod。
+卸载本插件时只移除该 ID 的补丁，不影响 `BroforceCustomMapMultiplayer` 或其它 Mod。
 
 ## 开关模型
 
@@ -64,7 +64,7 @@ Prefix 使用引用相等的集合记录当前正在执行 `ActuallyCollapse` �
 
 ## 构建与部署
 
-路径配置与 `Broforce_Online` 相同，使用 `LocalBroforcePath.props`：
+路径配置与 `BroforceCustomMapMultiplayer` 相同，使用 `LocalBroforcePath.props`：
 
 ```xml
 <Project>
