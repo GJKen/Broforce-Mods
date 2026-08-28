@@ -1,4 +1,4 @@
-# Broforce Custom Map Multiplayer：开发文档
+# Custom Map Multiplayer：开发文档
 
 安装、设置和日常使用见 [根目录 README](../README.md)。本文只记录当前有效的架构、补丁行为、诊断、测试和构建约定；单轮测试、旧构建和失败方案统一保留在 [issues 索引](../issues/README.md)。
 
@@ -10,6 +10,7 @@
 - FRP 的房主加两台加入方（三机）基础联机已通过用户实测；代码支持最多三台远端，但四机、动态容量边界和主机迁移尚未验收。
 - FRP 单一总开关、Host/Client 角色切换、非当前角色配置隔离和无 Apply 自动应用已通过用户实测。
 - Workshop 注入热关闭及退出房间后的官方地图恢复已通过用户实测。
+- UMM 设置页采用左侧导航和右侧动态内容布局；`Multiplayer Options`、`FRP Direct`、语言和 `Diagnostic Logs` 四个页面，以及跟随系统/English/中文按钮已实现。
 - 当前版本、分发 `buildHash`、DLL SHA-256 和用户侧限制以 [README 当前状态](../README.md#当前状态) 为唯一来源，避免多处维护。
 
 只使用官方 Steam 大厅彩色名单时，显示补丁只需安装在查看方。使用 Workshop 地图注入或 FRP Direct 时，所有参与端必须使用相同构建并下载相同 Workshop 地图；各端版本只以日志中的 `BUILD_INFO buildHash` 判断，不能依赖文件名、时间或大小。
@@ -17,8 +18,8 @@
 ## 架构与代码职责
 
 - `src/Plugin.cs`：UMM 加载、设置界面、保存和启用/禁用入口。
-- 分组标题三角形使用 `12` 像素图形加 `4` 像素透明右留白的固定纹理画布，使展开态倒三角与标题保持间距；不得通过标题前添加空格修正布局。
-- `src/DiagnosticSettings.cs`：Workshop、会话、折叠状态、FRP 和日志类别配置。
+- `src/SettingsUiText.cs`：UMM 设置界面的中英文文案和系统语言选择。
+- `src/DiagnosticSettings.cs`：Workshop、会话、当前页面、语言、FRP 和日志类别配置；旧的折叠状态字段仅为迁移和降级兼容保留，当前界面不再使用。
 - `src/DiagnosticLog.cs`：普通会话日志、Harmony 追踪、分类过滤和刷新。
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：大厅、关卡切换、Workshop 加载、玩家和英雄流程。
@@ -215,16 +216,16 @@ MCP 默认只读。传送、修改生命或速度、切换关卡、模拟输入�
 日志目录：
 
 ```text
-<Application.persistentDataPath>/CustomMapMultiplayer/
+%USERPROFILE%\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer\
 ```
 
 远端测试参与者应从自己的 Windows 用户数据目录导出日志；公开文档不记录内网地址、共享路径或用户名：
 
 ```text
-<远端 Application.persistentDataPath>\CustomMapMultiplayer
+<远端用户目录>\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer
 ```
 
-该目录对应加入方本机的 `Application.persistentDataPath\CustomMapMultiplayer`。分析双端会话时由各参与者分别提供日志；不要在 UMM DLL 部署目录中查找诊断日志。
+该目录是 Windows 下实际诊断日志目录，UMM 的“打开诊断日志目录”按钮与日志写入使用同一路径。`DiagnosticsBehaviour` 中的 `Persistent data path` 记录是 Unity 的独立路径诊断值，不作为日志文件位置判断依据。分析双端会话时由各参与者分别提供日志；不要在 UMM DLL 部署目录中查找诊断日志。
 
 插件加载时创建启动日志；`SteamLayer` 或 `FrpDirectLayer` 的 `CreateMatch`/`JoinLobby` 创建新会话。每个会话有普通事件日志和 Harmony 追踪日志：
 

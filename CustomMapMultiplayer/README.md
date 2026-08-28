@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=b54e5b48e235895d76350a990cac36d830145e65d9cd53a7a531ad238727d423` |
-| DLL SHA-256 | `4D6466AB510646587ED468D390A92CEC89F5A6F798DCD26BFD203C5250AF61ED` |
+| 当前分发构建 | `buildHash=fe70a703f02847b6ea3608f84fb522cf5c4d48502e6cbd3dd433a551520acca3` |
+| DLL SHA-256 | `DB9FA9F7E9A67854A125F313A1F4B9F9ED13EB391B112EA6DC4830F04C5A4498` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
 
@@ -60,7 +60,7 @@
 
 3. 将项目内安装包 `CustomMapMultiplayer` 下的 `CustomMapMultiplayer.dll` 和 `Info.json` 复制到 profile 的 `UMM\Mods\GJKen-CustomMapMultiplayer`。目录名必须是 `GJKen-CustomMapMultiplayer`。运行 `BuildAndDeploy.ps1` 后，构建者的安装包和配置的测试部署目标会自动更新。
 4. 重启 r2modman，在 UMM 中确认 `Custom Map Multiplayer 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
-5. 双方仍需订阅并下载相同 Workshop 地图。只需房主在 UMM 填写 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改。加入方开启线上地图注入后会自动采用房主发布的地图配置；即使忘记清空以前填写的 ID、场景名或战役名，这些保存值也不会参与本次加入。如果加入方没有订阅房主地图，屏幕顶部会提示缺少的 Workshop ID；订阅并等待 Steam 下载完成后重新加入房间。
+5. 双方仍需订阅并下载相同 Workshop 地图，并在 `Multiplayer Options` 中开启 Workshop 地图注入。只需房主在 UMM 填写 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改。加入方将本地 Workshop ID 留空并自动采用房主发布的地图配置；即使忘记清空以前填写的 ID、场景名或战役名，这些保存值也不会参与本次加入。如果加入方没有订阅房主地图，屏幕顶部会提示缺少的 Workshop ID；订阅并等待 Steam 下载完成后重新加入房间。关闭 Workshop 地图注入后，官方地图继续使用游戏原生选图流程。
 
 首次测试建议：
 
@@ -76,21 +76,33 @@ Diagnostic label: 任意标识或留空
 
 创建方已经进入 Workshop 地图时也支持晚加入。加入方会等待场景和原生玩家生成就绪后自动申请一次本地槽位；当前构建还会在最终场景向重入客户端重放房主的 buffered 网络实例。成功判据和诊断关键字见 [晚加入与重入](docs/DEVELOPMENT.md#晚加入与重入)。
 
+### UMM 设置面板
+
+实际 UMM 设置页采用左侧竖向功能列表、右侧显示当前功能内容的布局：
+
+- `Multiplayer Options`：Workshop 地图注入和自动 AFK 旁观模式。
+- `FRP Direct`：直连开关、Host/Client 角色、端口、人数上限和连接参数。
+- `语言`：直接点击“跟随系统”“English”或“中文”按钮切换界面语言。
+- `Diagnostic Logs`：诊断会话标识、日志预设和诊断分类。
+
+`umm-settings-preview.html` 只是静态预览；实际 UMM 界面以 `src/Plugin.cs` 和 `src/SettingsUiText.cs` 为准。
+
 ### 常用设置
 
-- `Inject configured workshop map into online level switching` 从开启切换为关闭时会立即保存并清理注入状态，但不会强制中断或切走当前场景。退出当前房间并从菜单重新创建官方房间后，后续选图使用游戏原生战役流程；不需要删除已保存的 Workshop ID。
+- `Multiplayer Options` 中的 Workshop 地图注入开关关闭时会立即保存并清理注入状态，但不会强制中断或切走当前场景。退出当前房间并从菜单重新创建官方房间后，后续选图使用游戏原生战役流程；不需要删除已保存的 Workshop ID。
 - `Diagnostic session ID` 用于关联双方同一轮日志；两端填写相同值。`Diagnostic label` 只影响日志文件名，不参与联机行为。
-- `Disable automatic AFK spectator mode in online games` 默认关闭，由每台客户端独立控制；要保护双方角色，双方必须分别开启。它不拦截手动退出、断线或正常死亡。
-- 诊断日志预设只影响输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
+- `Multiplayer Options` 中的 AFK 开关由每台客户端独立控制。未勾选时显示“已启用自动 AFK 旁观模式”；勾选后显示“已禁用自动 AFK 旁观模式”。要保护双方角色，双方必须分别勾选；它不拦截手动退出、断线或正常死亡。
+- 诊断日志预设和九个诊断分类只影响日志输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
 
-每轮测试结束后，收集所有参与端的诊断 `.log`、`.trace.log`，并尽量同时保存 UMM `Core\Log.txt` 和游戏 `error.log`。日志目录为 `Application.persistentDataPath\CustomMapMultiplayer\`，不是 DLL 部署目录。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
+每轮测试结束后，收集所有参与端的诊断 `.log`、`.trace.log`，并尽量同时保存 UMM `Core\Log.txt` 和游戏 `error.log`。Windows 日志目录为 `%USERPROFILE%\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer\`，不是 DLL 部署目录；UMM 中的“打开诊断日志目录”按钮也会打开这里。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
 
 ## FRP Direct 联机
 
-FRP Direct 默认关闭。设置页只保留一个总开关：
+FRP Direct 默认关闭。`FRP Direct` 页面只保留一个总开关：
 
 ```text
-Enable FRP Direct networking: 开启
+已启用 FRP Direct 联机
+已禁用 FRP Direct 联机
 ```
 
 `Host`/`Client` 角色仍由用户明确选择。切换角色会立即保存并自动切换连接：Host 只使用本地 UDP 监听端口，完全忽略已保存的 Client 公网地址；Client 只使用 FRP 公网 `host:port`，完全忽略 Host 的本地监听端口。两套配置分别保留，切回原角色时无需重新填写。设置页不再提供手动 Apply 按钮；总开关和角色立即生效，端口、地址和密码在停止输入后自动保存并重连。心跳、超时检测和普通断线重试均由传输层自动处理。
@@ -144,6 +156,7 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 
 ```text
 src/                              Mod 源码
+src/SettingsUiText.cs             UMM 设置界面中英文文案
 CustomMapMultiplayer.csproj C# 工程文件
 BuildAndDeploy.ps1                .NET 3.5 构建和部署脚本
 CustomMapMultiplayer/    可复制的 UMM 安装包（DLL + Info.json）
