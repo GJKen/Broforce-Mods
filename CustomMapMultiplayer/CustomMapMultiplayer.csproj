@@ -1,0 +1,88 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>CustomMapMultiplayer</RootNamespace>
+    <AssemblyName>CustomMapMultiplayer</AssemblyName>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <PackageModPath>$(MSBuildProjectDirectory)\CustomMapMultiplayer</PackageModPath>
+    <OutputPath>$(PackageModPath)\</OutputPath>
+  </PropertyGroup>
+
+  <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
+
+  <PropertyGroup>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-CustomMapMultiplayer</LocalBroforceModPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityModManager">
+      <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(UnityModManagerPath)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(BroforceManagedPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="src\Plugin.cs" />
+    <Compile Include="src\DiagnosticsBehaviour.cs" />
+    <Compile Include="src\DiagnosticLog.cs" />
+    <Compile Include="src\ReflectionProbe.cs" />
+    <Compile Include="src\HarmonyDiagnostics.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Trace.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Reflection.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Patches.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Lifecycle.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopJoin.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopPlayer.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopSpawn.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopLobby.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopIdentity.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopCache.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopPickup.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Afk.cs" />
+    <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopLevelEnd.cs" />
+    <Compile Include="src\HarmonyDiagnostics.EntityFinalState.cs" />
+    <Compile Include="src\HarmonyDiagnostics.DemolitionBro.cs" />
+    <Compile Include="src\HarmonyDiagnostics.McBrover.cs" />
+    <Compile Include="src\OptionalBroModDiagnostics.cs" />
+    <Compile Include="src\DiagnosticSettings.cs" />
+    <Compile Include="src\BuildMetadata.cs" />
+    <Compile Include="src\OnlinePlayerListFormatter.cs" />
+    <Compile Include="src\FrpDirectTransport.cs" />
+    <Compile Include="src\FrpDirectRoomInfo.cs" />
+    <Compile Include="src\FrpDirectLayer.cs" />
+    <Compile Include="src\FrpDirectNetworkManager.cs" />
+  </ItemGroup>
+
+  <Target Name="DeployCustomMapMultiplayer" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
+    <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json')" />
+  </Target>
+</Project>

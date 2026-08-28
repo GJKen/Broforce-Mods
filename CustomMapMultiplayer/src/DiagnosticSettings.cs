@@ -1,0 +1,78 @@
+namespace CustomMapMultiplayer
+{
+    public sealed class DiagnosticSettings : UnityModManagerNet.UnityModManager.ModSettings
+    {
+        public const string DefaultWorkshopSceneName = "Test Evan2";
+
+        public bool EnableOnlineWorkshopInjection;
+        public bool DisableOnlineAfkSpectatorMode;
+        public string WorkshopId;
+        public string WorkshopCampaignName;
+        public string WorkshopSceneName;
+        public string DiagnosticSessionId;
+        public string DiagnosticRole;
+        public bool EnableFrpDirect;
+        // Retained for migration from settings version 6 and downgrade compatibility.
+        public bool EnableFrpDirectPrototype;
+        public bool EnableFrpDirectGameLayer;
+        public string FrpDirectRole;
+        public int FrpDirectLocalPort;
+        public int FrpDirectPlayerLimit;
+        public string FrpDirectServerEndpoint;
+        // Retained for migration from settings version 3. The UI no longer exposes these fields.
+        public string FrpDirectServerAddress;
+        public int FrpDirectServerPort;
+        public string FrpDirectRoomPassword;
+        // UI-only section state; these do not enable or disable any feature.
+        public bool WorkshopSettingsExpanded;
+        public bool DiagnosticSettingsExpanded;
+        public bool FrpDirectSettingsExpanded;
+        // Diagnostic output categories. These only filter log writes; they never gate patches or game behavior.
+        public bool LogLobbyAndNetwork;
+        public bool LogWorkshop;
+        public bool LogPlayerLifecycle;
+        public bool LogAfk;
+        public bool LogLevelOutcome;
+        public bool LogWorkshopObjects;
+        public bool LogFrpDirect;
+        public bool LogOptionalMod;
+        public bool LogHarmonyTrace;
+        public string DiagnosticLogPreset;
+        public int DiagnosticSettingsVersion;
+
+        public DiagnosticSettings()
+        {
+            EnableOnlineWorkshopInjection = false;
+            DisableOnlineAfkSpectatorMode = false;
+            WorkshopId = string.Empty;
+            WorkshopCampaignName = string.Empty;
+            WorkshopSceneName = DefaultWorkshopSceneName;
+            DiagnosticSessionId = string.Empty;
+            DiagnosticRole = string.Empty;
+            EnableFrpDirect = false;
+            EnableFrpDirectPrototype = false;
+            EnableFrpDirectGameLayer = false;
+            FrpDirectRole = "host";
+            FrpDirectLocalPort = 27045;
+            FrpDirectPlayerLimit = 4;
+            FrpDirectServerEndpoint = string.Empty;
+            FrpDirectServerAddress = string.Empty;
+            FrpDirectServerPort = 27045;
+            FrpDirectRoomPassword = string.Empty;
+            WorkshopSettingsExpanded = true;
+            DiagnosticSettingsExpanded = false;
+            FrpDirectSettingsExpanded = false;
+            LogLobbyAndNetwork = true;
+            LogWorkshop = true;
+            LogPlayerLifecycle = true;
+            LogAfk = true;
+            LogLevelOutcome = true;
+            LogWorkshopObjects = true;
+            LogFrpDirect = true;
+            LogOptionalMod = true;
+            LogHarmonyTrace = true;
+            DiagnosticLogPreset = "full";
+            DiagnosticSettingsVersion = 0;
+        }
+    }
+}

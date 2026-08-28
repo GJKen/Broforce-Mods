@@ -22,7 +22,7 @@
 GJKen.BroforceBugFix.DoodadCrateReentry
 ```
 
-卸载本插件时只移除该 ID 的补丁，不影响 `BroforceCustomMapMultiplayer` 或其它 Mod。
+卸载本插件时只移除该 ID 的补丁，不影响 `CustomMapMultiplayer` 或其它 Mod。
 
 ## 开关模型
 

@@ -1,0 +1,8 @@
+{
+  "Id": "CustomMapMultiplayer",
+  "DisplayName": "Broforce Custom Map Multiplayer",
+  "Author": "GJKen",
+  "Version": "0.5.0",
+  "AssemblyName": "CustomMapMultiplayer.dll",
+  "EntryMethod": "CustomMapMultiplayer.Plugin.Load"
+}
