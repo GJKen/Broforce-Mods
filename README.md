@@ -1,5 +1,7 @@
 # Broforce-Mods
 
+> [English](README.en.md)
+
 这个仓库是游戏 Broforce 模组的源码以及所用到的开发工具, 用于留档备份
 
 本仓库的新增功能与维护主要在 AI 辅助下完成。
