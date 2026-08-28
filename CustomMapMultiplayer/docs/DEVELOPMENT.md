@@ -225,7 +225,7 @@ MCP 默认只读。传送、修改生命或速度、切换关卡、模拟输入�
 <远端用户目录>\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer
 ```
 
-该目录是 Windows 下实际诊断日志目录，UMM 的“打开诊断日志目录”按钮与日志写入使用同一路径。`DiagnosticsBehaviour` 中的 `Persistent data path` 记录是 Unity 的独立路径诊断值，不作为日志文件位置判断依据。分析双端会话时由各参与者分别提供日志；不要在 UMM DLL 部署目录中查找诊断日志。
+该目录是 Windows 下实际诊断日志目录，UMM 的“打开诊断日志目录”按钮、日志写入和启动日志中的 `Diagnostic log directory` 使用同一路径。分析双端会话时由各参与者分别提供日志；不要在 UMM DLL 部署目录中查找诊断日志。
 
 插件加载时创建启动日志；`SteamLayer` 或 `FrpDirectLayer` 的 `CreateMatch`/`JoinLobby` 创建新会话。每个会话有普通事件日志和 Harmony 追踪日志：
 

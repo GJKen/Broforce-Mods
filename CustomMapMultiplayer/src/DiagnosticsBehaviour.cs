@@ -63,7 +63,7 @@ namespace CustomMapMultiplayer
             SceneManager.sceneLoaded += OnSceneLoaded;
             Application.logMessageReceived += OnUnityLog;
             DiagnosticLog.Info("Initial scene: " + DescribeScene(SceneManager.GetActiveScene()));
-            DiagnosticLog.Info("Persistent data path: " + Application.persistentDataPath);
+            DiagnosticLog.Info("Diagnostic log directory: " + DiagnosticLog.DirectoryPath);
             DiagnosticLog.Info("Unity version: " + Application.unityVersion);
             _nextSnapshotAt = Time.unscaledTime;
             _nextHeroFallbackCheckAt = Time.unscaledTime;

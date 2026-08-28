@@ -38,6 +38,14 @@ namespace CustomMapMultiplayer
         public static string SessionId { get; private set; }
         public static string Role { get; private set; }
 
+        internal static string DirectoryPath
+        {
+            get
+            {
+                return string.IsNullOrEmpty(_directory) ? GetLogDirectory() : _directory;
+            }
+        }
+
         internal static DiagnosticLogCategory AllCategories
         {
             get

@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=fe70a703f02847b6ea3608f84fb522cf5c4d48502e6cbd3dd433a551520acca3` |
-| DLL SHA-256 | `DB9FA9F7E9A67854A125F313A1F4B9F9ED13EB391B112EA6DC4830F04C5A4498` |
+| 当前分发构建 | `buildHash=0c3475d8af2ea50122b7b41522001d238f8cca4143198fe211d48ae80af4aa62` |
+| DLL SHA-256 | `7192187349BC247D687F68F29F7E500249897E01D54D634EEF42731D98A28764` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
 
