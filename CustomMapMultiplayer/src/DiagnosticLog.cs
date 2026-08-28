@@ -60,7 +60,7 @@ namespace CustomMapMultiplayer
             EnsureCategoryDefaults();
             try
             {
-                _directory = Path.Combine(Application.persistentDataPath, "CustomMapMultiplayer");
+                _directory = GetLogDirectory();
                 Directory.CreateDirectory(_directory);
                 lock (Sync)
                 {
@@ -341,15 +341,42 @@ namespace CustomMapMultiplayer
             }
         }
 
-        internal static void DrawSettingsGui()
+        internal static bool TryOpenDirectory(out string error)
+        {
+            error = string.Empty;
+            try
+            {
+                var directory = _directory;
+                if (string.IsNullOrEmpty(directory))
+                {
+                    directory = GetLogDirectory();
+                }
+
+                Directory.CreateDirectory(directory);
+                System.Diagnostics.Process.Start("explorer.exe", "\"" + directory + "\"");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error = SanitizeUtf16(exception.Message);
+                return false;
+            }
+        }
+
+        internal static void DrawSettingsGui(
+            SettingsUiText text,
+            GUIStyle labelStyle,
+            GUIStyle selectionStyle,
+            GUIStyle toggleStyle,
+            float contentWidth)
         {
             var settings = Plugin.Settings;
-            if (settings == null)
+            if (settings == null || text == null)
             {
                 return;
             }
 
-            GUILayout.Label("Diagnostic log preset");
+            GUILayout.Label(text.DiagnosticLogPreset, labelStyle);
             var preset = (settings.DiagnosticLogPreset ?? string.Empty).ToLowerInvariant();
             var presetIndex = preset == "basic" ? 0 :
                 preset == "join" || preset == "rejoin" ? 1 :
@@ -357,9 +384,10 @@ namespace CustomMapMultiplayer
                 preset == "full" || preset == "complete" ? 4 : -1;
             var nextPresetIndex = GUILayout.SelectionGrid(
                 presetIndex,
-                new[] { "Basic", "Join / Rejoin", "AFK / Failure", "Workshop", "Full" },
+                text.DiagnosticPresets,
                 3,
-                GUILayout.Width(540f));
+                selectionStyle,
+                GUILayout.Width(contentWidth));
             if (nextPresetIndex != presetIndex)
             {
                 ApplyPreset(nextPresetIndex == 0 ? "basic" :
@@ -368,22 +396,26 @@ namespace CustomMapMultiplayer
                     nextPresetIndex == 3 ? "workshop" : "full");
             }
 
-            GUILayout.Label("Diagnostic categories");
-            DrawCategoryToggle(DiagnosticLogCategory.LobbyAndNetwork, "Lobby and network session");
-            DrawCategoryToggle(DiagnosticLogCategory.Workshop, "Workshop download/load/scenes");
-            DrawCategoryToggle(DiagnosticLogCategory.PlayerLifecycle, "Player join/spawn/dropout");
-            DrawCategoryToggle(DiagnosticLogCategory.Afk, "AFK and Dropout");
-            DrawCategoryToggle(DiagnosticLogCategory.LevelOutcome, "Lives/failure/level outcome");
-            DrawCategoryToggle(DiagnosticLogCategory.WorkshopObjects, "Workshop items and object sync");
-            DrawCategoryToggle(DiagnosticLogCategory.FrpDirect, "FRP Direct transport");
-            DrawCategoryToggle(DiagnosticLogCategory.OptionalMod, "Optional Mod compatibility");
-            DrawCategoryToggle(DiagnosticLogCategory.HarmonyTrace, "Harmony detailed tracing");
+            GUILayout.Space(7f);
+            GUILayout.Label(text.DiagnosticCategories, labelStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.LobbyAndNetwork, text.DiagnosticCategoryLabels[0], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.Workshop, text.DiagnosticCategoryLabels[1], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.PlayerLifecycle, text.DiagnosticCategoryLabels[2], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.Afk, text.DiagnosticCategoryLabels[3], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.LevelOutcome, text.DiagnosticCategoryLabels[4], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.WorkshopObjects, text.DiagnosticCategoryLabels[5], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.FrpDirect, text.DiagnosticCategoryLabels[6], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.OptionalMod, text.DiagnosticCategoryLabels[7], toggleStyle);
+            DrawCategoryToggle(DiagnosticLogCategory.HarmonyTrace, text.DiagnosticCategoryLabels[8], toggleStyle);
         }
 
-        private static void DrawCategoryToggle(DiagnosticLogCategory category, string label)
+        private static void DrawCategoryToggle(
+            DiagnosticLogCategory category,
+            string label,
+            GUIStyle style)
         {
             var current = IsCategoryEnabled(category);
-            var next = GUILayout.Toggle(current, label);
+            var next = Plugin.DrawSettingsToggle(current, label, style);
             if (next != current)
             {
                 SetCategoryEnabled(category, next);
@@ -575,6 +607,27 @@ namespace CustomMapMultiplayer
 
                 settings.DiagnosticLogPreset = "full";
             }
+        }
+
+        private static string GetLogDirectory()
+        {
+            var localApplicationData = Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData);
+            var appDataDirectory = string.IsNullOrEmpty(localApplicationData)
+                ? null
+                : Directory.GetParent(localApplicationData);
+            if (appDataDirectory != null)
+            {
+                return Path.Combine(
+                    Path.Combine(
+                        Path.Combine(
+                            Path.Combine(appDataDirectory.FullName, "LocalLow"),
+                            "Free Lives"),
+                        "Broforce"),
+                    "CustomMapMultiplayer");
+            }
+
+            return Path.Combine(Application.persistentDataPath, "CustomMapMultiplayer");
         }
 
         private static void OpenSessionLocked(string trigger, string inferredRole)

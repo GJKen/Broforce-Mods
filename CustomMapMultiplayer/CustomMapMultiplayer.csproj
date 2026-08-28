@@ -72,6 +72,7 @@
     <Compile Include="src\HarmonyDiagnostics.McBrover.cs" />
     <Compile Include="src\OptionalBroModDiagnostics.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
+    <Compile Include="src\SettingsUiText.cs" />
     <Compile Include="src\BuildMetadata.cs" />
     <Compile Include="src\OnlinePlayerListFormatter.cs" />
     <Compile Include="src\FrpDirectTransport.cs" />

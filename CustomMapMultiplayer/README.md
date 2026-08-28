@@ -1,4 +1,4 @@
-# Broforce Custom Map Multiplayer
+# Custom Map Multiplayer
 
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。默认复用官方 Steam Lobby/Steam P2P；可选的 `FRP Direct` 使用独立房间、PID 和游戏 RPC，但 Workshop 内容仍由 Steam 下载。
 
@@ -39,7 +39,7 @@
   name: GJKen-CustomMapMultiplayer
   authorName: GJKen
   websiteUrl: ''
-  displayName: Broforce Custom Map Multiplayer
+  displayName: Custom Map Multiplayer
   description: 使Broforce支持三方地图联机, 目前仍有许多bug待解决以及发现
   gameVersion: ''
   networkMode: ''
@@ -59,7 +59,7 @@
 ```
 
 3. 将项目内安装包 `CustomMapMultiplayer` 下的 `CustomMapMultiplayer.dll` 和 `Info.json` 复制到 profile 的 `UMM\Mods\GJKen-CustomMapMultiplayer`。目录名必须是 `GJKen-CustomMapMultiplayer`。运行 `BuildAndDeploy.ps1` 后，构建者的安装包和配置的测试部署目标会自动更新。
-4. 重启 r2modman，在 UMM 中确认 `Broforce Custom Map Multiplayer 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
+4. 重启 r2modman，在 UMM 中确认 `Custom Map Multiplayer 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
 5. 双方仍需订阅并下载相同 Workshop 地图。只需房主在 UMM 填写 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改。加入方开启线上地图注入后会自动采用房主发布的地图配置；即使忘记清空以前填写的 ID、场景名或战役名，这些保存值也不会参与本次加入。如果加入方没有订阅房主地图，屏幕顶部会提示缺少的 Workshop ID；订阅并等待 Steam 下载完成后重新加入房间。
 
 首次测试建议：
