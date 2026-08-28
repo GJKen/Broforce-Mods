@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <Import Project="..\LocalBroforcePath.props" Condition="Exists('..\LocalBroforcePath.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -12,6 +13,7 @@
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <InspectorModDependenciesPath Condition=" '$(InspectorModDependenciesPath)' == '' ">$(MSBuildProjectDirectory)\..\UnityInspectorMod</InspectorModDependenciesPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -32,10 +34,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>$(LibPath)\0Harmony.dll</HintPath>
+      <HintPath>$(UnityModManagerPath)\0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>$(LibPath)\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(BroforceManagedPath)\Assembly-CSharp.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -44,31 +46,31 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
     <Reference Include="UnityEngine">
-      <HintPath>$(LibPath)\UnityEngine.dll</HintPath>
+      <HintPath>$(BroforceManagedPath)\UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(LibPath)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(BroforceManagedPath)\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>$(LibPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <HintPath>$(BroforceManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>$(LibPath)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath>$(BroforceManagedPath)\UnityEngine.TextRenderingModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.ScreenCaptureModule">
-      <HintPath>$(LibPath)\UnityEngine.ScreenCaptureModule.dll</HintPath>
+      <HintPath>$(BroforceManagedPath)\UnityEngine.ScreenCaptureModule.dll</HintPath>
     </Reference>
     <Reference Include="mcs">
-      <HintPath>$(LibPath)\mcs.dll</HintPath>
+      <HintPath>$(InspectorModDependenciesPath)\mcs.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>$(LibPath)\UnityEngine.UI.dll</HintPath>
+      <HintPath>$(BroforceManagedPath)\UnityEngine.UI.dll</HintPath>
     </Reference>
     <Reference Include="UnityModManager">
-      <HintPath>$(LibPath)\UnityModManager.dll</HintPath>
+      <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>$(LibPath)\Newtonsoft.Json.dll</HintPath>
+      <HintPath>$(InspectorModDependenciesPath)\Newtonsoft.Json.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -89,5 +91,5 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="..\..\Scripts\BroforceModBuild.targets" />
+  <Import Project="..\Scripts\BroforceModBuild.targets" />
 </Project>

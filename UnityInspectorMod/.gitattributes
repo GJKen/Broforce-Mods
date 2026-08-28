@@ -4,4 +4,3 @@
 # Explicitly ensure shell scripts and Python files use LF
 *.sh text eol=lf
 *.py text eol=lf
-Makefile text eol=lf

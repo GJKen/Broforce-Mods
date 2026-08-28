@@ -3,5 +3,7 @@
   <PropertyGroup>
     <BroforceManagedPath>C:\Program Files (x86)\Steam\steamapps\common\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
     <UnityModManagerPath>C:\Path\To\Broforce\r2mod\Broforce\profiles\Broforce\UMM\Core</UnityModManagerPath>
+    <!-- Optional: installed Unity Inspector Mod package containing mcs.dll and Newtonsoft.Json.dll. -->
+    <!-- <InspectorModDependenciesPath>C:\Path\To\Broforce\r2mod\Broforce\profiles\Broforce\UMM\Mods\Unity Inspector Mod</InspectorModDependenciesPath> -->
   </PropertyGroup>
 </Project>

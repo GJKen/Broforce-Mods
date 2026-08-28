@@ -18,17 +18,41 @@ $propertyGroup = @($propsXml.Project.PropertyGroup) |
     Select-Object -First 1
 $broforceManagedPath = [string]$propertyGroup.BroforceManagedPath
 $unityModManagerPath = [string]$propertyGroup.UnityModManagerPath
+$inspectorModDependenciesPath = [string]$propertyGroup.InspectorModDependenciesPath
 
 if ([string]::IsNullOrWhiteSpace($broforceManagedPath) -or
     [string]::IsNullOrWhiteSpace($unityModManagerPath)) {
     throw 'LocalBroforcePath.props must define BroforceManagedPath and UnityModManagerPath.'
 }
 
-$dependencyLibPath = Join-Path $repoRoot 'libs'
-$sourcePath = Join-Path $repoRoot 'Unity Inspector Mod\Unity Inspector Mod'
+$sourcePath = Join-Path $repoRoot 'src'
 $buildPath = Join-Path $repoRoot ("bin\" + $Configuration)
 $packagePath = Join-Path $repoRoot 'UnityInspectorMod'
 $infoSourcePath = Join-Path $sourcePath '_ModContent\Info.json'
+
+if ([string]::IsNullOrWhiteSpace($inspectorModDependenciesPath)) {
+    $modsRoot = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods'
+    $dependencyCandidates = @(
+        $packagePath,
+        (Join-Path $modsRoot 'Unity Inspector Mod'),
+        (Join-Path $modsRoot 'alexneargarder-UnityInspectorMod'),
+        (Join-Path $modsRoot 'Unknown-alexneargarder-UnityInspectorMod')
+    )
+    $inspectorModDependenciesPath = $dependencyCandidates |
+        Where-Object {
+            (Test-Path -LiteralPath (Join-Path $_ 'mcs.dll')) -and
+            (Test-Path -LiteralPath (Join-Path $_ 'Newtonsoft.Json.dll'))
+        } |
+        Select-Object -First 1
+}
+
+if ([string]::IsNullOrWhiteSpace($inspectorModDependenciesPath)) {
+    throw 'Unable to locate mcs.dll and Newtonsoft.Json.dll. Set InspectorModDependenciesPath in LocalBroforcePath.props to an installed Unity Inspector Mod package.'
+}
+
+$mcsPath = Join-Path $inspectorModDependenciesPath 'mcs.dll'
+$newtonsoftJsonPath = Join-Path $inspectorModDependenciesPath 'Newtonsoft.Json.dll'
+Write-Host "Using Unity Inspector Mod runtime dependencies from $inspectorModDependenciesPath"
 $compilerCandidates = @(
     (Join-Path $repoRoot '.tools\roslyn\tasks\net472\csc.exe'),
     (Join-Path $env:windir 'Microsoft.NET\Framework64\v3.5\csc.exe')
@@ -54,8 +78,8 @@ $requiredFiles = @(
     $infoSourcePath,
     (Join-Path $unityModManagerPath '0Harmony.dll'),
     (Join-Path $broforceManagedPath 'Assembly-CSharp.dll'),
-    (Join-Path $dependencyLibPath 'mcs.dll'),
-    (Join-Path $dependencyLibPath 'Newtonsoft.Json.dll'),
+    $mcsPath,
+    $newtonsoftJsonPath,
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
     (Join-Path $broforceManagedPath 'UnityEngine.dll'),
     (Join-Path $broforceManagedPath 'UnityEngine.CoreModule.dll'),
@@ -94,8 +118,8 @@ $references = @(
     (Join-Path $broforceManagedPath 'UnityEngine.ScreenCaptureModule.dll'),
     (Join-Path $broforceManagedPath 'UnityEngine.UI.dll'),
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
-    (Join-Path $dependencyLibPath 'mcs.dll'),
-    (Join-Path $dependencyLibPath 'Newtonsoft.Json.dll')
+    $mcsPath,
+    $newtonsoftJsonPath
 )
 $compilerArguments = @(
     '/noconfig',
@@ -116,12 +140,15 @@ if ($LASTEXITCODE -ne 0) {
 
 $packageFiles = @(
     @{ Source = $outputPath; Name = 'Unity Inspector Mod.dll' },
-    @{ Source = (Join-Path $dependencyLibPath 'mcs.dll'); Name = 'mcs.dll' },
-    @{ Source = (Join-Path $dependencyLibPath 'Newtonsoft.Json.dll'); Name = 'Newtonsoft.Json.dll' },
+    @{ Source = $mcsPath; Name = 'mcs.dll' },
+    @{ Source = $newtonsoftJsonPath; Name = 'Newtonsoft.Json.dll' },
     @{ Source = $infoSourcePath; Name = 'Info.json' }
 )
 foreach ($packageFile in $packageFiles) {
-    Copy-Item -LiteralPath $packageFile.Source -Destination (Join-Path $packagePath $packageFile.Name) -Force
+    $destinationPath = Join-Path $packagePath $packageFile.Name
+    if ([IO.Path]::GetFullPath($packageFile.Source) -ne [IO.Path]::GetFullPath($destinationPath)) {
+        Copy-Item -LiteralPath $packageFile.Source -Destination $destinationPath -Force
+    }
 }
 
 Write-Host "Package ready: $packagePath"

@@ -457,4 +457,5 @@ ModContents/
 
 # Downloaded build tools and local assembly caches
 .tools/
+libs/
 libs-current/
