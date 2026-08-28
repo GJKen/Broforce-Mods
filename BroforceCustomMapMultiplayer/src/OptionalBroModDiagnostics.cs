@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using UnityModManagerNet;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Read-only weak integration for optional bro-selection mods.
     internal static class OptionalBroModDiagnostics

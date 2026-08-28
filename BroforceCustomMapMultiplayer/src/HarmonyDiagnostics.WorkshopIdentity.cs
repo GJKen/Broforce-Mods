@@ -2,7 +2,7 @@ using HarmonyLib;
 using System;
 using System.Reflection;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Host-advertised Workshop identity and client-side subscription validation.
     internal static partial class HarmonyDiagnostics

@@ -4,7 +4,7 @@ using System.Text;
 using UnityEngine;
 using UnityModManagerNet;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     [Flags]
     internal enum DiagnosticLogCategory
@@ -60,7 +60,7 @@ namespace BroforceOnlineDiagnostics
             EnsureCategoryDefaults();
             try
             {
-                _directory = Path.Combine(Application.persistentDataPath, "BroforceOnlineDiagnostics");
+                _directory = Path.Combine(Application.persistentDataPath, "BroforceCustomMapMultiplayer");
                 Directory.CreateDirectory(_directory);
                 lock (Sync)
                 {
@@ -74,7 +74,7 @@ namespace BroforceOnlineDiagnostics
             catch (Exception exception)
             {
                 Debug.LogError(
-                    "[BroforceOnlineDiagnostics] Cannot open diagnostic file: " +
+                    "[BroforceCustomMapMultiplayer] Cannot open diagnostic file: " +
                     SanitizeUtf16(exception.ToString()));
             }
         }
@@ -103,7 +103,7 @@ namespace BroforceOnlineDiagnostics
                 catch (Exception exception)
                 {
                     Debug.LogError(
-                        "[BroforceOnlineDiagnostics] Cannot start diagnostic session: " +
+                        "[BroforceCustomMapMultiplayer] Cannot start diagnostic session: " +
                         SanitizeUtf16(exception.ToString()));
                 }
             }
@@ -126,7 +126,7 @@ namespace BroforceOnlineDiagnostics
                 catch (Exception exception)
                 {
                     Debug.LogError(
-                        "[BroforceOnlineDiagnostics] Cannot finish diagnostic session: " +
+                        "[BroforceCustomMapMultiplayer] Cannot finish diagnostic session: " +
                         SanitizeUtf16(exception.ToString()));
                 }
                 finally
@@ -411,7 +411,7 @@ namespace BroforceOnlineDiagnostics
                 catch (Exception exception)
                 {
                     Debug.LogError(
-                        "[BroforceOnlineDiagnostics] Cannot close diagnostic file: " +
+                        "[BroforceCustomMapMultiplayer] Cannot close diagnostic file: " +
                         SanitizeUtf16(exception.ToString()));
                 }
                 finally
@@ -444,13 +444,13 @@ namespace BroforceOnlineDiagnostics
 
                 if (writeToUnity && written)
                 {
-                    Debug.Log("[BroforceOnlineDiagnostics] " + line);
+                    Debug.Log("[BroforceCustomMapMultiplayer] " + line);
                 }
             }
             catch (Exception exception)
             {
                 Debug.LogError(
-                    "[BroforceOnlineDiagnostics] Cannot write diagnostic file: " +
+                    "[BroforceCustomMapMultiplayer] Cannot write diagnostic file: " +
                     SanitizeUtf16(exception.ToString()));
             }
         }

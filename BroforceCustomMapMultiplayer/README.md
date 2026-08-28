@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=4f6c722566e8a265880b9bf92c8ddd33c148ce8ec6a2c4590e0ed1e200ee4360` |
-| DLL SHA-256 | `08C4999E96976DAF631742028B3117B8917253F555786EDF72606959F1D9C189` |
+| 当前分发构建 | `buildHash=b54e5b48e235895d76350a990cac36d830145e65d9cd53a7a531ad238727d423` |
+| DLL SHA-256 | `4D6466AB510646587ED468D390A92CEC89F5A6F798DCD26BFD203C5250AF61ED` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
 
@@ -22,6 +22,7 @@
 - 双端进入、晚加入、当前地图的退出/重入，以及双方独立角色和控制。
 - Steam 与 FRP Direct 的 Esc 彩色延迟名单和动态房主名；FRP 的三机基础联机、静态 `1` 人房满员提示及 Host/Client 配置自动应用。
 - Workshop 地图身份由房主发布，加入方自动采用；缺少订阅时显示提示并停止加载；注入可热关闭并恢复官方地图。
+- Workshop 加载会优先复用 Steam 已安装目录或旧版 UGC 本地缓存；缓存不可读时才回退到 Steam 下载，并抑制同一张地图加载期间的重复请求。
 - Workshop 的入场横幅、Esc 返回大厅和主菜单动画，以及标准弹药箱的确定性、远端扫描抑制和重复拾取防护。
 
 开放问题：普通 Mook 死亡终态、AFK 诊断、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
@@ -35,7 +36,7 @@
 
 ```yaml
 - manifestVersion: 1
-  name: GJKen-BroforceOnlineDiagnostics
+  name: GJKen-BroforceCustomMapMultiplayer
   authorName: GJKen
   websiteUrl: ''
   displayName: Broforce Custom Map Multiplayer
@@ -57,7 +58,7 @@
   onlineSource: false
 ```
 
-3. 将项目内安装包 `BroforceOnlineDiagnostics` 下的 `BroforceOnlineDiagnostics.dll` 和 `Info.json` 复制到 profile 的 `UMM\Mods\GJKen-BroforceOnlineDiagnostics`。目录名必须是 `GJKen-BroforceOnlineDiagnostics`。运行 `BuildAndDeploy.ps1` 后，构建者的安装包和配置的测试部署目标会自动更新。
+3. 将项目内安装包 `BroforceCustomMapMultiplayer` 下的 `BroforceCustomMapMultiplayer.dll` 和 `Info.json` 复制到 profile 的 `UMM\Mods\GJKen-BroforceCustomMapMultiplayer`。目录名必须是 `GJKen-BroforceCustomMapMultiplayer`。运行 `BuildAndDeploy.ps1` 后，构建者的安装包和配置的测试部署目标会自动更新。
 4. 重启 r2modman，在 UMM 中确认 `Broforce Custom Map Multiplayer 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
 5. 双方仍需订阅并下载相同 Workshop 地图。只需房主在 UMM 填写 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改。加入方开启线上地图注入后会自动采用房主发布的地图配置；即使忘记清空以前填写的 ID、场景名或战役名，这些保存值也不会参与本次加入。如果加入方没有订阅房主地图，屏幕顶部会提示缺少的 Workshop ID；订阅并等待 Steam 下载完成后重新加入房间。
 
@@ -82,7 +83,7 @@ Diagnostic label: 任意标识或留空
 - `Disable automatic AFK spectator mode in online games` 默认关闭，由每台客户端独立控制；要保护双方角色，双方必须分别开启。它不拦截手动退出、断线或正常死亡。
 - 诊断日志预设只影响输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
 
-每轮测试结束后，收集所有参与端的诊断 `.log`、`.trace.log`，并尽量同时保存 UMM `Core\Log.txt` 和游戏 `error.log`。日志目录为 `Application.persistentDataPath\BroforceOnlineDiagnostics\`，不是 DLL 部署目录。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
+每轮测试结束后，收集所有参与端的诊断 `.log`、`.trace.log`，并尽量同时保存 UMM `Core\Log.txt` 和游戏 `error.log`。日志目录为 `Application.persistentDataPath\BroforceCustomMapMultiplayer\`，不是 DLL 部署目录。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
 
 ## FRP Direct 联机
 
@@ -143,9 +144,9 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 
 ```text
 src/                              Mod 源码
-BroforceOnlineDiagnostics.csproj C# 工程文件
+BroforceCustomMapMultiplayer.csproj C# 工程文件
 BuildAndDeploy.ps1                .NET 3.5 构建和部署脚本
-BroforceOnlineDiagnostics/        可复制的 UMM 安装包（DLL + Info.json）
+BroforceCustomMapMultiplayer/    可复制的 UMM 安装包（DLL + Info.json）
 modinfo.json                      UMM 清单模板
 LocalBroforcePath.props.example   本机路径配置示例
 docs/DEVELOPMENT.md               开发、逆向、测试和故障排查

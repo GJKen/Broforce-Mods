@@ -4,7 +4,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Low-frequency observation around Broforce's native 35-second online AFK path.
     internal static partial class HarmonyDiagnostics

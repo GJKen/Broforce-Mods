@@ -1,4 +1,4 @@
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     public sealed class DiagnosticSettings : UnityModManagerNet.UnityModManager.ModSettings
     {

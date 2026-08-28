@@ -59,14 +59,14 @@ foreach ($requiredPath in $requiredPaths) {
     }
 }
 
-$packageModPath = Join-Path $repoRoot 'BroforceOnlineDiagnostics'
+$packageModPath = Join-Path $repoRoot 'BroforceCustomMapMultiplayer'
 $packageInfoPath = Join-Path $packageModPath 'Info.json'
 if (-not (Test-Path -LiteralPath $packageInfoPath)) {
     throw "Missing copyable package metadata: $packageInfoPath"
 }
 
 New-Item -ItemType Directory -Force -Path $packageModPath | Out-Null
-$outputPath = Join-Path $packageModPath 'BroforceOnlineDiagnostics.dll'
+$outputPath = Join-Path $packageModPath 'BroforceCustomMapMultiplayer.dll'
 $sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src') -Filter '*.cs' -File |
     Sort-Object Name |
     Select-Object -ExpandProperty FullName)
@@ -95,7 +95,7 @@ foreach ($sourceFile in $sourceFiles) {
 }
 
 $buildMetadataPath = Join-Path ([IO.Path]::GetTempPath()) (
-    'BroforceOnlineDiagnostics.BuildMetadata.' + [Guid]::NewGuid().ToString('N') + '.cs')
+    'BroforceCustomMapMultiplayer.BuildMetadata.' + [Guid]::NewGuid().ToString('N') + '.cs')
 
 try {
     $referencePaths = @($references)
@@ -114,7 +114,7 @@ try {
     Write-Host "Build hash: $buildHash"
 
     $metadataSource = @"
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     internal static partial class BuildMetadata
     {
@@ -147,7 +147,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "C# compilation failed with exit code $LASTEXITCODE."
 }
 
-$localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-BroforceOnlineDiagnostics'
+$localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-BroforceCustomMapMultiplayer'
 Write-Host "Updated copyable package $outputPath"
 
 $deploymentPaths = @($localModPath)
@@ -157,7 +157,7 @@ if (-not [string]::IsNullOrWhiteSpace($testDeployModPath)) {
 $deploymentPaths = @($deploymentPaths | Select-Object -Unique)
 foreach ($deploymentPath in $deploymentPaths) {
     New-Item -ItemType Directory -Force -Path $deploymentPath | Out-Null
-    $destinationPath = Join-Path $deploymentPath 'BroforceOnlineDiagnostics.dll'
+    $destinationPath = Join-Path $deploymentPath 'BroforceCustomMapMultiplayer.dll'
     Copy-Item -LiteralPath $outputPath -Destination $destinationPath -Force
     Write-Host "Deployed $destinationPath"
 

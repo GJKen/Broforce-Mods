@@ -2,7 +2,7 @@ using UnityModManagerNet;
 using System;
 using UnityEngine;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     public static class Plugin
     {

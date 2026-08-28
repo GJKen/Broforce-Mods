@@ -122,7 +122,7 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 ### FRP Direct 网络层
 
-`FrpDirectTransport` 复用 Lidgren，应用标识为 `BroforceOnlineDiagnostics.FrpDirect.v1`。`EnableFrpDirect` 同时控制传输和游戏连接层；Host/Client 配置隔离，角色、总开关和连接文本自动应用，无 Apply 按钮。
+`FrpDirectTransport` 复用 Lidgren，应用标识为 `BroforceCustomMapMultiplayer.FrpDirect.v1`。`EnableFrpDirect` 同时控制传输和游戏连接层；Host/Client 配置隔离，角色、总开关和连接文本自动应用，无 Apply 按钮。
 
 - Host 监听配置的 UDP 端口（默认 27045），可在地图内设置 `1` 至 `4` 人总上限；Client 以临时端口连接 `host:port`，普通断线后每 5 秒重试。
 - Host 以挑战、密码、协议版本、双方 `buildHash` 和机器 ID 完成 HMAC-SHA256 握手。协议 v4 提供房间、加入/离开、机器路由 `GameData` 和 RTT 快照；协议不匹配或认证失败会拒绝连接。
@@ -215,16 +215,16 @@ MCP 默认只读。传送、修改生命或速度、切换关卡、模拟输入�
 日志目录：
 
 ```text
-<Application.persistentDataPath>/BroforceOnlineDiagnostics/
+<Application.persistentDataPath>/BroforceCustomMapMultiplayer/
 ```
 
 远端测试参与者应从自己的 Windows 用户数据目录导出日志；公开文档不记录内网地址、共享路径或用户名：
 
 ```text
-<远端 Application.persistentDataPath>\BroforceOnlineDiagnostics
+<远端 Application.persistentDataPath>\BroforceCustomMapMultiplayer
 ```
 
-该目录对应加入方本机的 `Application.persistentDataPath\BroforceOnlineDiagnostics`。分析双端会话时由各参与者分别提供日志；不要在 UMM DLL 部署目录中查找诊断日志。
+该目录对应加入方本机的 `Application.persistentDataPath\BroforceCustomMapMultiplayer`。分析双端会话时由各参与者分别提供日志；不要在 UMM DLL 部署目录中查找诊断日志。
 
 插件加载时创建启动日志；`SteamLayer` 或 `FrpDirectLayer` 的 `CreateMatch`/`JoinLobby` 创建新会话。每个会话有普通事件日志和 Harmony 追踪日志：
 
@@ -282,23 +282,23 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 有效输出位置：
 
 ```text
-<项目根目录>\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
-<本机 UMM_PROFILE_DIR>\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
+<项目根目录>\BroforceCustomMapMultiplayer\BroforceCustomMapMultiplayer.dll
+<本机 UMM_PROFILE_DIR>\Mods\GJKen-BroforceCustomMapMultiplayer\BroforceCustomMapMultiplayer.dll
 ```
 
 脚本输出并嵌入 `Build hash`，覆盖 DLL；项目安装包固定包含 `Info.json`。部署目标的 `Info.json` 每次均从 `modinfo.json` 同步，保证名称、版本和入口与当前构建一致。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
 
-`BroforceOnlineDiagnostics.csproj` 的 `OutputPath` 也指向项目安装包；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
+`BroforceCustomMapMultiplayer.csproj` 的 `OutputPath` 也指向项目安装包；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
 
 安装包结构与命名：
 
 ```text
-BroforceOnlineDiagnostics\
-  BroforceOnlineDiagnostics.dll
+BroforceCustomMapMultiplayer\
+  BroforceCustomMapMultiplayer.dll
   Info.json
 ```
 
-复制到 UMM 后目录名必须为 `GJKen-BroforceOnlineDiagnostics`，程序集名保持 `BroforceOnlineDiagnostics.dll`。脚本不更新 r2modman 缓存包。
+复制到 UMM 后目录名必须为 `GJKen-BroforceCustomMapMultiplayer`，程序集名保持 `BroforceCustomMapMultiplayer.dll`。脚本不更新 r2modman 缓存包。
 
 ## 逆向参考
 

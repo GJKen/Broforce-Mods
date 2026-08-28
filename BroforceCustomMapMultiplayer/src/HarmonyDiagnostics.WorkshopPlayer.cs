@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // 角色退出重入：控制器绑定恢复、英雄类型恢复、重复加入抑制、暂停状态清理。
     internal static partial class HarmonyDiagnostics

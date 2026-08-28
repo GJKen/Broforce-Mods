@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     internal sealed class DiagnosticsBehaviour : MonoBehaviour
     {
@@ -35,7 +35,7 @@ namespace BroforceOnlineDiagnostics
 
         public static DiagnosticsBehaviour Create()
         {
-            var gameObject = new GameObject("BroforceOnlineDiagnostics");
+            var gameObject = new GameObject("BroforceCustomMapMultiplayer");
             DontDestroyOnLoad(gameObject);
             var behaviour = gameObject.AddComponent<DiagnosticsBehaviour>();
             behaviour.Initialize();

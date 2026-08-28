@@ -1,4 +1,4 @@
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // The standard build script supplies the implementation with a compile-time hash.
     // Keeping the fallback makes source-only IDE builds identifiable as untracked builds.

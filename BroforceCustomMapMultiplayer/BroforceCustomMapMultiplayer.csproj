@@ -2,18 +2,18 @@
   <PropertyGroup>
     <TargetFramework>net35</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <RootNamespace>BroforceOnlineDiagnostics</RootNamespace>
-    <AssemblyName>BroforceOnlineDiagnostics</AssemblyName>
+    <RootNamespace>BroforceCustomMapMultiplayer</RootNamespace>
+    <AssemblyName>BroforceCustomMapMultiplayer</AssemblyName>
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <PackageModPath>$(MSBuildProjectDirectory)\BroforceOnlineDiagnostics</PackageModPath>
+    <PackageModPath>$(MSBuildProjectDirectory)\BroforceCustomMapMultiplayer</PackageModPath>
     <OutputPath>$(PackageModPath)\</OutputPath>
   </PropertyGroup>
 
   <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
 
   <PropertyGroup>
-    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceOnlineDiagnostics</LocalBroforceModPath>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceCustomMapMultiplayer</LocalBroforceModPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -62,6 +62,7 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopSpawn.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopLobby.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopIdentity.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorkshopCache.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopPickup.cs" />
     <Compile Include="src\HarmonyDiagnostics.Afk.cs" />
     <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />
@@ -79,7 +80,7 @@
     <Compile Include="src\FrpDirectNetworkManager.cs" />
   </ItemGroup>
 
-  <Target Name="DeployBroforceOnlineDiagnostics" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
+  <Target Name="DeployBroforceCustomMapMultiplayer" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
     <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)" SkipUnchangedFiles="false" />
     <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json')" />

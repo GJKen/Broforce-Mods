@@ -5,7 +5,7 @@ using System.Reflection;
 using Networking;
 using UnityEngine;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // 跨官方/Workshop 地图和 Steam/FRP 会话的普通 Mook 死亡与尸体终态收敛。
     internal static partial class HarmonyDiagnostics

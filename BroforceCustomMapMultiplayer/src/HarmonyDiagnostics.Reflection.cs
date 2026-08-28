@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // 反射兼容层：字段/属性读写、类型转换、游戏对象与房间信息访问。
     internal static partial class HarmonyDiagnostics

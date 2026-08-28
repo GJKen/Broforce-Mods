@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Text;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Low-frequency online level outcome diagnostics. These patches only observe state.
     internal static partial class HarmonyDiagnostics

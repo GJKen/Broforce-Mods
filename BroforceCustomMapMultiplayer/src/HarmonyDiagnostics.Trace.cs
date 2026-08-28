@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // 方法追踪：追踪消息构建、参数格式化、敏感信息脱敏、去重缓存。
     internal static partial class HarmonyDiagnostics

@@ -8,13 +8,13 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // 核心入口：Start/Stop/Update/TracePrefix
     // 其他功能模块已拆分到 HarmonyDiagnostics.*.cs 文件
     internal static partial class HarmonyDiagnostics
     {
-        private const string HarmonyId = "GJKen.BroforceOnlineDiagnostics.MethodTrace";
+        private const string HarmonyId = "GJKen.BroforceCustomMapMultiplayer.MethodTrace";
         private const int DuplicateWindowSeconds = 5;
         private const int DuplicateWorkshopLoadSuppressionSeconds = 5;
         private const int WorkshopLocalJoinRequestRetrySeconds = 10;
@@ -48,9 +48,9 @@ namespace BroforceOnlineDiagnostics
             new TraceTarget("SteamLayer", "LeaveMatch"),
             new TraceTarget("SteamLayer", "LobbyCreated_Callback"),
             new TraceTarget("SteamLayer", "LobbyJoined_Callback"),
-            new TraceTarget("BroforceOnlineDiagnostics.FrpDirectLayer", "CreateMatch"),
-            new TraceTarget("BroforceOnlineDiagnostics.FrpDirectLayer", "JoinLobby"),
-            new TraceTarget("BroforceOnlineDiagnostics.FrpDirectLayer", "LeaveMatch"),
+            new TraceTarget("BroforceCustomMapMultiplayer.FrpDirectLayer", "CreateMatch"),
+            new TraceTarget("BroforceCustomMapMultiplayer.FrpDirectLayer", "JoinLobby"),
+            new TraceTarget("BroforceCustomMapMultiplayer.FrpDirectLayer", "LeaveMatch"),
             new TraceTarget("ConnectionLayer", "OnJoinedLobby"),
             new TraceTarget("ConnectionLayer", "PlayerHasJoinedMatch"),
             new TraceTarget("ConnectionLayer", "RegisterNewPlayer"),
@@ -211,6 +211,7 @@ namespace BroforceOnlineDiagnostics
             _workshopSpawnRebroadcastUseCurrentPositions = false;
             _lastLocalWorkshopControllerId = -1;
             ClearDuplicateWorkshopLoadSuppression();
+            ClearWorkshopLoadRequest();
             ClearWorkshopLocalJoinRequests();
             ClearLateJoinState();
             ClearWorkshopIdentityState();
@@ -332,6 +333,7 @@ namespace BroforceOnlineDiagnostics
             PatchSwitchLevelTranspiler();
             PatchWorldMapEnterMissionTranspiler();
             PatchGameStateLoadLevelPrefix();
+            PatchWorkshopLoadCache();
             PatchLateHeroResponseGuard();
             PatchWorkshopHeroTypePreservation();
             PatchWorkshopJoinPromptSuppression();
@@ -389,6 +391,7 @@ namespace BroforceOnlineDiagnostics
                 _workshopSpawnRebroadcastUseCurrentPositions = false;
                 _lastLocalWorkshopControllerId = -1;
                 ClearDuplicateWorkshopLoadSuppression();
+                ClearWorkshopLoadRequest();
                 ClearWorkshopLocalJoinRequests();
                 ClearLateJoinState();
                 ClearWorkshopIdentityState();
@@ -413,13 +416,13 @@ namespace BroforceOnlineDiagnostics
             HarmonyMethod spawnJoinedPlayersPostfix)
         {
             if ((target.TypeName == "SteamLayer" ||
-                 target.TypeName == "BroforceOnlineDiagnostics.FrpDirectLayer") &&
+                 target.TypeName == "BroforceCustomMapMultiplayer.FrpDirectLayer") &&
                 target.MethodName == "JoinLobby")
             {
                 return joinLobbyPostfix;
             }
             if ((target.TypeName == "SteamLayer" && target.MethodName == "LobbyCreated_Callback") ||
-                (target.TypeName == "BroforceOnlineDiagnostics.FrpDirectLayer" &&
+                (target.TypeName == "BroforceCustomMapMultiplayer.FrpDirectLayer" &&
                  target.MethodName == "CreateMatch"))
             {
                 return lobbyCreatedPostfix;
@@ -433,7 +436,7 @@ namespace BroforceOnlineDiagnostics
                 return joinedLobbyPostfix;
             }
             if ((target.TypeName == "SteamLayer" ||
-                 target.TypeName == "BroforceOnlineDiagnostics.FrpDirectLayer") &&
+                 target.TypeName == "BroforceCustomMapMultiplayer.FrpDirectLayer") &&
                 target.MethodName == "LeaveMatch")
             {
                 return new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
@@ -584,6 +587,7 @@ namespace BroforceOnlineDiagnostics
 
         internal static void Update()
         {
+            TryCompleteCachedWorkshopLoad();
             ObserveOnlineHostRole();
             TrySynchronizeClientWorkshopIdentity(false, "periodic room check");
             TryRebroadcastWorkshopSpawns();

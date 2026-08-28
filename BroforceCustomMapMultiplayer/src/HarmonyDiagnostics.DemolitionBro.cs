@@ -6,7 +6,7 @@ using System.Reflection.Emit;
 using Networking;
 using UnityEngine;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Only synchronizes DemolitionBro's second-press currentBomb detonation.
     internal static partial class HarmonyDiagnostics

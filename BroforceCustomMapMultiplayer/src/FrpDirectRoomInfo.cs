@@ -1,6 +1,6 @@
 using System;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     internal sealed class FrpDirectRoomInfo : RoomInfo
     {
