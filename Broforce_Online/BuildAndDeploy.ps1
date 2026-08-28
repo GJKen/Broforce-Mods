@@ -1,6 +1,6 @@
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Debug'
+    [string]$Configuration = 'Release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +18,7 @@ $propertyGroup = @($propsXml.Project.PropertyGroup) |
 
 $broforceManagedPath = [string]$propertyGroup.BroforceManagedPath
 $unityModManagerPath = [string]$propertyGroup.UnityModManagerPath
+$testDeployModPath = [string]$propertyGroup.TestDeployModPath
 $infoSourcePath = Join-Path $repoRoot 'modinfo.json'
 if ([string]::IsNullOrWhiteSpace($broforceManagedPath) -or
     [string]::IsNullOrWhiteSpace($unityModManagerPath)) {
@@ -147,10 +148,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-BroforceOnlineDiagnostics'
-$networkModPath = '\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics'
 Write-Host "Updated copyable package $outputPath"
 
-$deploymentPaths = @($localModPath, $networkModPath)
+$deploymentPaths = @($localModPath)
+if (-not [string]::IsNullOrWhiteSpace($testDeployModPath)) {
+    $deploymentPaths += $testDeployModPath.Trim()
+}
+$deploymentPaths = @($deploymentPaths | Select-Object -Unique)
 foreach ($deploymentPath in $deploymentPaths) {
     New-Item -ItemType Directory -Force -Path $deploymentPath | Out-Null
     $destinationPath = Join-Path $deploymentPath 'BroforceOnlineDiagnostics.dll'
@@ -158,10 +162,8 @@ foreach ($deploymentPath in $deploymentPaths) {
     Write-Host "Deployed $destinationPath"
 
     $infoDestinationPath = Join-Path $deploymentPath 'Info.json'
-    if (-not (Test-Path -LiteralPath $infoDestinationPath)) {
-        Copy-Item -LiteralPath $infoSourcePath -Destination $infoDestinationPath
-        Write-Host "Initialized $infoDestinationPath from modinfo.json"
-    }
+    Copy-Item -LiteralPath $infoSourcePath -Destination $infoDestinationPath -Force
+    Write-Host "Updated $infoDestinationPath from modinfo.json"
 }
 
 Write-Host 'Build and deployment completed.'

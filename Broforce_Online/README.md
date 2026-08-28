@@ -1,4 +1,4 @@
-# Broforce 第三方地图联机 Mod
+# Broforce Custom Map Multiplayer
 
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。默认复用官方 Steam Lobby/Steam P2P；可选的 `FRP Direct` 使用独立房间、PID 和游戏 RPC，但 Workshop 内容仍由 Steam 下载。
 
@@ -38,8 +38,8 @@
   name: GJKen-BroforceOnlineDiagnostics
   authorName: GJKen
   websiteUrl: ''
-  displayName: BroforceOnlineDiagnostics
-  description: 测试
+  displayName: Broforce Custom Map Multiplayer
+  description: 使Broforce支持三方地图联机, 目前仍有许多bug待解决以及发现
   gameVersion: ''
   networkMode: ''
   packageType: ''
@@ -58,7 +58,7 @@
 ```
 
 3. 将项目内安装包 `BroforceOnlineDiagnostics` 下的 `BroforceOnlineDiagnostics.dll` 和 `Info.json` 复制到 profile 的 `UMM\Mods\GJKen-BroforceOnlineDiagnostics`。目录名必须是 `GJKen-BroforceOnlineDiagnostics`。运行 `BuildAndDeploy.ps1` 后，构建者的安装包和配置的测试部署目标会自动更新。
-4. 重启 r2modman，在 UMM 中确认 `Broforce Online Diagnostics 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
+4. 重启 r2modman，在 UMM 中确认 `Broforce Custom Map Multiplayer 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
 5. 双方仍需订阅并下载相同 Workshop 地图。只需房主在 UMM 填写 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改。加入方开启线上地图注入后会自动采用房主发布的地图配置；即使忘记清空以前填写的 ID、场景名或战役名，这些保存值也不会参与本次加入。如果加入方没有订阅房主地图，屏幕顶部会提示缺少的 Workshop ID；订阅并等待 Steam 下载完成后重新加入房间。
 
 首次测试建议：
@@ -125,13 +125,19 @@ FRP 房间列表显示人数已满时，加入方点击房间会直接在屏幕�
 
 ## 构建
 
-项目面向 .NET Framework 3.5。复制 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props`，填写 Broforce `Managed` 目录和 UMM 核心目录，然后从项目根目录运行：
+项目面向 .NET Framework 3.5。构建或部署前必须读取项目根目录的 `LocalBroforcePath.props`：
+
+- `BroforceManagedPath`：本机 Broforce `Managed` 目录。
+- `UnityModManagerPath`：本机 UMM 核心目录。
+- `TestDeployModPath`：本机测试机部署目录；值为空表示明确关闭额外测试部署。
+
+该文件包含本机专用路径，只用于执行构建或部署，不得写入公开文件、提交信息、日志摘录或对外回复。首次使用时，复制 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props` 并填写本机路径，然后从项目根目录运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
-标准脚本会生成项目内安装包并部署到配置的本机/内网 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署路径不可访问、目录创建失败或 DLL 复制失败时，构建视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
+标准脚本会生成项目内安装包并部署到本机 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署时会同步覆盖 DLL 和 `Info.json`，使名称、版本和入口与当前构建一致。可选测试部署目录仅从未提交的 `LocalBroforcePath.props` 读取；不要把测试机地址、共享路径或用户名写入仓库。已配置的部署路径不可访问、目录创建失败或 DLL 复制失败时，构建视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
 
 ## 项目结构与文档
 

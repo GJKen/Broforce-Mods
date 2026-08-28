@@ -1,4 +1,4 @@
-# Broforce 第三方地图联机 Mod：开发文档
+# Broforce Custom Map Multiplayer：开发文档
 
 安装、设置和日常使用见 [根目录 README](../README.md)。本文只记录当前有效的架构、补丁行为、诊断、测试和构建约定；单轮测试、旧构建和失败方案统一保留在 [issues 索引](../issues/README.md)。
 
@@ -218,13 +218,13 @@ MCP 默认只读。传送、修改生命或速度、切换关卡、模拟输入�
 <Application.persistentDataPath>/BroforceOnlineDiagnostics/
 ```
 
-当前内网加入方的 Windows 用户数据目录已通过 SMB 共享，可直接从开发机读取：
+远端测试参与者应从自己的 Windows 用户数据目录导出日志；公开文档不记录内网地址、共享路径或用户名：
 
 ```text
-\\192.168.1.181\Users\5700G\AppData\LocalLow\Free Lives\Broforce\BroforceOnlineDiagnostics
+<远端 Application.persistentDataPath>\BroforceOnlineDiagnostics
 ```
 
-该 UNC 路径对应加入方本机的 `Application.persistentDataPath\BroforceOnlineDiagnostics`。分析双端会话时从这里读取加入方日志；不要在 `\\192.168.1.181\Epan\...\UMM\Mods` DLL 部署目录中查找诊断日志。
+该目录对应加入方本机的 `Application.persistentDataPath\BroforceOnlineDiagnostics`。分析双端会话时由各参与者分别提供日志；不要在 UMM DLL 部署目录中查找诊断日志。
 
 插件加载时创建启动日志；`SteamLayer` 或 `FrpDirectLayer` 的 `CreateMatch`/`JoinLobby` 创建新会话。每个会话有普通事件日志和 Harmony 追踪日志：
 
@@ -265,10 +265,13 @@ diagnostics-host-<session>-<utc-time>.trace.log
 
 ## 构建与部署
 
-1. 复制 `LocalBroforcePath.props.example` 为不提交的 `LocalBroforcePath.props`。
-2. 配置 `BroforceManagedPath` 为 `Broforce_beta_Data/Managed`，其中必须含 `UnityEngine.TextRenderingModule.dll`。
-3. 配置 `UnityModManagerPath` 为含 `UnityModManager.dll` 和 `0Harmony.dll` 的 UMM 核心目录。
-4. 使用兼容 .NET Framework 3.5 的编译器。当前验证路径：`C:\Windows\Microsoft.NET\Framework64\v3.5\csc.exe`；不要直接使用 v4 编译器。
+构建或部署前必须读取项目根目录的 `LocalBroforcePath.props`：
+
+1. `BroforceManagedPath` 是本机 Broforce `Broforce_beta_Data/Managed` 目录，其中必须含 `UnityEngine.TextRenderingModule.dll`。
+2. `UnityModManagerPath` 是含 `UnityModManager.dll` 和 `0Harmony.dll` 的本机 UMM 核心目录。
+3. `TestDeployModPath` 是本机测试机部署目录；值为空表示明确关闭额外测试部署。
+4. 该文件包含本机专用路径，只允许用于执行构建或部署，不得写入公开文件、提交信息、日志摘录或对外回复。
+5. 使用兼容 .NET Framework 3.5 的编译器。当前验证路径：`C:\Windows\Microsoft.NET\Framework64\v3.5\csc.exe`；不要直接使用 v4 编译器。
 
 唯一标准入口：
 
@@ -281,10 +284,9 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```text
 <项目根目录>\BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
 <本机 UMM_PROFILE_DIR>\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
-\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics\BroforceOnlineDiagnostics.dll
 ```
 
-脚本输出并嵌入 `Build hash`，覆盖 DLL；项目安装包固定包含 `Info.json`。目标缺少清单时可从 `modinfo.json` 初始化，但不覆盖已有清单或其它文件。任一网络路径、目录创建或复制失败时整个部署失败，不得继续双端测试。
+脚本输出并嵌入 `Build hash`，覆盖 DLL；项目安装包固定包含 `Info.json`。部署目标的 `Info.json` 每次均从 `modinfo.json` 同步，保证名称、版本和入口与当前构建一致。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
 
 `BroforceOnlineDiagnostics.csproj` 的 `OutputPath` 也指向项目安装包；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
 
