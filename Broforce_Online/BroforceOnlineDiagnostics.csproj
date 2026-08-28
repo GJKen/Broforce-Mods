@@ -6,13 +6,15 @@
     <AssemblyName>BroforceOnlineDiagnostics</AssemblyName>
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceOnlineDiagnostics</LocalBroforceModPath>
-    <NetworkBroforceModPath>\\192.168.1.181\Epan\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\GJKen-BroforceOnlineDiagnostics</NetworkBroforceModPath>
     <PackageModPath>$(MSBuildProjectDirectory)\BroforceOnlineDiagnostics</PackageModPath>
     <OutputPath>$(PackageModPath)\</OutputPath>
   </PropertyGroup>
 
   <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
+
+  <PropertyGroup>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-BroforceOnlineDiagnostics</LocalBroforceModPath>
+  </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="UnityEngine">
@@ -78,10 +80,8 @@
   </ItemGroup>
 
   <Target Name="DeployBroforceOnlineDiagnostics" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
-    <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath);$(NetworkBroforceModPath)" />
+    <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(NetworkBroforceModPath)" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json') And !Exists('$(LocalBroforceModPath)\Info.json')" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(NetworkBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json') And !Exists('$(NetworkBroforceModPath)\Info.json')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json')" />
   </Target>
 </Project>
