@@ -223,20 +223,25 @@
       <div class="section-content" id="frp-content" hidden>
         <label class="check-row"><input type="checkbox" checked>Enable FRP Direct networking</label>
         <div class="field-label">FRP Direct role</div>
-        <div class="segments" role="group" aria-label="FRP Direct role">
-          <button type="button" aria-pressed="true">Host</button>
-          <button type="button" aria-pressed="false">Client</button>
+        <div class="segments frp-role" role="group" aria-label="FRP Direct role">
+          <button type="button" data-frp-role="host" aria-pressed="true">Host</button>
+          <button type="button" data-frp-role="client" aria-pressed="false">Client</button>
         </div>
-        <label>Local UDP listen port<input type="number" value="27045"></label>
-        <div class="field-label">FRP room player limit (applies immediately)</div>
-        <div class="segments player-limit" role="group" aria-label="FRP room player limit">
-          <button type="button" aria-pressed="false">1</button>
-          <button type="button" aria-pressed="false">2</button>
-          <button type="button" aria-pressed="false">3</button>
-          <button type="button" aria-pressed="true">4</button>
+        <div class="frp-host-settings">
+          <label>Local UDP listen port<input type="number" value="27045"></label>
+          <div class="field-label">FRP room player limit (applies immediately)</div>
+          <div class="segments player-limit" role="group" aria-label="FRP room player limit">
+            <button type="button" aria-pressed="false">1</button>
+            <button type="button" aria-pressed="false">2</button>
+            <button type="button" aria-pressed="false">3</button>
+            <button type="button" aria-pressed="true">4</button>
+          </div>
+        </div>
+        <div class="frp-client-settings" hidden>
+          <label>FRP server endpoint (host:port)<input type="text" value="frp.example.com:27045"></label>
         </div>
         <label>FRP room password (optional)<input type="password" value="preview"></label>
-        <div class="status">FRP Direct status: Listening on UDP 27045</div>
+        <div class="status" id="frp-status">FRP Direct status: Listening on UDP 27045</div>
       </div>
     </section>
 
@@ -288,6 +293,21 @@
         group.querySelectorAll('button').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
       });
     });
+
+    const frpRoleGroup = document.querySelector('.frp-role');
+    if (frpRoleGroup) {
+      frpRoleGroup.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+
+        const isClient = button.getAttribute('data-frp-role') === 'client';
+        document.querySelector('.frp-host-settings').hidden = isClient;
+        document.querySelector('.frp-client-settings').hidden = !isClient;
+        document.getElementById('frp-status').textContent = isClient
+          ? 'FRP Direct status: Waiting to connect to frp.example.com:27045'
+          : 'FRP Direct status: Listening on UDP 27045';
+      });
+    }
   </script>
 </body>
 </html>
