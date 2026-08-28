@@ -28,10 +28,10 @@
 
 当前范围不包括活动 AI 持续同步、敌方弹体、钱币、金色奖励、普通 `Grenade` 地形伤害或历史动态世界实验。详细实现和证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
 
-## 安装与首次测试
+## 安装与首次运行
 
-1. 所有玩家安装 `r2modman`，为 Broforce 创建或选择同一个 profile，并在其中安装 UMM。
-2. 启动一次游戏确认 UMM 加载成功。若本地 Mod 尚未登记，在 profile 的 `mods.yml` 增加：
+1. 所有玩家安装 `r2modman`，为 Broforce 创建或选择同一个 profile，并在其中安装 UMM。启动一次游戏确认 UMM 加载成功。
+2. 若本地 Mod 尚未登记，在 profile 的 `mods.yml` 增加：
 
 ```yaml
 - manifestVersion: 1
