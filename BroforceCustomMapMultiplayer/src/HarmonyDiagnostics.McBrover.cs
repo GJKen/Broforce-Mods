@@ -6,7 +6,7 @@ using System.Reflection.Emit;
 using Networking;
 using UnityEngine;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Synchronizes only McBrover's currentTurkey active detonation.
     internal static partial class HarmonyDiagnostics

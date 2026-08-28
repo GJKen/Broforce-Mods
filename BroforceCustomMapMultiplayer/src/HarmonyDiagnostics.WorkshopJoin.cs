@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Workshop 晚加入：加入请求排队、槽位准备、加入完成与超时处理。
     internal static partial class HarmonyDiagnostics

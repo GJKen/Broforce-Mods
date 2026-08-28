@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // 角色生成与出生点同步：延迟出生点捕获、应用与重广播。
     internal static partial class HarmonyDiagnostics

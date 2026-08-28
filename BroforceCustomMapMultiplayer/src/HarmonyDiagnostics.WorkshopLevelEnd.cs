@@ -3,7 +3,7 @@ using System;
 using System.Reflection;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     internal static partial class HarmonyDiagnostics
     {

@@ -6,11 +6,11 @@ using System.Security.Cryptography;
 using System.Text;
 using Lidgren.Network;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     internal sealed class FrpDirectTransport : IDisposable
     {
-        private const string ApplicationIdentifier = "BroforceOnlineDiagnostics.FrpDirect.v1";
+        private const string ApplicationIdentifier = "BroforceCustomMapMultiplayer.FrpDirect.v1";
         private const string ProtocolMagic = "BFOD-FRP";
         private const int ProtocolVersion = 4;
         private const int MaxRemoteConnections = 3;

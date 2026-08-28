@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // 会话生命周期：进出房间、场景加载、Workshop 会话状态的建立与重置。
     internal static partial class HarmonyDiagnostics
@@ -267,6 +267,7 @@ namespace BroforceOnlineDiagnostics
             _workshopSpawnRebroadcastPending = false;
             _workshopSpawnRebroadcastUseCurrentPositions = false;
             ClearDuplicateWorkshopLoadSuppression();
+            ClearWorkshopLoadRequest();
             ClearWorkshopLevelNumberOverride();
             ClearWorkshopOnlineLobbyReturnState();
             ClearWorkshopLocalJoinRequests();

@@ -2,11 +2,11 @@ using System;
 using System.Reflection;
 using HarmonyLib;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     internal static class FrpDirectNetworkManager
     {
-        private const string HarmonyId = "GJKen.BroforceOnlineDiagnostics.FrpDirectLayer";
+        private const string HarmonyId = "GJKen.BroforceCustomMapMultiplayer.FrpDirectLayer";
         private static readonly FieldInfo ConnectLayerField = AccessTools.Field(typeof(Connect), "layer");
         private static Harmony _harmony;
         private static FrpDirectTransport _transport;

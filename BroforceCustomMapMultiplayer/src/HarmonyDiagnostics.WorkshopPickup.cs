@@ -5,7 +5,7 @@ using System.Reflection;
 using Networking;
 using UnityEngine;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     internal static partial class HarmonyDiagnostics
     {

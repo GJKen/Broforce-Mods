@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Steam Lobby 状态同步与返回大厅：大厅数据读写、主菜单动画与可见性控制。
     internal static partial class HarmonyDiagnostics

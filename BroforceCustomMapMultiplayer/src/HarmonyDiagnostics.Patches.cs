@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace BroforceOnlineDiagnostics
+namespace BroforceCustomMapMultiplayer
 {
     // Harmony 补丁安装与 IL 织入：各目标方法的 Patch 注册和 transpiler。
     internal static partial class HarmonyDiagnostics
