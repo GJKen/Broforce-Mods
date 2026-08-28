@@ -1,5 +1,7 @@
 # Unity Inspector Mod
 
+> [English](README.en.md)
+
 这个目录包含 Unity Inspector Mod 的源码、构建脚本和本地配置模板。Mod 为 Broforce 提供 TCP 检查和运行时调试接口，供 `unity-inspector-mcp` 连接。
 
 ## 前置条件

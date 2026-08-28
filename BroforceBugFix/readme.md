@@ -1,5 +1,7 @@
 # Broforce Bug Fix
 
+> [English](README.en.md)
+
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony 修复插件。项目只收纳已经通过日志和原版源码确认的游戏缺陷；每个修复都应保持独立、可验证，并尽量不改变正常玩法。
 
 ## 当前修复
