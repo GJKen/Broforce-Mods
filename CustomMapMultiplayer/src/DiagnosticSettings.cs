@@ -23,6 +23,9 @@ namespace CustomMapMultiplayer
         public string FrpDirectServerAddress;
         public int FrpDirectServerPort;
         public string FrpDirectRoomPassword;
+        // UMM presentation state; these values never affect multiplayer behavior.
+        public string SettingsPanel;
+        public string SettingsLanguage;
         // UI-only section state; these do not enable or disable any feature.
         public bool WorkshopSettingsExpanded;
         public bool DiagnosticSettingsExpanded;
@@ -59,6 +62,8 @@ namespace CustomMapMultiplayer
             FrpDirectServerAddress = string.Empty;
             FrpDirectServerPort = 27045;
             FrpDirectRoomPassword = string.Empty;
+            SettingsPanel = "multiplayer";
+            SettingsLanguage = "system";
             WorkshopSettingsExpanded = true;
             DiagnosticSettingsExpanded = false;
             FrpDirectSettingsExpanded = false;
