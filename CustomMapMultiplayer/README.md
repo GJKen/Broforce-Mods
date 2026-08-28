@@ -1,10 +1,10 @@
 # Custom Map Multiplayer
 
+> [English](README.en.md)
+
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。默认复用官方 Steam Lobby/Steam P2P；可选的 `FRP Direct` 使用独立房间、PID 和游戏 RPC，但 Workshop 内容仍由 Steam 下载。
 
-官方 Steam 大厅和 FRP Direct 的 Esc 在线名单都会显示彩色延迟与动态渐变房主名。Steam 使用游戏原生 `PID.Ping`，FRP 使用 Lidgren RTT；显示效果只要求当前查看名单的机器安装本 Mod。
-
-只使用官方 Steam 大厅的彩色延迟名单时，仅查看名单的一方需要安装本 Mod。使用 Workshop 地图注入或 FRP Direct 时，所有参与联机的玩家必须安装相同构建的 Mod，并订阅、下载相同的 Workshop 地图；排查版本时以各端日志中的 `BUILD_INFO buildHash` 为准。加入方会读取房主发布的 Workshop ID、场景名和战役名，不再需要手工填写与房主相同的地图配置。
+使用 Workshop 地图注入或 FRP Direct 时，所有参与联机的玩家必须安装相同构建的 Mod，并订阅、下载相同的 Workshop 地图；排查版本时以各端日志中的 `BUILD_INFO buildHash` 为准。加入方会读取房主发布的 Workshop ID、场景名和战役名，不再需要手工填写与房主相同的地图配置。
 
 ## 当前状态
 
@@ -31,8 +31,11 @@
 
 ## 安装与首次运行
 
-1. 所有玩家安装 `r2modman`，为 Broforce 创建或选择同一个 profile，并在其中安装 UMM。启动一次游戏确认 UMM 加载成功。
-2. 若本地 Mod 尚未登记，在 profile 的 `mods.yml` 增加：
+1. 所有玩家安装 `r2modman`，为 Broforce 创建或选择默认的 profile，并在其中安装 UMM。启动一次游戏确认 UMM 加载成功。
+2. 将项目内最新编译的 `CustomMapMultiplayer` 目录复制到 r2modman 对应 profile 的 `UMM\Mods\`。目录名必须是 `GJKen-CustomMapMultiplayer`。
+3. 在 profile 的 `mods.yml` 追加👇：
+
+<details><summary>点击展开</summary>
 
 ```yaml
 - manifestVersion: 1
@@ -40,7 +43,7 @@
   authorName: GJKen
   websiteUrl: ''
   displayName: Custom Map Multiplayer
-  description: 使Broforce支持三方地图联机, 目前仍有许多bug待解决以及发现
+  description:
   gameVersion: ''
   networkMode: ''
   packageType: ''
@@ -57,24 +60,21 @@
   enabled: true
   onlineSource: false
 ```
+</details>
 
-3. 将项目内安装包 `CustomMapMultiplayer` 下的 `CustomMapMultiplayer.dll` 和 `Info.json` 复制到 profile 的 `UMM\Mods\GJKen-CustomMapMultiplayer`。目录名必须是 `GJKen-CustomMapMultiplayer`。运行 `BuildAndDeploy.ps1` 后，构建者的安装包和配置的测试部署目标会自动更新。
-4. 重启 r2modman，在 UMM 中确认 `Custom Map Multiplayer 0.5.0` 已加载。填写设置后点击 UMM 的保存按钮；切换 Mod 或退出游戏时也会尝试自动保存。
-5. 双方仍需订阅并下载相同 Workshop 地图，并在 `Multiplayer Options` 中开启 Workshop 地图注入。只需房主在 UMM 填写 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改。加入方将本地 Workshop ID 留空并自动采用房主发布的地图配置；即使忘记清空以前填写的 ID、场景名或战役名，这些保存值也不会参与本次加入。如果加入方没有订阅房主地图，屏幕顶部会提示缺少的 Workshop ID；订阅并等待 Steam 下载完成后重新加入房间。关闭 Workshop 地图注入后，官方地图继续使用游戏原生选图流程。
+> 做这一步只是为了让 r2modman 能够看见当前本地已经安装了此 mod，实际上步骤2已经能正常使用了。
 
-首次测试建议：
+4. 重启 r2modman，在 UMM 中确认 `Custom Map Multiplayer 0.5.0` 已加载。
+5. 双方需订阅并下载相同 Workshop 地图，并在 `Multiplayer Options` 中开启 Workshop 地图注入。
+只需房主在 UMM 填写地图的 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改；加入方的 Workshop ID 可留空，mod会自动采用房主发布的地图配置；
+如果加入方没有订阅房主地图，屏幕顶部会提示缺少订阅地图，你需要根据提示去订阅地图；
+关闭 Workshop 地图注入和 FRP Direct 后，恢复官方创建街机线上地图。
 
-```text
-Workshop ID: 房主填写 <Workshop 页面 URL 中 id= 后的数字>；加入方可留空
-Workshop campaign name: 留空
-Custom level scene: Test Evan2
-Diagnostic session ID: test001（可留空）
-Diagnostic label: 任意标识或留空
-```
+配置图示:
 
-6. 任意一端按官方流程创建线上大厅，另一端加入 `p1-p4` 选择界面。加入方按一次攻击键占用自己的位置；创建方确认双方位于不同位置后，再按攻击键进入地图。稳定测试优先采用“先加入大厅、创建方后进入地图”。
+<img width="781" height="417" alt="image" src="https://github.com/user-attachments/assets/48ad31e3-9103-44cd-ba2d-763c3801294f" />
 
-创建方已经进入 Workshop 地图时也支持晚加入。加入方会等待场景和原生玩家生成就绪后自动申请一次本地槽位；当前构建还会在最终场景向重入客户端重放房主的 buffered 网络实例。成功判据和诊断关键字见 [晚加入与重入](docs/DEVELOPMENT.md#晚加入与重入)。
+6. 任意一端使用街机模式创建线上大厅，加入方找到房间直接加入即可。
 
 ### UMM 设置面板
 
@@ -98,12 +98,7 @@ Diagnostic label: 任意标识或留空
 
 ## FRP Direct 联机
 
-FRP Direct 默认关闭。`FRP Direct` 页面只保留一个总开关：
-
-```text
-已启用 FRP Direct 联机
-已禁用 FRP Direct 联机
-```
+FRP Direct 总开关默认关闭。
 
 `Host`/`Client` 角色仍由用户明确选择。切换角色会立即保存并自动切换连接：Host 只使用本地 UDP 监听端口，完全忽略已保存的 Client 公网地址；Client 只使用 FRP 公网 `host:port`，完全忽略 Host 的本地监听端口。两套配置分别保留，切回原角色时无需重新填写。设置页不再提供手动 Apply 按钮；总开关和角色立即生效，端口、地址和密码在停止输入后自动保存并重连。心跳、超时检测和普通断线重试均由传输层自动处理。
 
@@ -160,6 +155,8 @@ src/SettingsUiText.cs             UMM 设置界面中英文文案
 CustomMapMultiplayer.csproj C# 工程文件
 BuildAndDeploy.ps1                .NET 3.5 构建和部署脚本
 CustomMapMultiplayer/    可复制的 UMM 安装包（DLL + Info.json）
+README.md                         默认中文说明文档
+README.en.md                      英文说明文档
 modinfo.json                      UMM 清单模板
 LocalBroforcePath.props.example   本机路径配置示例
 docs/DEVELOPMENT.md               开发、逆向、测试和故障排查
