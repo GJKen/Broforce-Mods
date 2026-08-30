@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=0c3475d8af2ea50122b7b41522001d238f8cca4143198fe211d48ae80af4aa62` |
-| DLL SHA-256 | `7192187349BC247D687F68F29F7E500249897E01D54D634EEF42731D98A28764` |
+| 当前分发构建 | `buildHash=13f2052f9a67caaa4c319acad1cfc49b1b3667ec9643eb5af077e9a721b64a92` |
+| DLL SHA-256 | `2973E9E53BDA502EE972B61675683F513D06D3A2DF0E4D86DA7DEC19A6E971CC` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
 
@@ -23,9 +23,9 @@
 - Steam 与 FRP Direct 的 Esc 彩色延迟名单和动态房主名；FRP 的三机基础联机、静态 `1` 人房满员提示及 Host/Client 配置自动应用。
 - Workshop 地图身份由房主发布，加入方自动采用；缺少订阅时显示提示并停止加载；注入可热关闭并恢复官方地图。
 - Workshop 加载会优先复用 Steam 已安装目录或旧版 UGC 本地缓存；缓存不可读时才回退到 Steam 下载，并抑制同一张地图加载期间的重复请求。
-- Workshop 的入场横幅、Esc 返回大厅和主菜单动画，以及标准弹药箱的确定性、远端扫描抑制和重复拾取防护。
+- Workshop 的入场横幅、Esc 返回大厅和主菜单动画；标准弹药箱的确定性、远端扫描抑制和重复拾取防护已在 FRP 双端验证，官方 Steam 大厅和更多地图仍需复测。
 
-开放问题：普通 Mook 死亡终态、AFK 诊断、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
+Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁只覆盖 `CheckForTraps`，遗漏了 `CalculateMovement` 和 `Damage` 对 `CoverInAcid` 的直达调用。当前实现已改为直接扫描 `DoodadAcidPool`，在统一 `CoverInAcid` 基入口执行加入方本地预测和房主权威校验；双方已实机验证房主、加入方分别进入酸液时均能正确死亡，且不会连带出生区玩家，详见 [独立 issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。普通 Mook 死亡终态、AFK 诊断、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
 
 当前范围不包括活动 AI 持续同步、敌方弹体、钱币、金色奖励、普通 `Grenade` 地形伤害或历史动态世界实验。详细实现和证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
 
@@ -95,6 +95,8 @@
 - 诊断日志预设和九个诊断分类只影响日志输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
 
 每轮测试结束后，收集所有参与端的诊断 `.log`、`.trace.log`，并尽量同时保存 UMM `Core\Log.txt` 和游戏 `error.log`。Windows 日志目录为 `%USERPROFILE%\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer\`，不是 DLL 部署目录；UMM 中的“打开诊断日志目录”按钮也会打开这里。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
+
+排查酸液池导致的异常死亡时，重点对齐双方同一会话的 `PLAYER_ACID` 事件：它记录 `CoverInAcid`、`CoverInAcidRPC` 和 `PlayerHasDiedRPC` 前后对应的玩家槽位、RPC 请求槽位、角色 NID、`IsMine`、坐标、`acidMeltTimer` 和 `hasBeenCoverInAcid`，并通过低频 `authority-gate` 标明 `host-check`、`client-request`、`authority-wait` 或 `native-fallback` 决策。
 
 ## FRP Direct 联机
 

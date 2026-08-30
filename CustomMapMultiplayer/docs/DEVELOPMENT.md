@@ -6,7 +6,8 @@
 
 - 项目是面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod，目标框架为 .NET Framework 3.5。
 - 默认网络路径是官方 Steam Lobby/P2P；`FRP Direct` 默认关闭，启用后接管房间、PID 和游戏 RPC，Steam 只负责 Workshop 内容下载。
-- Steam Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名、正常退出后重入和 Workshop 道具防重复已通过当前测试地图验收。
+- Steam Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名和正常退出后重入已通过当前测试地图验收；Workshop 道具防重复已在 FRP 双端实测，官方 Steam 大厅和更多地图仍需独立复测。
+- Workshop 酸液池已在 `Test Evan2 / Bromandy_Ptr1 / levelIndex=7` 完成房主与加入方分别接触的双端回归：实际接触者正常死亡，出生区玩家不再被连带死亡。
 - FRP 的房主加两台加入方（三机）基础联机已通过用户实测；代码支持最多三台远端，但四机、动态容量边界和主机迁移尚未验收。
 - FRP 单一总开关、Host/Client 角色切换、非当前角色配置隔离和无 Apply 自动应用已通过用户实测。
 - Workshop 注入热关闭及退出房间后的官方地图恢复已通过用户实测。
@@ -26,6 +27,7 @@
 - `src/HarmonyDiagnostics.WorkshopPickup.cs`：道具确定性、拾取所有权、幂等和满弹药退避。
 - `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、超时和槽位移除观测。
 - `src/HarmonyDiagnostics.LevelOutcome.cs`：`LevelFinish`/`RemoveLife` 前后快照。
+- `src/HarmonyDiagnostics.Acid.cs`：统一拦截英雄 `CoverInAcid` 基入口，在 Workshop 在线场景中执行酸池扫描、加入方本地预测、房主权威请求/校验/应用，并记录酸液 RPC 和玩家死亡 RPC 前后状态。
 - `src/HarmonyDiagnostics.WorkshopLevelEnd.cs`：Workshop 关卡结束动作防重入保护。
 - `src/HarmonyDiagnostics.WorkshopIdentity.cs`：房主地图身份发布、加入方会话配置采用、Steam 订阅检测和缺图加载保护。
 - `src/OptionalBroModDiagnostics.cs`：Swap Bros 公开 API、版本和角色指纹的只读弱依赖诊断。
@@ -97,7 +99,7 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 - 已消费或停用道具的重复 `Collect` 被忽略。
 - 弹药已满时只在本机提供一次原生反馈，不发送无效 `TargetAll` RPC；离开道具后可再次反馈，未消费道具有 0.5 秒退避。
 
-离线、普通线上原版关卡和未启用有效 Workshop 注入的会话保持原生行为。该补丁不依赖 Steam/FRP 层，已通过 FRP 双端实测，官方 Steam 大厅仍需独立复测。测试证据见 [issues 索引](../issues/README.md)。
+离线、普通线上原版关卡和未启用有效 Workshop 注入的会话保持原生行为。该补丁不依赖 Steam/FRP 层；当前仅有 FRP 双端道具证据，官方 Steam 大厅和更多地图仍需独立复测。测试证据见 [issues 索引](../issues/README.md)。
 
 ### Mook 终态与主动引爆
 
@@ -160,9 +162,10 @@ MainMenu
 
 部分 Workshop 地图会在 `GameModeController.switchingLevel=true` 后继续逐帧触发成功结束流程。重复流程会重新执行 `DetermineLevelOutcome -> CompleteCurrentLevel`，持续增加关卡号并重置切关倒计时；地图结束动作还可能先清除 `levelFinished`，绕过原生幂等保护。当前补丁只在有效线上 Workshop 会话、配置场景和 Workshop ID 均匹配时，抑制切关期间重复的 `LevelEndSuccess`/`LevelEndSuccessSilent` 和成功结算重入；第一次结束动作、失败重试和其它场景保持原生行为。对应根因、构建和复测要求见 [3715087178 黑屏记录](../issues/ISSUES-2026-08-26-3715087178联机通关黑屏与关卡结束重入.md)。
 
-这些诊断均为只读，不改变关卡结果、Workshop 模式、角色选择或 AFK 规则：
+除 Workshop 联机英雄酸液的主机权威校验外，这些诊断均为只读，不改变关卡结果、Workshop 模式、角色选择或 AFK 规则：
 
 - `LEVEL_OUTCOME`：在 `GameModeController.LevelFinish` 和 `Player.RemoveLife` 前后记录场景、生命、槽位、存活/本机玩家数、切关和房间状态。
+- `PLAYER_ACID`：在 `TestVanDammeAnim.CoverInAcid`、`CoverInAcidRPC` 和 `HeroController.PlayerHasDiedRPC` 前后记录 `playerNum`、RPC 请求槽位、角色 NID、`IsMine`、坐标、`acidMeltTimer` 和 `hasBeenCoverInAcid`。旧实现只转译 `CheckForTraps`，会被 `CalculateMovement` 和 `Damage` 的直达调用绕过；当前补丁改在统一 `CoverInAcid` 基入口拦截 Workshop 在线英雄。地图酸液状态通过场景中的 `DoodadAcidPool` 直接扫描并短时缓存，避免 `Map.GetNearestAcid` 在 Workshop 地图中失效。Host 同时扫描本机和远程英雄并广播经过地图验证的 NID；Client 本机英雄命中后先调用本地原生酸液 RPC，再请求 Host 确认，远程镜像只等待授权应用；权威状态尚未稳定时使用 `authority-wait` 保守阻断原生广播。离线、普通官方联机、非配置场景和非英雄对象仍执行原生行为。
 - `WORKSHOP_GAME_MODE_COMPARE`：比较 Campaign、`GameState` 和 `RoomInfo` 的 `gameMode`；不一致时告警，不回写。
 - `OPTIONAL_BRO_MOD`：通过 `UnityModManager.FindMod("Swap Bros Mod")` 和公开 API 记录版本、API、角色表及本地选择 SHA-256；缺失或失败时安全降级。
 - `AFK_TIMER`/`AFK_STATE`/`PLAYER_DROPOUT`：观察原生 AFK 和槽位移除。
@@ -209,6 +212,7 @@ MCP 默认只读。传送、修改生命或速度、切换关卡、模拟输入�
 - 道具：双方核对同一位置的数量/类型；满弹药站在箱子上不得持续播放反馈，消耗弹药后可拾取一次；MechDrop、RCCar 等显式特殊箱保持原类型。金色奖励没有当前专项同步实现，不能按稳定键或权威类型作为验收依据。
 - 实体终态与主动引爆：Mook 应在双方完成一次死亡链并收敛尸体终态；DemolitionBro 应只发生一次主动爆炸；McBrover 按其 [独立 issue](../issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md) 的 NID、`Death()` 与最终销毁条件验收。
 - 关卡结果：确认 `Level outcome diagnostics enabled; patched methods=2.`，分别触发扣命、通关和失败，检查 `LEVEL_OUTCOME` 前后快照。
+- 酸液/死亡链（已完成回归，2026-08-30）：双方使用同一 `sessionId` 和 `buildHash`，在 `Test Evan2 / Bromandy_Ptr1 / levelIndex=7` 交换验证房主和加入方分别接触酸液。两端均由实际接触者正常死亡，出生区玩家保持存活；加入方本地预测降低了死亡体感延迟，Host 仍负责权威校验和同步。复查日志时继续对齐 `authority-gate`、`authority-request/reject/apply/applied`、`CoverInAcidRPC`、`PlayerHasDiedRPC` 与 `LEVEL_OUTCOME`，确认只有实际接触酸液的英雄 NID 进入死亡链。完整记录见 [酸液问题 issue](../issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。
 - 可选 Mod：先比较双方安装/启用状态、版本、`rosterHash` 和 `selectedHash`。指纹不同只证明角色环境不同，不能单独作为英雄生成失败的根因。
 
 ## 诊断日志
@@ -255,7 +259,7 @@ diagnostics-host-<session>-<utc-time>.trace.log
 | 英雄回复 | Client 可能丢失原生英雄类型回复；18 秒备用生成只能缓解，不能替代网络同步 |
 | 晚加入/重入 | 当前地图已通过；不同地图、控制器、高延迟、异常断网和长期多轮仍需覆盖 |
 | AFK/失败 | 新诊断待真实双端触发；需确认远端槽位移除后 Host 的存活人数和失败判定 |
-| Workshop 地图 | 缺订阅时的自动识别、中文提示和加载阻止已通过双端实测；加入方残留本地配置隔离及房主地图自动识别已通过官方 Steam 大厅和 FRP Direct 实测；`GeneratePole.Awake`、`BroBase` 或特效可能抛出地图自身异常 |
+| Workshop 地图 | 缺订阅时的自动识别、中文提示和加载阻止已通过双端实测；加入方残留本地配置隔离及房主地图自动识别已通过官方 Steam 大厅和 FRP Direct 实测；酸液已完成当前测试地图房主/加入方回归，其它地图、高延迟和长期运行仍需覆盖；`GeneratePole.Awake`、`BroBase` 或特效可能抛出地图自身异常 |
 | Workshop 切关 | `3715087178` 的重复结束动作保护已实现并构建，普通成功、静默成功、失败重试和最终结算仍待双端复测；`3781818421` 仍作为独立问题保留 |
 | Mook 终态 | 普通网络 `PolymorphicAI` Mook 的死亡事件与尸体终态同步已实现；活动 AI、敌方弹体、钱币和载具不在当前范围，重启后双端验收仍需覆盖 |
 | 主动引爆 | DemolitionBro 已有恢复实测；McBrover 火鸡 NID 同步已实现但残留仍可复现，发生概率已显著降低但根因未闭环；普通 Grenade 保持原行为 |

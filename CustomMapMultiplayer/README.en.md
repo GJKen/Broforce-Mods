@@ -12,8 +12,8 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=0c3475d8af2ea50122b7b41522001d238f8cca4143198fe211d48ae80af4aa62` |
-| DLL SHA-256 | `7192187349BC247D687F68F29F7E500249897E01D54D634EEF42731D98A28764` |
+| Current distributed build | `buildHash=13f2052f9a67caaa4c319acad1cfc49b1b3667ec9643eb5af077e9a721b64a92` |
+| DLL SHA-256 | `2973E9E53BDA502EE972B61675683F513D06D3A2DF0E4D86DA7DEC19A6E971CC` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
 
@@ -23,7 +23,9 @@ Verified:
 - The colored latency list and animated host name in the Esc menu for Steam and FRP Direct; three-player FRP Direct play, the static full-room notice for a `1`-player room, and automatic Host/Client configuration application.
 - The host publishes the Workshop map identity and joining players use it automatically. Missing subscriptions show a notice and stop loading. Injection can be disabled while running and the official map flow is restored.
 - Workshop loading first reuses the Steam-installed directory or an older local UGC cache. It falls back to a Steam download only when the cache cannot be read, and suppresses duplicate requests while the same map is loading.
-- The Workshop entry banner, returning to the lobby with Esc, the main-menu animation, deterministic standard ammunition crates, remote scanning suppression, and duplicate pickup protection.
+- The Workshop entry banner, returning to the lobby with Esc, and the main-menu animation; deterministic standard ammunition crates, remote scanning suppression, and duplicate pickup protection are verified on both FRP sides, while the official Steam lobby and more maps still require retesting.
+
+Workshop acid failure samples confirmed that player slots and hero NIDs did not cross. The old patch covered only `CheckForTraps`, while reachable direct `CoverInAcid` calls in `CalculateMovement` and `Damage` bypassed it. The implementation now scans `DoodadAcidPool` directly, predicts local death for the joining player, and enforces Host authority at the common `CoverInAcid` entry. Host and joining-player acid deaths have been verified independently without killing the player left at the spawn area. See the [dedicated issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md).
 
 Open issues: ordinary Mook death final states, AFK diagnostics, level-end re-entry protection, official Steam items, high latency, and long-term re-entry still need expanded acceptance testing. Residual entities after McBrover's turkey self-detonation can still be reproduced, although the probability is significantly lower; see the [separate issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md). Four-player FRP Direct, the `2` to `4` player capacity boundaries, dynamic capacity reduction followed by re-entry, and host migration have not been verified.
 
@@ -95,6 +97,8 @@ The actual UMM settings page uses a vertical feature list on the left and displa
 - Diagnostic log presets and the nine diagnostic categories only filter log output; they do not change multiplayer behavior. Use matching categories on both sides when investigating the same problem.
 
 After each test round, collect the diagnostic `.log` and `.trace.log` files from every participant, and also preserve UMM `Core\Log.txt` and the game's `error.log` when possible. On Windows, logs are stored in `%USERPROFILE%\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer\`, not in the DLL deployment directory. The UMM `Open diagnostic log directory` button opens this location. With logs from only one side, state the evidence gap clearly and do not determine the network root cause from that side alone.
+
+For abnormal deaths caused by acid, align the `PLAYER_ACID` events from both sides for the same session. They record the before/after state around `CoverInAcid`, `CoverInAcidRPC`, and `PlayerHasDiedRPC`, including the player slot, requested RPC slot, character NID, `IsMine`, position, `acidMeltTimer`, and `hasBeenCoverInAcid`. The deduplicated `authority-gate` event also identifies the `host-check`, `client-request`, `authority-wait`, or `native-fallback` decision.
 
 ## FRP Direct Multiplayer
 
