@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>AssemblyCSharpChineseInputSwitch</RootNamespace>
+    <AssemblyName>AssemblyCSharpChineseInputSwitch</AssemblyName>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <OutputPath>$(MSBuildProjectDirectory)\</OutputPath>
+  </PropertyGroup>
+
+  <Import Project="..\LocalBroforcePath.props" Condition="Exists('..\LocalBroforcePath.props')" />
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityModManager">
+      <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="src\Plugin.cs" />
+  </ItemGroup>
+</Project>

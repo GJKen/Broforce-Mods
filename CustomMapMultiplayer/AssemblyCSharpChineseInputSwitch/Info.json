@@ -1,0 +1,8 @@
+{
+  "Id": "AssemblyCSharpChineseInputSwitch",
+  "DisplayName": "Assembly-CSharp Chinese Input Switch",
+  "Author": "GJKen",
+  "Version": "0.1.0",
+  "AssemblyName": "AssemblyCSharpChineseInputSwitch.dll",
+  "EntryMethod": "AssemblyCSharpChineseInputSwitch.Plugin.Load"
+}
