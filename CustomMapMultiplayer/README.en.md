@@ -12,8 +12,8 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=13f2052f9a67caaa4c319acad1cfc49b1b3667ec9643eb5af077e9a721b64a92` |
-| DLL SHA-256 | `2973E9E53BDA502EE972B61675683F513D06D3A2DF0E4D86DA7DEC19A6E971CC` |
+| Current distributed build | `buildHash=993e95efdc78a50e7ba6b25fb2495cb01e90d2a0cf551c058b6a43377904c9e3` |
+| DLL SHA-256 | `8BD597F4843C0C7F625EE5391A6FCC73F93BFEBB0DFD571C069228303BFF3EB0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
 
@@ -24,8 +24,11 @@ Verified:
 - The host publishes the Workshop map identity and joining players use it automatically. Missing subscriptions show a notice and stop loading. Injection can be disabled while running and the official map flow is restored.
 - Workshop loading first reuses the Steam-installed directory or an older local UGC cache. It falls back to a Steam download only when the cache cannot be read, and suppresses duplicate requests while the same map is loading.
 - The Workshop entry banner, returning to the lobby with Esc, and the main-menu animation; deterministic standard ammunition crates, remote scanning suppression, and duplicate pickup protection are verified on both FRP sides, while the official Steam lobby and more maps still require retesting.
+- In a long high-density combat test, Host frame drops were noticeably reduced. This is currently an observed improvement; unified graphics settings, reversed Host/Client roles, and p50/p95/p99 comparisons are still required for formal acceptance.
 
-Workshop acid failure samples confirmed that player slots and hero NIDs did not cross. The old patch covered only `CheckForTraps`, while reachable direct `CoverInAcid` calls in `CalculateMovement` and `Damage` bypassed it. The implementation now scans `DoodadAcidPool` directly, predicts local death for the joining player, and enforces Host authority at the common `CoverInAcid` entry. Host and joining-player acid deaths have been verified independently without killing the player left at the spawn area. See the [dedicated issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md).
+Workshop acid failure samples confirmed that player slots and hero NIDs did not cross. The old patch covered only `CheckForTraps`, while reachable direct `CoverInAcid` calls in `CalculateMovement` and `Damage` bypassed it. The implementation now keeps a scene-level `DoodadAcidPool` list, predicts local death for the joining player, and enforces Host authority at the common `CoverInAcid` entry while rate-limiting the Host scan. Host and joining-player acid deaths have been verified independently without killing the player left at the spawn area. See the [dedicated issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md).
+
+In the logs, `NullReferenceException` means code tried to use an object that was not initialized or was no longer valid. `DoodadCrate` is the game's native crate-handling class. Repeated crate effects and related errors on the joining side are tracked separately and are not direct evidence of Host combat frame drops.
 
 Open issues: ordinary Mook death final states, AFK diagnostics, level-end re-entry protection, official Steam items, high latency, and long-term re-entry still need expanded acceptance testing. Residual entities after McBrover's turkey self-detonation can still be reproduced, although the probability is significantly lower; see the [separate issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md). Four-player FRP Direct, the `2` to `4` player capacity boundaries, dynamic capacity reduction followed by re-entry, and host migration have not been verified.
 

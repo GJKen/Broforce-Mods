@@ -8,6 +8,7 @@
 - 默认网络路径是官方 Steam Lobby/P2P；`FRP Direct` 默认关闭，启用后接管房间、PID 和游戏 RPC，Steam 只负责 Workshop 内容下载。
 - Steam Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名和正常退出后重入已通过当前测试地图验收；Workshop 道具防重复已在 FRP 双端实测，官方 Steam 大厅和更多地图仍需独立复测。
 - Workshop 酸液池已在 `Test Evan2 / Bromandy_Ptr1 / levelIndex=7` 完成房主与加入方分别接触的双端回归：实际接触者正常死亡，出生区玩家不再被连带死亡。
+- 使用 `buildHash=993e95efdc78a50e7ba6b25fb2495cb01e90d2a0cf551c058b6a43377904c9e3` 的长时间高密度战斗测试中，Host 掉帧已明显减轻；该结果仍属于体感改善，正式 p50/p95/p99 A/B 验收尚未完成。
 - FRP 的房主加两台加入方（三机）基础联机已通过用户实测；代码支持最多三台远端，但四机、动态容量边界和主机迁移尚未验收。
 - FRP 单一总开关、Host/Client 角色切换、非当前角色配置隔离和无 Apply 自动应用已通过用户实测。
 - Workshop 注入热关闭及退出房间后的官方地图恢复已通过用户实测。
@@ -28,6 +29,9 @@
 - `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、超时和槽位移除观测。
 - `src/HarmonyDiagnostics.LevelOutcome.cs`：`LevelFinish`/`RemoveLife` 前后快照。
 - `src/HarmonyDiagnostics.Acid.cs`：统一拦截英雄 `CoverInAcid` 基入口，在 Workshop 在线场景中执行酸池扫描、加入方本地预测、房主权威请求/校验/应用，并记录酸液 RPC 和玩家死亡 RPC 前后状态。
+- `src/HarmonyDiagnostics.EntityFinalState.cs`：普通网络 Mook 的死亡事件、尸体终态同步、待提交候选和终态生命周期清理。
+- `src/HarmonyDiagnostics.Reflection.cs`：连接层 `Connect`/`ConnectionLayer` 状态读取及其反射元数据缓存。
+- `src/HarmonyDiagnostics.Trace.cs`：Harmony 方法追踪消息格式化、字段/属性读取和追踪反射元数据缓存。
 - `src/HarmonyDiagnostics.WorkshopLevelEnd.cs`：Workshop 关卡结束动作防重入保护。
 - `src/HarmonyDiagnostics.WorkshopIdentity.cs`：房主地图身份发布、加入方会话配置采用、Steam 订阅检测和缺图加载保护。
 - `src/OptionalBroModDiagnostics.cs`：Swap Bros 公开 API、版本和角色指纹的只读弱依赖诊断。
@@ -105,6 +109,8 @@ Workshop 玩家发生 `Dropout` 后，Mod 按槽位保存英雄类型和本地 `
 
 实体同步只覆盖普通、非载具、非 Boss 的网络 `PolymorphicAI` Mook：拥有端广播首次死亡事件和最终停稳位置，远端用非空 `DamageObject` 补全死亡链。活动 AI、敌方弹体、钱币和载具不在范围内。
 
+为降低 Host 在死亡事件密集时的开销，终态提交只遍历待提交的 NID 候选集合，不再每帧复制并遍历全部状态；普通 Mook 的 `PolymorphicAI` 和 Boss 类型资格判断按对象缓存。已经完成终态且不再等待其它状态的记录保留 15 秒，每 5 秒执行一次清理；pending 状态的超时、RPC 幂等和序列号行为保持不变。这些优化不改变网络协议、RPC 顺序或授权条件。
+
 `DemolitionBro.currentBomb` 与 `McBrover.currentTurkey` 的二次按键各有独立 Harmony 转译：拥有端立即执行原版 `Projectile.Death()` 并发送 NID 与位置，远端按 NID 以会话内幂等集合处理。DemolitionBro 已有恢复实测；McBrover 残留仍可复现但概率显著降低，详见 [独立 issue](../issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。其它投掷物保持原行为。
 
 ### AFK 行为
@@ -165,7 +171,7 @@ MainMenu
 除 Workshop 联机英雄酸液的主机权威校验外，这些诊断均为只读，不改变关卡结果、Workshop 模式、角色选择或 AFK 规则：
 
 - `LEVEL_OUTCOME`：在 `GameModeController.LevelFinish` 和 `Player.RemoveLife` 前后记录场景、生命、槽位、存活/本机玩家数、切关和房间状态。
-- `PLAYER_ACID`：在 `TestVanDammeAnim.CoverInAcid`、`CoverInAcidRPC` 和 `HeroController.PlayerHasDiedRPC` 前后记录 `playerNum`、RPC 请求槽位、角色 NID、`IsMine`、坐标、`acidMeltTimer` 和 `hasBeenCoverInAcid`。旧实现只转译 `CheckForTraps`，会被 `CalculateMovement` 和 `Damage` 的直达调用绕过；当前补丁改在统一 `CoverInAcid` 基入口拦截 Workshop 在线英雄。地图酸液状态通过场景中的 `DoodadAcidPool` 直接扫描并短时缓存，避免 `Map.GetNearestAcid` 在 Workshop 地图中失效。Host 同时扫描本机和远程英雄并广播经过地图验证的 NID；Client 本机英雄命中后先调用本地原生酸液 RPC，再请求 Host 确认，远程镜像只等待授权应用；权威状态尚未稳定时使用 `authority-wait` 保守阻断原生广播。离线、普通官方联机、非配置场景和非英雄对象仍执行原生行为。
+- `PLAYER_ACID`：在 `TestVanDammeAnim.CoverInAcid`、`CoverInAcidRPC` 和 `HeroController.PlayerHasDiedRPC` 前后记录 `playerNum`、RPC 请求槽位、角色 NID、`IsMine`、坐标、`acidMeltTimer` 和 `hasBeenCoverInAcid`。旧实现只转译 `CheckForTraps`，会被 `CalculateMovement` 和 `Damage` 的直达调用绕过；当前补丁改在统一 `CoverInAcid` 基入口拦截 Workshop 在线英雄。地图酸液状态通过场景级 `DoodadAcidPool` 列表判断，对象列表约每秒刷新，英雄结果短时缓存，避免 `Map.GetNearestAcid` 在 Workshop 地图中失效并减少全场景查找。Host 同时以约 10Hz 扫描本机和远程英雄并广播经过地图验证的 NID；Client 本机英雄命中后先调用本地原生酸液 RPC，再请求 Host 确认，远程镜像只等待授权应用；权威状态尚未稳定时使用 `authority-wait` 保守阻断原生广播。离线、普通官方联机、非配置场景和非英雄对象仍执行原生行为。
 - `WORKSHOP_GAME_MODE_COMPARE`：比较 Campaign、`GameState` 和 `RoomInfo` 的 `gameMode`；不一致时告警，不回写。
 - `OPTIONAL_BRO_MOD`：通过 `UnityModManager.FindMod("Swap Bros Mod")` 和公开 API 记录版本、API、角色表及本地选择 SHA-256；缺失或失败时安全降级。
 - `AFK_TIMER`/`AFK_STATE`/`PLAYER_DROPOUT`：观察原生 AFK 和槽位移除。
@@ -270,12 +276,15 @@ diagnostics-host-<session>-<utc-time>.trace.log
 
 `LEVEL_OUTCOME`、AFK 和 Dropout 事件同时写入普通日志和 trace；`WORKSHOP_GAME_MODE_COMPARE`、`OPTIONAL_BRO_MOD` 写普通日志。`OPTIONAL_BRO_MOD` 在启用诊断和每个会话开始时各采集一次，分析网络问题时使用会话中的第二次快照。
 
+Harmony Trace 关闭时会在构造追踪消息前直接短路，跳过参数格式化和反射读取；开启时复用方法参数、方法描述、字段和属性的缓存。连接层的 `Connect` 类型、`Layer`/`IsHost`/`IsOffline` 属性以及 `ConnectionLayer.Room` 访问也使用缓存，减少高频状态检查的反射开销。上述缓存只影响诊断路径，不改变功能性 Hook、RPC 或授权行为。
+
 标准构建把源码、引用、编译器目标和配置组成清单，计算 SHA-256 `buildHash` 并嵌入 DLL；未通过标准脚本的构建记录 `UNBUILT`。
 
 日志约束：
 
 - 不直接追踪 `Update`、`RunHeroRespawnLogic` 等每帧方法；改用低频下游事件。
 - 重复事件按方法、参数和状态限频；恢复记录时报告抑制数量。
+- 高频实体终态和酸液观察事件仍写入普通诊断日志，但不再同步调用 Unity `Debug.Log`，避免密集战斗事件把诊断输出开销叠加到游戏帧中；Warning、Error 和 trace 行为保持不变。
 - 新增追踪后先检查本机增长速度；持续每秒多行时先修复限频。
 - 写入前清洗未配对 UTF-16 代理项。
 - 不自动限制大小或删除旧日志；测试后按会话自行清理。
@@ -310,6 +319,12 @@ diagnostics-host-<session>-<utc-time>.trace.log
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
+```
+
+仅生成项目安装包而不复制到本机或内网 UMM 目录时，使用：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Release -SkipDeploy
 ```
 
 有效输出位置：
