@@ -71,8 +71,10 @@
     <Compile Include="src\HarmonyDiagnostics.EntityFinalState.cs" />
     <Compile Include="src\HarmonyDiagnostics.DemolitionBro.cs" />
     <Compile Include="src\HarmonyDiagnostics.McBrover.cs" />
+    <Compile Include="src\HarmonyDiagnostics.NativeMapSafety.cs" />
     <Compile Include="src\OptionalBroModDiagnostics.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
+    <Compile Include="src\PerformanceTelemetry.cs" />
     <Compile Include="src\SettingsUiText.cs" />
     <Compile Include="src\BuildMetadata.cs" />
     <Compile Include="src\OnlinePlayerListFormatter.cs" />

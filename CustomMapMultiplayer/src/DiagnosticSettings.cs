@@ -40,6 +40,7 @@ namespace CustomMapMultiplayer
         public bool LogFrpDirect;
         public bool LogOptionalMod;
         public bool LogHarmonyTrace;
+        public bool EnablePerformanceTelemetry;
         public string DiagnosticLogPreset;
         public int DiagnosticSettingsVersion;
 
@@ -76,6 +77,7 @@ namespace CustomMapMultiplayer
             LogFrpDirect = true;
             LogOptionalMod = true;
             LogHarmonyTrace = true;
+            EnablePerformanceTelemetry = false;
             DiagnosticLogPreset = "full";
             DiagnosticSettingsVersion = 0;
         }

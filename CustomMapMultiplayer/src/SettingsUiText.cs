@@ -40,6 +40,9 @@ namespace CustomMapMultiplayer
         internal string DiagnosticSessionId;
         internal string DiagnosticLabel;
         internal string OpenLogDirectory;
+        internal string PerformanceTelemetryEnabled;
+        internal string PerformanceTelemetryDisabled;
+        internal string PerformanceTelemetryHelp;
         internal string DiagnosticLogPreset;
         internal string[] DiagnosticPresets;
         internal string DiagnosticCategories;
@@ -85,6 +88,9 @@ namespace CustomMapMultiplayer
             DiagnosticSessionId = "Diagnostic session ID (use the same value on both clients; optional)",
             DiagnosticLabel = "Diagnostic label (optional; only used in log names)",
             OpenLogDirectory = "Open diagnostic log directory",
+            PerformanceTelemetryEnabled = "Enabled: performance telemetry",
+            PerformanceTelemetryDisabled = "Disabled: performance telemetry",
+            PerformanceTelemetryHelp = "When enabled, writes a two-second aggregate summary of frame time and Mod hot paths to the diagnostic file. It does not change online behavior.",
             DiagnosticLogPreset = "Diagnostic log preset",
             DiagnosticPresets = new[] { "Basic", "Join / Rejoin", "AFK / Failure", "Workshop", "Full" },
             DiagnosticCategories = "Diagnostic categories (log output only; online behavior is unchanged.)",
@@ -139,6 +145,9 @@ namespace CustomMapMultiplayer
             DiagnosticSessionId = "诊断会话 ID（双方使用相同值；可选）",
             DiagnosticLabel = "诊断标签（可选；仅用于日志文件名）",
             OpenLogDirectory = "打开诊断日志目录",
+            PerformanceTelemetryEnabled = "已启用性能观测",
+            PerformanceTelemetryDisabled = "已禁用性能观测",
+            PerformanceTelemetryHelp = "启用后每两秒向诊断文件写入一次帧时间和 Mod 热路径聚合摘要，不改变联机行为。",
             DiagnosticLogPreset = "诊断日志预设",
             DiagnosticPresets = new[] { "基础", "加入/重新加入", "AFK/失败", "Workshop", "完整" },
             DiagnosticCategories = "诊断分类（只筛选日志输出，不改变联机行为。）",

@@ -74,6 +74,7 @@ namespace CustomMapMultiplayer
 
         private void Update()
         {
+            PerformanceTelemetry.ObserveFrame(Time.unscaledDeltaTime);
             HarmonyDiagnostics.Update();
             if (_frpDirectTransport != null)
             {
@@ -98,6 +99,8 @@ namespace CustomMapMultiplayer
                 _nextHeroFallbackCheckAt = now + HeroFallbackCheckIntervalSeconds;
                 RecoverStalledLocalHeroRequests(now);
             }
+
+            PerformanceTelemetry.Update();
         }
 
         internal void ApplyFrpDirectSettings(bool forceRestart)

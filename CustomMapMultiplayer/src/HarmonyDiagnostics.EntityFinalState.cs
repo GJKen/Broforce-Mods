@@ -589,6 +589,9 @@ namespace CustomMapMultiplayer
             }
 
             var now = Time.unscaledTime;
+            PerformanceTelemetry.AddItems(
+                PerformanceMetric.EntitySubmit,
+                EntityFinalStateSubmissionCandidates.Count);
             EntityFinalStateCandidatesToRemove.Clear();
             foreach (var nid in EntityFinalStateSubmissionCandidates)
             {
@@ -639,6 +642,7 @@ namespace CustomMapMultiplayer
                 }
 
                 SubmitEntityCorpseTerminal(nid, state, mook);
+                PerformanceTelemetry.Hit(PerformanceMetric.EntitySubmit);
                 EntityFinalStateCandidatesToRemove.Add(nid);
             }
 
@@ -699,6 +703,9 @@ namespace CustomMapMultiplayer
             }
 
             var now = Time.unscaledTime;
+            PerformanceTelemetry.AddItems(
+                PerformanceMetric.EntityPending,
+                PendingEntityDeaths.Count + PendingEntityTerminals.Count);
             PendingEntityDeathsToRemove.Clear();
             foreach (var pair in PendingEntityDeaths)
             {
@@ -807,6 +814,9 @@ namespace CustomMapMultiplayer
             }
 
             EntityFinalStatesToRemove.Clear();
+            PerformanceTelemetry.AddItems(
+                PerformanceMetric.EntityPrune,
+                EntityFinalStates.Count);
             foreach (var pair in EntityFinalStates)
             {
                 var state = pair.Value;

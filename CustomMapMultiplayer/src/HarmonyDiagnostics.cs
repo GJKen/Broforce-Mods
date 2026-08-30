@@ -196,6 +196,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
+            PerformanceTelemetry.Reset();
             _harmony = new Harmony(HarmonyId);
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
@@ -346,6 +347,7 @@ namespace CustomMapMultiplayer
             PatchEntityFinalStateSynchronization();
             PatchDemolitionBroBombDetonationSynchronization();
             PatchMcBroverTurkeyDetonationSynchronization();
+            PatchNativeMapObjectSafety();
             PatchMainMenuInitializationPostfix();
             PatchMainMenuInitializationDelay();
             PatchLobbyMainMenuReturnPostfix();
@@ -401,6 +403,7 @@ namespace CustomMapMultiplayer
                 {
                     TraceCache.Clear();
                 }
+                PerformanceTelemetry.Reset();
             }
         }
 
@@ -517,6 +520,7 @@ namespace CustomMapMultiplayer
                     DiagnosticLog.BeginSession(
                         __originalMethod.DeclaringType.Name + "." + __originalMethod.Name,
                         __originalMethod.Name == "CreateMatch" ? "host" : "client");
+                    PerformanceTelemetry.Reset();
                     OptionalBroModDiagnostics.LogCompatibilitySnapshot("network-session-start");
                     Interlocked.Exchange(ref _sequence, 0);
                     lock (Sync)
@@ -543,10 +547,15 @@ namespace CustomMapMultiplayer
                 }
 
                 var sequence = Interlocked.Increment(ref _sequence);
+                var traceBuildStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.TraceBuild);
                 var message = BuildTraceMessage(__originalMethod, __instance, __args);
+                PerformanceTelemetry.End(PerformanceMetric.TraceBuild, traceBuildStartedAt);
                 var key = DescribeMethod(__originalMethod);
                 string suppressionSummary;
-                if (ShouldWrite(key, message, out suppressionSummary))
+                var traceDedupStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.TraceDedup);
+                var shouldWrite = ShouldWrite(key, message, out suppressionSummary);
+                PerformanceTelemetry.End(PerformanceMetric.TraceDedup, traceDedupStartedAt);
+                if (shouldWrite)
                 {
                     if (!string.IsNullOrEmpty(suppressionSummary))
                     {
@@ -554,6 +563,10 @@ namespace CustomMapMultiplayer
                     }
 
                     DiagnosticLog.Trace("TRACE #" + sequence + " " + message);
+                }
+                else
+                {
+                    PerformanceTelemetry.Hit(PerformanceMetric.TraceDedup);
                 }
             }
             catch (Exception exception)
@@ -596,11 +609,19 @@ namespace CustomMapMultiplayer
             TryCompleteCachedWorkshopLoad();
             ObserveOnlineHostRole();
             TrySynchronizeClientWorkshopIdentity(false, "periodic room check");
+            var acidAuthorityStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidAuthority);
             TryApplyWorkshopRemoteHeroAcid();
+            PerformanceTelemetry.End(PerformanceMetric.AcidAuthority, acidAuthorityStartedAt);
             TryRebroadcastWorkshopSpawns();
+            var entityPendingStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.EntityPending);
             TryApplyPendingEntityFinalStates();
+            PerformanceTelemetry.End(PerformanceMetric.EntityPending, entityPendingStartedAt);
+            var entitySubmitStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.EntitySubmit);
             TrySubmitEntityFinalStates();
+            PerformanceTelemetry.End(PerformanceMetric.EntitySubmit, entitySubmitStartedAt);
+            var entityPruneStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.EntityPrune);
             TryPruneEntityFinalStates();
+            PerformanceTelemetry.End(PerformanceMetric.EntityPrune, entityPruneStartedAt);
             TryApplyPendingMcBroverTurkeyDetonations();
             TryReturnToWorkshopOnlineLobby();
             TryRecoverWorkshopOnlineLobbyNavigationFailure();
@@ -667,6 +688,16 @@ namespace CustomMapMultiplayer
             }
 
             TryStartLateJoin();
+        }
+
+        internal static string GetTelemetryNetworkRole()
+        {
+            if (!_networkSessionActive)
+            {
+                return "offline";
+            }
+
+            return _sessionIsHost ? "host" : "client";
         }
 
         private static bool _workshopCompletionSubscribed;
