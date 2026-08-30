@@ -41,6 +41,7 @@
 | `archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md` | 已归档 | FRP Direct 公网双端基础游玩、Workshop 加载和玩家名单已经实测；文档中列出的扩展能力仍不因此自动视为完成。 |
 | `archive/ISSUES-2026-08-26-FRP多客户端与地图内动态房间人数上限.md` | 已归档 | 三机基础联机和静态 `1` 人房满员提示已验证；四机、`2` 至 `4` 人容量边界、动态容量调整和其它扩展场景仍待验收。 |
 | `archive/ISSUES-2026-08-28-关闭Workshop注入后恢复官方地图.md` | 已归档 | 关闭 Workshop 注入后清理运行态并恢复官方地图的修复已通过用户实测。 |
+| `archive/ISSUES-2026-08-28-DemolitionBro炸弹主动引爆联机同步.md` | 已归档 | `DemolitionBro.currentBomb` 主动引爆同步已完成双端联机实测，用户确认测试无问题。 |
 
 ## 阅读规则
 
