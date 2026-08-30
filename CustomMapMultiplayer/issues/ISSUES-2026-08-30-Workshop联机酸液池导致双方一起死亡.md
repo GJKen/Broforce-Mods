@@ -17,8 +17,8 @@ Workshop 地图中，一名英雄接触酸液时，另一名留在出生区的�
 实现位于 [`src/HarmonyDiagnostics.Acid.cs`](../src/HarmonyDiagnostics.Acid.cs)：
 
 - 在 `TestVanDammeAnim.CoverInAcid` 基入口统一拦截 Workshop 在线英雄，覆盖所有原生调用路径。
-- 直接扫描场景中的 `DoodadAcidPool`，检查 `fluidType=Acid`、`fullness > 0.2`，使用横向 4、纵向 `-2.5..10` 的角色范围，并缓存 50ms 结果。
-- Host 扫描本机和远程英雄；地图判定通过后按英雄 NID 广播，Host 本机还保留逐帧扫描兜底。
+- 维护场景级 `DoodadAcidPool` 列表，检查 `fluidType=Acid`、`fullness > 0.2`，使用横向 4、纵向 `-2.5..10` 的角色范围；对象列表约每秒刷新，英雄结果缓存 50ms。
+- Host 以约 10Hz 扫描本机和远程英雄；地图判定通过后按英雄 NID 广播，`CoverInAcid` 入口仍保留即时检查兜底。
 - 加入方本机命中后立即调用原生 `CoverInAcidRPC`，同时请求 Host 确认；远程镜像只等待 Host 授权应用。
 - 请求、广播和应用按 NID 限流并用 `hasBeenCoverInAcid` 去重，Host 应用前再次校验地图酸液状态。
 - 离线、普通官方联机、非配置场景和非英雄对象继续执行原生行为。

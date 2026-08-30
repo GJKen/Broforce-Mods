@@ -1,6 +1,7 @@
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [switch]$SkipDeploy
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,20 +151,25 @@ if ($LASTEXITCODE -ne 0) {
 $localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-CustomMapMultiplayer'
 Write-Host "Updated copyable package $outputPath"
 
-$deploymentPaths = @($localModPath)
-if (-not [string]::IsNullOrWhiteSpace($testDeployModPath)) {
-    $deploymentPaths += $testDeployModPath.Trim()
+if ($SkipDeploy) {
+    Write-Host 'Skipping UMM deployment because -SkipDeploy was specified.'
 }
-$deploymentPaths = @($deploymentPaths | Select-Object -Unique)
-foreach ($deploymentPath in $deploymentPaths) {
-    New-Item -ItemType Directory -Force -Path $deploymentPath | Out-Null
-    $destinationPath = Join-Path $deploymentPath 'CustomMapMultiplayer.dll'
-    Copy-Item -LiteralPath $outputPath -Destination $destinationPath -Force
-    Write-Host "Deployed $destinationPath"
+else {
+    $deploymentPaths = @($localModPath)
+    if (-not [string]::IsNullOrWhiteSpace($testDeployModPath)) {
+        $deploymentPaths += $testDeployModPath.Trim()
+    }
+    $deploymentPaths = @($deploymentPaths | Select-Object -Unique)
+    foreach ($deploymentPath in $deploymentPaths) {
+        New-Item -ItemType Directory -Force -Path $deploymentPath | Out-Null
+        $destinationPath = Join-Path $deploymentPath 'CustomMapMultiplayer.dll'
+        Copy-Item -LiteralPath $outputPath -Destination $destinationPath -Force
+        Write-Host "Deployed $destinationPath"
 
-    $infoDestinationPath = Join-Path $deploymentPath 'Info.json'
-    Copy-Item -LiteralPath $infoSourcePath -Destination $infoDestinationPath -Force
-    Write-Host "Updated $infoDestinationPath from modinfo.json"
+        $infoDestinationPath = Join-Path $deploymentPath 'Info.json'
+        Copy-Item -LiteralPath $infoSourcePath -Destination $infoDestinationPath -Force
+        Write-Host "Updated $infoDestinationPath from modinfo.json"
+    }
 }
 
 Write-Host 'Build and deployment completed.'
