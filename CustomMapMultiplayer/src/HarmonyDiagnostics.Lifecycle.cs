@@ -115,6 +115,7 @@ namespace CustomMapMultiplayer
 
         private static void ClearLifecycleState()
         {
+            ClearWorkshopAcidAuthorityState();
             ClearAfkDiagnosticsState();
             ClearWorkshopPickupSynchronizationState();
             ClearEntityFinalStateSynchronizationState();

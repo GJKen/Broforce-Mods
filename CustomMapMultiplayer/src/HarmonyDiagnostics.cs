@@ -341,6 +341,7 @@ namespace CustomMapMultiplayer
             PatchOnlineAfkPrevention();
             PatchOnlinePlayerListDisplay();
             PatchLevelOutcomeDiagnostics();
+            PatchAcidDiagnostics();
             PatchWorkshopLevelEndReentryGuard();
             PatchEntityFinalStateSynchronization();
             PatchDemolitionBroBombDetonationSynchronization();
@@ -590,6 +591,7 @@ namespace CustomMapMultiplayer
             TryCompleteCachedWorkshopLoad();
             ObserveOnlineHostRole();
             TrySynchronizeClientWorkshopIdentity(false, "periodic room check");
+            TryApplyWorkshopRemoteHeroAcid();
             TryRebroadcastWorkshopSpawns();
             TryApplyPendingEntityFinalStates();
             TrySubmitEntityFinalStates();
