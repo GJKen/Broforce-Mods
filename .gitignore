@@ -2,5 +2,8 @@
 /BroforceBugFix/LocalBroforcePath.props
 /CustomMapMultiplayer/LocalBroforcePath.props
 
+# Locally supplied Assembly-CSharp candidate; do not publish the game assembly.
+/CustomMapMultiplayer/AssemblyCSharpChineseInputSwitch/payload/Assembly-CSharp-ChineseInput.candidate.dll
+
 # Local reverse-engineering reference; never publish extracted game source.
 /Broforce_src/Broforce-Source/
