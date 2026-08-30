@@ -537,6 +537,11 @@ namespace CustomMapMultiplayer
                 RestoreAuthoritativeWorkshopLevelNumberBeforeCompletion(__originalMethod);
                 ObserveWorkshopOnlineLobbyReturnBeforeTrace(__originalMethod, __args);
                 ObserveLifecycleBeforeTrace(__originalMethod, __instance, __args);
+                if (!DiagnosticLog.IsCategoryEnabled(DiagnosticLogCategory.HarmonyTrace))
+                {
+                    return true;
+                }
+
                 var sequence = Interlocked.Increment(ref _sequence);
                 var message = BuildTraceMessage(__originalMethod, __instance, __args);
                 var key = DescribeMethod(__originalMethod);
@@ -595,6 +600,7 @@ namespace CustomMapMultiplayer
             TryRebroadcastWorkshopSpawns();
             TryApplyPendingEntityFinalStates();
             TrySubmitEntityFinalStates();
+            TryPruneEntityFinalStates();
             TryApplyPendingMcBroverTurkeyDetonations();
             TryReturnToWorkshopOnlineLobby();
             TryRecoverWorkshopOnlineLobbyNavigationFailure();

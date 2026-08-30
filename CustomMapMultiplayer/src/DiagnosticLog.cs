@@ -150,6 +150,13 @@ namespace CustomMapMultiplayer
             Write("INFO", message, false, true);
         }
 
+        // Keep high-frequency events in the session file without pushing them through
+        // Unity's main-thread log pipeline, which adds allocations during event bursts.
+        internal static void InfoFileOnly(string message)
+        {
+            Write("INFO", message, false, false);
+        }
+
         public static void Warning(string message)
         {
             Write("WARN", message, false, true);
