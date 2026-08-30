@@ -206,6 +206,34 @@ MainMenu
 
 MCP 默认只读。传送、修改生命或速度、切换关卡、模拟输入、执行运行时代码和临时注入都必须获得当次明确授权，并记录目标、指令与前后状态；不得把临时运行时修改混同为正式源码修复。
 
+### MCP 热修复记录
+
+MCP 热修复用于缩短“定位问题 -> 验证假设”的循环，可以在不重新编译和重启游戏的情况下替换当前进程中的窄范围方法。它只存在于当前游戏进程，进程停止、关卡重载或主动卸载后即失效，不能作为发布版本或最终验收依据。
+
+每次热修复都要单独记录以下字段：
+
+```text
+hotfixId=唯一名称或版本
+time=开始/结束时间
+authorization=本次明确授权来源
+targets=Host、Client 或具体 MCP 端点
+baseBuildHash=应用前双方 BUILD_INFO
+scene/map/session=场景、Workshop ID、sessionId
+patchScope=目标类型、方法、RPC 或字段；禁止写成“全场景修复”
+before=应用前关键状态和日志游标
+actions=实际注入、复现和回退动作
+after=应用后状态、日志事件和异常
+result=假设验证结果及未解决问题
+handoff=正式源码文件、构建哈希和后续验收要求
+```
+
+热修复操作约束：
+
+- 先建立双方 `ping`、场景、地图、传输方式、`sessionId` 和 `buildHash` 基线，再注入；Host 与 Client 必须分别记录补丁是否成功。
+- 一个热修复只验证一个假设，限定到已知方法、NID 或对象；不宽泛枚举场景，不把自动输入结果当成人工复现。
+- 记录注入前后状态和新增日志，包含正常样本、异常样本和补丁版本；连接中断时停止向该端发送指令。
+- 验证通过后把实际行为迁移到正式源码，删除或卸载临时补丁，执行标准 Release 构建并重启双方游戏进行回归；热修复日志只能作为定位证据。
+
 ### 专项验收
 
 - AFK：启动日志应有 `AFK_DIAGNOSTICS_PATCH playerUpdate=True; dropoutRpc=True`；目标端无输入至少 35 秒，对齐双方 `AFK_TIMER`、`AFK_STATE`、`PLAYER_DROPOUT` 和槽位/存活人数。开启防 AFK 时应有 `prevention-active`，不应有本机 `timeout-triggered`。
