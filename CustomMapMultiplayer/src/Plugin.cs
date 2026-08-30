@@ -6,7 +6,7 @@ namespace CustomMapMultiplayer
 {
     public static class Plugin
     {
-        private const int CurrentDiagnosticSettingsVersion = 8;
+        private const int CurrentDiagnosticSettingsVersion = 9;
         private const float FrpSettingsApplyDelaySeconds = 0.75f;
         private const float SettingsNavigationWidth = 190f;
         private const float SettingsContentWidth = 590f;
@@ -184,7 +184,7 @@ namespace CustomMapMultiplayer
                     DrawLanguageSettings(text);
                     break;
                 case "logs":
-                    DrawDiagnosticSettings(text);
+                    DrawDiagnosticSettings(modEntry, text);
                     break;
                 default:
                     DrawMultiplayerSettings(modEntry, text);
@@ -390,7 +390,9 @@ namespace CustomMapMultiplayer
             return 0;
         }
 
-        private static void DrawDiagnosticSettings(SettingsUiText text)
+        private static void DrawDiagnosticSettings(
+            UnityModManager.ModEntry modEntry,
+            SettingsUiText text)
         {
             DrawViewHeading(text.DiagnosticLogs, text.DiagnosticsIntro);
             Settings.DiagnosticSessionId = DrawTextField(
@@ -402,6 +404,19 @@ namespace CustomMapMultiplayer
                 string error;
                 DiagnosticLog.TryOpenDirectory(out error);
             }
+            GUILayout.Space(7f);
+            var performanceTelemetryEnabled = DrawSettingsToggle(
+                Settings.EnablePerformanceTelemetry,
+                Settings.EnablePerformanceTelemetry
+                    ? text.PerformanceTelemetryEnabled
+                    : text.PerformanceTelemetryDisabled,
+                GetSettingsToggleStyle());
+            if (performanceTelemetryEnabled != Settings.EnablePerformanceTelemetry)
+            {
+                Settings.EnablePerformanceTelemetry = performanceTelemetryEnabled;
+                SaveSettings(modEntry);
+            }
+            DrawIndentedHelp(text.PerformanceTelemetryHelp);
             GUILayout.Space(7f);
             DiagnosticLog.DrawSettingsGui(
                 text,

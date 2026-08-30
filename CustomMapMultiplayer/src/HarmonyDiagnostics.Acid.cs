@@ -190,11 +190,15 @@ namespace CustomMapMultiplayer
             if (WorkshopAcidScanCacheByHero.TryGetValue(heroId, out cached) &&
                 now - cached.ScannedAt < WorkshopAcidScanCacheSeconds)
             {
+                PerformanceTelemetry.Hit(PerformanceMetric.AcidHeroCache);
                 return cached.HasAcid;
             }
 
+            PerformanceTelemetry.Miss(PerformanceMetric.AcidHeroCache);
+            var scanStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidHeroScan);
             var hasAcid = false;
             var acidPools = GetWorkshopAcidPools();
+            PerformanceTelemetry.AddItems(PerformanceMetric.AcidHeroScan, acidPools.Length);
             for (var index = 0; index < acidPools.Length; index++)
             {
                 var acidPool = acidPools[index];
@@ -228,6 +232,15 @@ namespace CustomMapMultiplayer
             }
             cached.ScannedAt = now;
             cached.HasAcid = hasAcid;
+            if (hasAcid)
+            {
+                PerformanceTelemetry.Hit(PerformanceMetric.AcidHeroScan);
+            }
+            else
+            {
+                PerformanceTelemetry.Miss(PerformanceMetric.AcidHeroScan);
+            }
+            PerformanceTelemetry.End(PerformanceMetric.AcidHeroScan, scanStartedAt);
             return hasAcid;
         }
 
@@ -245,6 +258,7 @@ namespace CustomMapMultiplayer
                 return _workshopAcidPools;
             }
 
+            var refreshStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidPoolRefresh);
             try
             {
                 var discoveredPools = UnityEngine.Object.FindObjectsOfType<DoodadAcidPool>();
@@ -292,6 +306,10 @@ namespace CustomMapMultiplayer
                 }
             }
 
+            PerformanceTelemetry.AddItems(
+                PerformanceMetric.AcidPoolRefresh,
+                _workshopAcidPools == null ? 0 : _workshopAcidPools.Length);
+            PerformanceTelemetry.End(PerformanceMetric.AcidPoolRefresh, refreshStartedAt);
             return _workshopAcidPools;
         }
 
@@ -312,6 +330,9 @@ namespace CustomMapMultiplayer
 
             _nextWorkshopAcidAuthorityScanAt =
                 now + WorkshopAcidAuthorityScanIntervalSeconds;
+            PerformanceTelemetry.AddItems(
+                PerformanceMetric.AcidAuthority,
+                HeroController.players.Length);
 
             for (var index = 0; index < HeroController.players.Length; index++)
             {
@@ -590,6 +611,7 @@ namespace CustomMapMultiplayer
             TestVanDammeAnim __instance,
             ref bool __state)
         {
+            PerformanceTelemetry.Count(PerformanceMetric.AcidHook);
             __state = true;
             var suppressNativeFallback = false;
             LogAcidObservation("CoverInAcid", "before", __instance, -1);
@@ -751,11 +773,13 @@ namespace CustomMapMultiplayer
 
         private static void CoverInAcidRpcDiagnosticsPrefix(TestVanDammeAnim __instance)
         {
+            PerformanceTelemetry.Count(PerformanceMetric.AcidHook);
             LogAcidObservation("CoverInAcidRPC", "before", __instance, -1);
         }
 
         private static void CoverInAcidRpcDiagnosticsPostfix(TestVanDammeAnim __instance)
         {
+            PerformanceTelemetry.Count(PerformanceMetric.AcidHook);
             LogAcidObservation("CoverInAcidRPC", "after", __instance, -1);
         }
 
@@ -785,6 +809,7 @@ namespace CustomMapMultiplayer
             TestVanDammeAnim character,
             int requestedPlayerNum)
         {
+            var observationStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidObservation);
             try
             {
                 var player = GetAcidPlayer(character);
@@ -811,6 +836,12 @@ namespace CustomMapMultiplayer
             {
                 DiagnosticLog.Warning(
                     "PLAYER_ACID observation failed for " + eventName + ": " + exception.Message);
+            }
+            finally
+            {
+                PerformanceTelemetry.End(
+                    PerformanceMetric.AcidObservation,
+                    observationStartedAt);
             }
         }
 

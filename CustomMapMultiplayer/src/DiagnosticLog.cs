@@ -157,6 +157,13 @@ namespace CustomMapMultiplayer
             Write("INFO", message, false, false);
         }
 
+        // Performance summaries must remain visible even when a log preset has
+        // disabled the normal lobby category.
+        internal static void Performance(string message)
+        {
+            Write("PERF", message, false, false);
+        }
+
         public static void Warning(string message)
         {
             Write("WARN", message, false, true);
@@ -472,6 +479,7 @@ namespace CustomMapMultiplayer
 
         private static void Write(string level, string message, bool trace, bool writeToUnity)
         {
+            var performanceStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.DiagnosticWrite);
             var safeMessage = SanitizeUtf16(message);
             var line = string.Empty;
             var written = false;
@@ -500,12 +508,19 @@ namespace CustomMapMultiplayer
                     "[CustomMapMultiplayer] Cannot write diagnostic file: " +
                     SanitizeUtf16(exception.ToString()));
             }
+            finally
+            {
+                PerformanceTelemetry.End(
+                    PerformanceMetric.DiagnosticWrite,
+                    performanceStartedAt);
+            }
         }
 
         private static bool ShouldWrite(string level, DiagnosticLogCategory category)
         {
             return string.Equals(level, "WARN", StringComparison.Ordinal) ||
                    string.Equals(level, "ERROR", StringComparison.Ordinal) ||
+                   string.Equals(level, "PERF", StringComparison.Ordinal) ||
                    IsCategoryEnabled(category);
         }
 
