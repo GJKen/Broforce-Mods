@@ -41,6 +41,7 @@ The following records completed their respective user-testing scope. Their origi
 | `archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md` | Archived | FRP Direct public-network two-sided basic play, Workshop loading, and the player list were tested; extended capabilities described in the document are not automatically complete. |
 | `archive/ISSUES-2026-08-26-FRP多客户端与地图内动态房间人数上限.md` | Archived | Three-player basic play and the static full-room notice for a `1`-player room were verified; four-player play, `2` to `4` capacity boundaries, dynamic capacity adjustment, and other extended scenarios still require testing. |
 | `archive/ISSUES-2026-08-28-关闭Workshop注入后恢复官方地图.md` | Archived | Clearing runtime state after disabling Workshop injection and restoring the official map flow were verified by the user. |
+| `archive/ISSUES-2026-08-28-DemolitionBro炸弹主动引爆联机同步.md` | Archived | `DemolitionBro.currentBomb` self-detonation synchronization was implemented and verified in two-sided multiplayer testing; the user confirmed no issue. |
 
 ## Reading Rules
 
