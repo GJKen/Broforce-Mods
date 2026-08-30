@@ -15,6 +15,8 @@ namespace CustomMapMultiplayer
         private const float EntityFinalStateStableVelocity = 1f;
         private const float EntityFinalStateMissingObjectTimeoutSeconds = 5f;
         private const float EntityFinalStateDisableGraceSeconds = 2f;
+        private const float EntityFinalStateTerminalRetentionSeconds = 15f;
+        private const float EntityFinalStatePruneIntervalSeconds = 5f;
 
         private static readonly Dictionary<NID, EntityFinalState> EntityFinalStates =
             new Dictionary<NID, EntityFinalState>();
@@ -22,12 +24,28 @@ namespace CustomMapMultiplayer
             new Dictionary<NID, PendingEntityDeath>();
         private static readonly Dictionary<NID, PendingEntityTerminal> PendingEntityTerminals =
             new Dictionary<NID, PendingEntityTerminal>();
+        private static readonly HashSet<NID> EntityFinalStateSubmissionCandidates =
+            new HashSet<NID>();
+        private static readonly List<NID> EntityFinalStateCandidatesToRemove =
+            new List<NID>();
+        private static readonly List<NID> PendingEntityDeathsToRemove =
+            new List<NID>();
+        private static readonly List<NID> PendingEntityTerminalsToRemove =
+            new List<NID>();
+        private static readonly List<NID> EntityFinalStatesToRemove =
+            new List<NID>();
+        private static readonly Dictionary<int, EntityFinalStateMookQualification>
+            EntityFinalStateMookQualifications =
+                new Dictionary<int, EntityFinalStateMookQualification>();
+        private static readonly List<int> EntityFinalStateMookQualificationsToRemove =
+            new List<int>();
         private static readonly FieldInfo MookHasDiedField =
             typeof(Mook).GetField(
                 "hasDied",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static bool _applyingEntityFinalState;
         private static int _entityFinalStateWarningCount;
+        private static float _nextEntityFinalStatePruneAt = float.NegativeInfinity;
 
         private sealed class EntityFinalState
         {
@@ -39,6 +57,7 @@ namespace CustomMapMultiplayer
             internal bool DeathApplied;
             internal bool TerminalSent;
             internal bool TerminalApplied;
+            internal float TerminalCompletedAt;
         }
 
         private sealed class PendingEntityDeath
@@ -61,6 +80,13 @@ namespace CustomMapMultiplayer
             internal float Y;
             internal int Health;
             internal float ExpiresAt;
+        }
+
+        private sealed class EntityFinalStateMookQualification
+        {
+            internal Mook Mook;
+            internal bool HasPolymorphicAi;
+            internal bool IsBossType;
         }
 
         private static void PatchEntityFinalStateSynchronization()
@@ -138,15 +164,28 @@ namespace CustomMapMultiplayer
         private static bool IsEntityFinalStateMook(Mook mook)
         {
             if (!IsEntityFinalStateSession() || mook == null || mook.IsHero || mook.destroyed ||
-                mook.GetComponent<PolymorphicAI>() == null || mook.mookType == MookType.Vehicle)
+                mook.mookType == MookType.Vehicle || mook.Nid == NID.NoID)
             {
                 return false;
             }
 
-            var typeName = mook.GetType().Name;
-            return typeName.IndexOf("Boss", StringComparison.OrdinalIgnoreCase) < 0 &&
-                   typeName.IndexOf("Miniboss", StringComparison.OrdinalIgnoreCase) < 0 &&
-                   mook.Nid != NID.NoID;
+            var instanceId = mook.GetInstanceID();
+            EntityFinalStateMookQualification qualification;
+            if (!EntityFinalStateMookQualifications.TryGetValue(instanceId, out qualification) ||
+                !object.ReferenceEquals(qualification.Mook, mook))
+            {
+                var typeName = mook.GetType().Name;
+                qualification = new EntityFinalStateMookQualification
+                {
+                    Mook = mook,
+                    HasPolymorphicAi = mook.GetComponent<PolymorphicAI>() != null,
+                    IsBossType = typeName.IndexOf("Boss", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 typeName.IndexOf("Miniboss", StringComparison.OrdinalIgnoreCase) >= 0
+                };
+                EntityFinalStateMookQualifications[instanceId] = qualification;
+            }
+
+            return qualification.HasPolymorphicAi && !qualification.IsBossType;
         }
 
         private static bool IsMookDeathComplete(Mook mook)
@@ -204,6 +243,7 @@ namespace CustomMapMultiplayer
                 state.StableAt = 0f;
                 state.DeathSent = true;
                 state.DeathApplied = true;
+                EntityFinalStateSubmissionCandidates.Add(nid);
 
                 var damageType = damage == null ? DamageType.Normal : damage.damageType;
                 var damageAmount = damage == null
@@ -224,7 +264,7 @@ namespace CustomMapMultiplayer
                     damageType,
                     false);
 
-                DiagnosticLog.Info(
+                DiagnosticLog.InfoFileOnly(
                     "ENTITY_FINAL death-owner; nid=" + nid +
                     "; sequence=" + state.Sequence +
                     "; type=" + __instance.GetType().Name +
@@ -353,7 +393,7 @@ namespace CustomMapMultiplayer
             mook.actionState = ActionState.Dead;
             state.DeathApplied = true;
 
-            DiagnosticLog.Info(
+            DiagnosticLog.InfoFileOnly(
                 "ENTITY_FINAL death-apply; nid=" + nid +
                 "; sequence=" + sequence +
                 "; health=" + mook.health +
@@ -409,7 +449,7 @@ namespace CustomMapMultiplayer
                 state.DeathAt = Time.unscaledTime;
                 state.DeathApplied = true;
                 state.DeathSent = false;
-                DiagnosticLog.Info(
+                DiagnosticLog.InfoFileOnly(
                     "ENTITY_FINAL native-death-apply; nid=" + mook.Nid +
                     "; health=" + mook.health +
                     "; position=" + mook.X + "," + mook.Y + ".");
@@ -528,12 +568,13 @@ namespace CustomMapMultiplayer
             state.Mook = mook;
             state.Sequence = sequence;
             state.TerminalApplied = true;
+            state.TerminalCompletedAt = Time.unscaledTime;
             SetEntityMookPosition(mook, x, y);
             mook.health = health;
             mook.xI = 0f;
             mook.yI = 0f;
 
-            DiagnosticLog.Info(
+            DiagnosticLog.InfoFileOnly(
                 "ENTITY_FINAL corpse-terminal-apply; nid=" + nid +
                 "; sequence=" + sequence +
                 "; health=" + mook.health +
@@ -542,20 +583,30 @@ namespace CustomMapMultiplayer
 
         private static void TrySubmitEntityFinalStates()
         {
-            if (!IsEntityFinalStateSession())
+            if (!IsEntityFinalStateSession() || EntityFinalStateSubmissionCandidates.Count == 0)
             {
                 return;
             }
 
             var now = Time.unscaledTime;
-            foreach (var pair in new List<KeyValuePair<NID, EntityFinalState>>(EntityFinalStates))
+            EntityFinalStateCandidatesToRemove.Clear();
+            foreach (var nid in EntityFinalStateSubmissionCandidates)
             {
-                var nid = pair.Key;
-                var state = pair.Value;
+                EntityFinalState state;
+                if (!EntityFinalStates.TryGetValue(nid, out state))
+                {
+                    EntityFinalStateCandidatesToRemove.Add(nid);
+                    continue;
+                }
+
                 var mook = state.Mook;
                 if (state.TerminalSent || !state.DeathSent || mook == null || !mook.IsMine ||
                     !IsEntityFinalStateMook(mook) || mook.actionState != ActionState.Dead)
                 {
+                    if (state.TerminalSent || mook == null)
+                    {
+                        EntityFinalStateCandidatesToRemove.Add(nid);
+                    }
                     continue;
                 }
 
@@ -588,6 +639,13 @@ namespace CustomMapMultiplayer
                 }
 
                 SubmitEntityCorpseTerminal(nid, state, mook);
+                EntityFinalStateCandidatesToRemove.Add(nid);
+            }
+
+            for (var index = 0; index < EntityFinalStateCandidatesToRemove.Count; index++)
+            {
+                EntityFinalStateSubmissionCandidates.Remove(
+                    EntityFinalStateCandidatesToRemove[index]);
             }
         }
 
@@ -598,6 +656,7 @@ namespace CustomMapMultiplayer
         {
             state.TerminalSent = true;
             state.TerminalApplied = true;
+            state.TerminalCompletedAt = Time.unscaledTime;
             SetEntityMookPosition(mook, mook.X, mook.Y);
             mook.xI = 0f;
             mook.yI = 0f;
@@ -612,7 +671,7 @@ namespace CustomMapMultiplayer
                 mook.health,
                 false);
 
-            DiagnosticLog.Info(
+            DiagnosticLog.InfoFileOnly(
                 "ENTITY_FINAL corpse-owner-terminal; nid=" + nid +
                 "; sequence=" + state.Sequence +
                 "; health=" + mook.health +
@@ -633,18 +692,20 @@ namespace CustomMapMultiplayer
 
         private static void TryApplyPendingEntityFinalStates()
         {
-            if (!IsEntityFinalStateSession())
+            if (!IsEntityFinalStateSession() ||
+                (PendingEntityDeaths.Count == 0 && PendingEntityTerminals.Count == 0))
             {
                 return;
             }
 
             var now = Time.unscaledTime;
-            foreach (var pair in new List<KeyValuePair<NID, PendingEntityDeath>>(PendingEntityDeaths))
+            PendingEntityDeathsToRemove.Clear();
+            foreach (var pair in PendingEntityDeaths)
             {
                 var pending = pair.Value;
                 if (pending.ExpiresAt < now)
                 {
-                    PendingEntityDeaths.Remove(pair.Key);
+                    PendingEntityDeathsToRemove.Add(pair.Key);
                     LogEntityFinalStateWarning(
                         "ENTITY_FINAL death-miss timeout; nid=" + pair.Key + ".");
                     continue;
@@ -664,7 +725,7 @@ namespace CustomMapMultiplayer
                     continue;
                 }
 
-                PendingEntityDeaths.Remove(pair.Key);
+                PendingEntityDeathsToRemove.Add(pair.Key);
                 ApplyEntityDeathToMook(
                     pair.Key,
                     mook,
@@ -678,12 +739,18 @@ namespace CustomMapMultiplayer
                     pending.DamageType);
             }
 
-            foreach (var pair in new List<KeyValuePair<NID, PendingEntityTerminal>>(PendingEntityTerminals))
+            for (var index = 0; index < PendingEntityDeathsToRemove.Count; index++)
+            {
+                PendingEntityDeaths.Remove(PendingEntityDeathsToRemove[index]);
+            }
+
+            PendingEntityTerminalsToRemove.Clear();
+            foreach (var pair in PendingEntityTerminals)
             {
                 var pending = pair.Value;
                 if (pending.ExpiresAt < now)
                 {
-                    PendingEntityTerminals.Remove(pair.Key);
+                    PendingEntityTerminalsToRemove.Add(pair.Key);
                     LogEntityFinalStateWarning(
                         "ENTITY_FINAL corpse-terminal-miss timeout; nid=" + pair.Key + ".");
                     continue;
@@ -703,7 +770,7 @@ namespace CustomMapMultiplayer
                     continue;
                 }
 
-                PendingEntityTerminals.Remove(pair.Key);
+                PendingEntityTerminalsToRemove.Add(pair.Key);
                 ApplyEntityCorpseTerminalToMook(
                     pair.Key,
                     mook,
@@ -711,6 +778,70 @@ namespace CustomMapMultiplayer
                     pending.X,
                     pending.Y,
                     pending.Health);
+            }
+
+            for (var index = 0; index < PendingEntityTerminalsToRemove.Count; index++)
+            {
+                PendingEntityTerminals.Remove(PendingEntityTerminalsToRemove[index]);
+            }
+        }
+
+        private static void TryPruneEntityFinalStates()
+        {
+            if (!IsEntityFinalStateSession())
+            {
+                return;
+            }
+
+            var now = Time.unscaledTime;
+            if (now < _nextEntityFinalStatePruneAt)
+            {
+                return;
+            }
+
+            _nextEntityFinalStatePruneAt =
+                now + EntityFinalStatePruneIntervalSeconds;
+            if (EntityFinalStates.Count == 0)
+            {
+                return;
+            }
+
+            EntityFinalStatesToRemove.Clear();
+            foreach (var pair in EntityFinalStates)
+            {
+                var state = pair.Value;
+                if ((!state.TerminalSent && !state.TerminalApplied) ||
+                    EntityFinalStateSubmissionCandidates.Contains(pair.Key) ||
+                    PendingEntityDeaths.ContainsKey(pair.Key) ||
+                    PendingEntityTerminals.ContainsKey(pair.Key) ||
+                    state.TerminalCompletedAt <= 0f ||
+                    now - state.TerminalCompletedAt < EntityFinalStateTerminalRetentionSeconds)
+                {
+                    continue;
+                }
+
+                EntityFinalStatesToRemove.Add(pair.Key);
+            }
+
+            EntityFinalStateMookQualificationsToRemove.Clear();
+            foreach (var pair in EntityFinalStateMookQualifications)
+            {
+                var mook = pair.Value.Mook;
+                if (mook == null || mook.destroyed)
+                {
+                    EntityFinalStateMookQualificationsToRemove.Add(pair.Key);
+                }
+            }
+
+            for (var index = 0; index < EntityFinalStatesToRemove.Count; index++)
+            {
+                EntityFinalStates.Remove(EntityFinalStatesToRemove[index]);
+            }
+
+            for (var index = 0; index < EntityFinalStateMookQualificationsToRemove.Count; index++)
+            {
+                EntityFinalStateMookQualifications.Remove(
+                    EntityFinalStateMookQualificationsToRemove[index]);
             }
         }
 
@@ -725,6 +856,7 @@ namespace CustomMapMultiplayer
             if (EntityFinalStates.TryGetValue(mook.Nid, out state) && !state.TerminalSent)
             {
                 SubmitEntityCorpseTerminal(mook.Nid, state, mook);
+                EntityFinalStateSubmissionCandidates.Remove(mook.Nid);
             }
         }
 
@@ -741,8 +873,16 @@ namespace CustomMapMultiplayer
             EntityFinalStates.Clear();
             PendingEntityDeaths.Clear();
             PendingEntityTerminals.Clear();
+            EntityFinalStateSubmissionCandidates.Clear();
+            EntityFinalStateCandidatesToRemove.Clear();
+            PendingEntityDeathsToRemove.Clear();
+            PendingEntityTerminalsToRemove.Clear();
+            EntityFinalStatesToRemove.Clear();
+            EntityFinalStateMookQualifications.Clear();
+            EntityFinalStateMookQualificationsToRemove.Clear();
             _applyingEntityFinalState = false;
             _entityFinalStateWarningCount = 0;
+            _nextEntityFinalStatePruneAt = float.NegativeInfinity;
         }
     }
 }

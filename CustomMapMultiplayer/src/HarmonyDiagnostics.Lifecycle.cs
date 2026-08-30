@@ -573,6 +573,7 @@ namespace CustomMapMultiplayer
         {
             try
             {
+                ClearWorkshopAcidPoolCache();
                 ClearEntityFinalStateSynchronizationState();
                 ClearDemolitionBroBombDetonationState();
                 ClearMcBroverTurkeyDetonationState();

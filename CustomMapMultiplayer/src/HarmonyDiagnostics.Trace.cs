@@ -13,7 +13,62 @@ namespace CustomMapMultiplayer
     // 方法追踪：追踪消息构建、参数格式化、敏感信息脱敏、去重缓存。
     internal static partial class HarmonyDiagnostics
     {
-                private static string BuildTraceMessage(
+        private static readonly string[] RoomInfoTraceFields =
+        {
+            "gameMode", "campaignName", "CurrentSceneName", "capacity", "_playerCount",
+            "returnToWorldMap", "levelNumber", "totalLevels", "worldMapProgress",
+            "liberatedAreas", "invalidInfo", "hardMode", "hardcoreMode"
+        };
+        private static readonly string[] GameStateTraceFields =
+        {
+            "_sceneToLoad", "_campaignName", "levelNumber", "customLevelID",
+            "loadCustomCampaign", "loadMode", "gameMode", "levelEditorActive",
+            "returnToWorldMap", "arcadeHardMode", "persistPastLevelLoad"
+        };
+        private static readonly string[] LevelSelectionControllerTraceFields =
+        {
+            "_levelFileNameToLoad", "JoinScene", "CampaignScene", "OnlineCampaign",
+            "OfflineCampaign", "DefaultCampaign", "loadPublishedCampaign", "isOnlineCampaign",
+            "currentWorkshopLevel"
+        };
+        private static readonly string[] GameModeControllerTraceFields =
+        {
+            "switchingLevel", "nextScene", "levelHasStarted", "levelFinished",
+            "waitingForAllPlayersToReady", "switchSilently"
+        };
+        private static readonly string[] WorkshopLevelDetailsTraceFields =
+        {
+            "name", "fileid", "fileName", "tags", "isWWBLevel", "wasCompletedSuccessfully"
+        };
+        private static readonly string[] CampaignTraceFields = { "name", "levels", "brodownLevel" };
+        private static readonly string[] CampaignHeaderTraceFields =
+        {
+            "name", "length", "md5", "isPublished", "gameMode"
+        };
+        private static readonly string[] MakeOnlineMenuTraceFields =
+        {
+            "state", "playerLimit", "canChangePassword", "canChangeName"
+        };
+        private static readonly string[] HeroControllerTraceFields =
+        {
+            "playersPlaying", "players", "PIDS", "playerControllerIDs",
+            "heroesHaveBeenReleasedFromTransport", "brosHaveBeenReleased",
+            "WaitForAllPlayersToSpawnBeforeStarting", "AllPlayersHaveJoined"
+        };
+        private static readonly string[] PlayerTraceFields =
+        {
+            "playerNum", "lives", "firstDeployment", "_awaitingHeroTypeFromServer", "heroType"
+        };
+        private static readonly Dictionary<MethodBase, ParameterInfo[]> TraceParametersCache =
+            new Dictionary<MethodBase, ParameterInfo[]>();
+        private static readonly Dictionary<MethodBase, string> TraceMethodDescriptionCache =
+            new Dictionary<MethodBase, string>();
+        private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> TraceFieldCache =
+            new Dictionary<Type, Dictionary<string, FieldInfo>>();
+        private static readonly Dictionary<Type, Dictionary<string, PropertyInfo>> TracePropertyCache =
+            new Dictionary<Type, Dictionary<string, PropertyInfo>>();
+
+        private static string BuildTraceMessage(
             MethodBase method,
             object instance,
             object[] arguments)
@@ -22,7 +77,7 @@ namespace CustomMapMultiplayer
             builder.Append(DescribeMethod(method));
             builder.Append("(");
 
-            var parameters = method.GetParameters();
+            var parameters = GetTraceParameters(method);
             for (var index = 0; index < parameters.Length; index++)
             {
                 if (index > 0)
@@ -101,6 +156,71 @@ namespace CustomMapMultiplayer
             return "<" + type.FullName + ">";
         }
 
+        private static ParameterInfo[] GetTraceParameters(MethodBase method)
+        {
+            lock (Sync)
+            {
+                ParameterInfo[] parameters;
+                if (!TraceParametersCache.TryGetValue(method, out parameters))
+                {
+                    parameters = method.GetParameters();
+                    TraceParametersCache[method] = parameters;
+                }
+
+                return parameters;
+            }
+        }
+
+        private static FieldInfo GetTraceField(Type type, string fieldName)
+        {
+            lock (Sync)
+            {
+                Dictionary<string, FieldInfo> fields;
+                if (!TraceFieldCache.TryGetValue(type, out fields))
+                {
+                    fields = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+                    TraceFieldCache[type] = fields;
+                }
+
+                FieldInfo field;
+                if (!fields.TryGetValue(fieldName, out field))
+                {
+                    field = type.GetField(
+                        fieldName,
+                        BindingFlags.Public | BindingFlags.NonPublic |
+                        BindingFlags.Instance | BindingFlags.Static);
+                    fields[fieldName] = field;
+                }
+
+                return field;
+            }
+        }
+
+        private static PropertyInfo GetTraceProperty(Type type, string propertyName)
+        {
+            lock (Sync)
+            {
+                Dictionary<string, PropertyInfo> properties;
+                if (!TracePropertyCache.TryGetValue(type, out properties))
+                {
+                    properties = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+                    TracePropertyCache[type] = properties;
+                }
+
+                PropertyInfo property;
+                if (!properties.TryGetValue(propertyName, out property))
+                {
+                    property = type.GetProperty(
+                        propertyName,
+                        BindingFlags.Public | BindingFlags.NonPublic |
+                        BindingFlags.Instance | BindingFlags.Static);
+                    properties[propertyName] = property;
+                }
+
+                return property;
+            }
+        }
+
         private static string FormatVector3(Vector3 value)
         {
             return string.Format(
@@ -122,32 +242,13 @@ namespace CustomMapMultiplayer
             switch (typeName)
             {
                 case "RoomInfo":
-                    return FormatFields(value, new[]
-                    {
-                        "gameMode", "campaignName", "CurrentSceneName", "capacity", "_playerCount",
-                        "returnToWorldMap", "levelNumber", "totalLevels", "worldMapProgress",
-                        "liberatedAreas", "invalidInfo", "hardMode", "hardcoreMode"
-                    });
+                    return FormatFields(value, RoomInfoTraceFields);
                 case "GameState":
-                    return FormatFields(value, new[]
-                    {
-                        "_sceneToLoad", "_campaignName", "levelNumber", "customLevelID",
-                        "loadCustomCampaign", "loadMode", "gameMode", "levelEditorActive",
-                        "returnToWorldMap", "arcadeHardMode", "persistPastLevelLoad"
-                    });
+                    return FormatFields(value, GameStateTraceFields);
                 case "LevelSelectionController":
-                    return FormatFields(value, new[]
-                    {
-                        "_levelFileNameToLoad", "JoinScene", "CampaignScene", "OnlineCampaign",
-                        "OfflineCampaign", "DefaultCampaign", "loadPublishedCampaign", "isOnlineCampaign",
-                        "currentWorkshopLevel"
-                    });
+                    return FormatFields(value, LevelSelectionControllerTraceFields);
                 case "GameModeController":
-                    return FormatFields(value, new[]
-                    {
-                        "switchingLevel", "nextScene", "levelHasStarted", "levelFinished",
-                        "waitingForAllPlayersToReady", "switchSilently"
-                    });
+                    return FormatFields(value, GameModeControllerTraceFields);
                 case "HeroController":
                     return FormatHeroControllerState(value);
                 case "Player":
@@ -155,19 +256,13 @@ namespace CustomMapMultiplayer
                 case "PID":
                     return FormatPid(value);
                 case "WorkshopLevelDetails":
-                    return FormatFields(value, new[]
-                    {
-                        "name", "fileid", "fileName", "tags", "isWWBLevel", "wasCompletedSuccessfully"
-                    });
+                    return FormatFields(value, WorkshopLevelDetailsTraceFields);
                 case "Campaign":
-                    return FormatFields(value, new[] { "name", "levels", "brodownLevel" });
+                    return FormatFields(value, CampaignTraceFields);
                 case "CampaignHeader":
-                    return FormatFields(value, new[]
-                    {
-                        "name", "length", "md5", "isPublished", "gameMode"
-                    });
+                    return FormatFields(value, CampaignHeaderTraceFields);
                 case "MakeOnlineMenu":
-                    return FormatFields(value, new[] { "state", "playerLimit", "canChangePassword", "canChangeName" });
+                    return FormatFields(value, MakeOnlineMenuTraceFields);
                 default:
                     return string.Empty;
             }
@@ -175,21 +270,13 @@ namespace CustomMapMultiplayer
 
         private static string FormatHeroControllerState(object value)
         {
-            return FormatFields(value, new[]
-            {
-                "playersPlaying", "players", "PIDS", "playerControllerIDs",
-                "heroesHaveBeenReleasedFromTransport", "brosHaveBeenReleased",
-                "WaitForAllPlayersToSpawnBeforeStarting", "AllPlayersHaveJoined"
-            });
+            return FormatFields(value, HeroControllerTraceFields);
         }
 
         private static string FormatPlayerState(object value)
         {
             var builder = new StringBuilder();
-            builder.Append(FormatFields(value, new[]
-            {
-                "playerNum", "lives", "firstDeployment", "_awaitingHeroTypeFromServer", "heroType"
-            }));
+            builder.Append(FormatFields(value, PlayerTraceFields));
             builder.Length--;
             builder.Append(", IsMine=");
             builder.Append(FormatReadableProperty(value, "IsMine"));
@@ -226,9 +313,7 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                var property = value.GetType().GetProperty(
-                    propertyName,
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                var property = GetTraceProperty(value.GetType(), propertyName);
                 if (property == null || !property.CanRead || property.GetIndexParameters().Length != 0)
                 {
                     return "<missing>";
@@ -251,9 +336,7 @@ namespace CustomMapMultiplayer
 
             foreach (var fieldName in fieldNames)
             {
-                var field = value.GetType().GetField(
-                    fieldName,
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                var field = GetTraceField(value.GetType(), fieldName);
                 if (field == null)
                 {
                     continue;
@@ -493,8 +576,20 @@ namespace CustomMapMultiplayer
 
         private static string DescribeMethod(MethodBase method)
         {
-            var typeName = method.DeclaringType == null ? "<unknown>" : method.DeclaringType.FullName;
-            return typeName + "." + method.Name;
+            lock (Sync)
+            {
+                string description;
+                if (!TraceMethodDescriptionCache.TryGetValue(method, out description))
+                {
+                    var typeName = method.DeclaringType == null
+                        ? "<unknown>"
+                        : method.DeclaringType.FullName;
+                    description = typeName + "." + method.Name;
+                    TraceMethodDescriptionCache[method] = description;
+                }
+
+                return description;
+            }
         }
 
         private sealed class TraceTarget

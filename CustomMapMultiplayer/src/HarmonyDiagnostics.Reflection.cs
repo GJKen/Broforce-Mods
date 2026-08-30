@@ -13,6 +13,73 @@ namespace CustomMapMultiplayer
     // 反射兼容层：字段/属性读写、类型转换、游戏对象与房间信息访问。
     internal static partial class HarmonyDiagnostics
     {
+        private static Type _connectTypeCache;
+        private static MethodInfo _connectLayerGetterCache;
+        private static MethodInfo _connectIsHostGetterCache;
+        private static MethodInfo _connectIsOfflineGetterCache;
+        private static Type _connectionLayerTypeCache;
+        private static MethodInfo _connectionLayerRoomGetterCache;
+
+        private static Type GetConnectTypeCached()
+        {
+            if (_connectTypeCache == null)
+            {
+                _connectTypeCache = AccessTools.TypeByName("Connect");
+            }
+
+            return _connectTypeCache;
+        }
+
+        private static MethodInfo GetConnectLayerGetterCached(Type connectType)
+        {
+            if (_connectLayerGetterCache == null && connectType != null)
+            {
+                _connectLayerGetterCache = AccessTools.PropertyGetter(connectType, "Layer");
+            }
+
+            return _connectLayerGetterCache;
+        }
+
+        private static MethodInfo GetConnectIsHostGetterCached(Type connectType)
+        {
+            if (_connectIsHostGetterCache == null && connectType != null)
+            {
+                _connectIsHostGetterCache = AccessTools.PropertyGetter(connectType, "IsHost");
+            }
+
+            return _connectIsHostGetterCache;
+        }
+
+        private static MethodInfo GetConnectIsOfflineGetterCached(Type connectType)
+        {
+            if (_connectIsOfflineGetterCache == null && connectType != null)
+            {
+                _connectIsOfflineGetterCache = AccessTools.PropertyGetter(connectType, "IsOffline");
+            }
+
+            return _connectIsOfflineGetterCache;
+        }
+
+        private static Type GetConnectionLayerTypeCached()
+        {
+            if (_connectionLayerTypeCache == null)
+            {
+                _connectionLayerTypeCache = AccessTools.TypeByName("ConnectionLayer");
+            }
+
+            return _connectionLayerTypeCache;
+        }
+
+        private static MethodInfo GetConnectionLayerRoomGetterCached(Type connectionType)
+        {
+            if (_connectionLayerRoomGetterCache == null && connectionType != null)
+            {
+                _connectionLayerRoomGetterCache = AccessTools.PropertyGetter(connectionType, "Room");
+            }
+
+            return _connectionLayerRoomGetterCache;
+        }
+
                 private static bool TryConvertHeroType(object value, out HeroType heroType)
         {
             heroType = HeroType.None;
@@ -85,15 +152,11 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                var connectType = AccessTools.TypeByName("Connect");
-                var layerGetter = connectType == null
-                    ? null
-                    : AccessTools.PropertyGetter(connectType, "Layer");
+                var connectType = GetConnectTypeCached();
+                var layerGetter = GetConnectLayerGetterCached(connectType);
                 var layer = layerGetter == null ? null : layerGetter.Invoke(null, null);
-                var connectionType = AccessTools.TypeByName("ConnectionLayer");
-                var roomGetter = connectionType == null
-                    ? null
-                    : AccessTools.PropertyGetter(connectionType, "Room");
+                var connectionType = GetConnectionLayerTypeCached();
+                var roomGetter = GetConnectionLayerRoomGetterCached(connectionType);
                 return roomGetter == null ? null : roomGetter.Invoke(layer, null) as RoomInfo;
             }
             catch
@@ -106,10 +169,8 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                var connectType = AccessTools.TypeByName("Connect");
-                var layerGetter = connectType == null
-                    ? null
-                    : AccessTools.PropertyGetter(connectType, "Layer");
+                var connectType = GetConnectTypeCached();
+                var layerGetter = GetConnectLayerGetterCached(connectType);
                 return layerGetter == null ? null : layerGetter.Invoke(null, null);
             }
             catch
@@ -221,25 +282,25 @@ namespace CustomMapMultiplayer
 
         private static bool IsOnlineHost()
         {
-            var connectType = AccessTools.TypeByName("Connect");
+            var connectType = GetConnectTypeCached();
             if (connectType == null || !IsOnline())
             {
                 return false;
             }
 
-            var hostGetter = AccessTools.PropertyGetter(connectType, "IsHost");
+            var hostGetter = GetConnectIsHostGetterCached(connectType);
             return hostGetter != null && Convert.ToBoolean(hostGetter.Invoke(null, null));
         }
 
         private static bool IsOnline()
         {
-            var connectType = AccessTools.TypeByName("Connect");
+            var connectType = GetConnectTypeCached();
             if (connectType == null)
             {
                 return false;
             }
 
-            var offlineGetter = AccessTools.PropertyGetter(connectType, "IsOffline");
+            var offlineGetter = GetConnectIsOfflineGetterCached(connectType);
             return offlineGetter == null || !Convert.ToBoolean(offlineGetter.Invoke(null, null));
         }
 

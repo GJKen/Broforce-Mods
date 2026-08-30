@@ -12,6 +12,8 @@ namespace CustomMapMultiplayer
     {
         private const float WorkshopAcidRequestRetrySeconds = 0.75f;
         private const float WorkshopAcidScanCacheSeconds = 0.05f;
+        private const float WorkshopAcidPoolRefreshSeconds = 1f;
+        private const float WorkshopAcidAuthorityScanIntervalSeconds = 0.1f;
         private const float WorkshopAcidHorizontalRadius = 4f;
         private const float WorkshopAcidMinVerticalOffset = -2.5f;
         private const float WorkshopAcidMaxVerticalOffset = 10f;
@@ -21,6 +23,12 @@ namespace CustomMapMultiplayer
             new Dictionary<NID, float>();
         private static readonly Dictionary<int, WorkshopAcidScanCache> WorkshopAcidScanCacheByHero =
             new Dictionary<int, WorkshopAcidScanCache>();
+        private static WorkshopAcidPoolCacheEntry[] _workshopAcidPools =
+            new WorkshopAcidPoolCacheEntry[0];
+        private static string _workshopAcidPoolSceneName = string.Empty;
+        private static float _workshopAcidPoolsRefreshedAt = float.NegativeInfinity;
+        private static float _nextWorkshopAcidAuthorityScanAt = float.NegativeInfinity;
+        private static bool _workshopAcidPoolRefreshWarningLogged;
         private static readonly HashSet<string> WorkshopAcidAuthorityGateDiagnostics =
             new HashSet<string>(StringComparer.Ordinal);
         private static readonly HashSet<NID> UnresolvedWorkshopAcidApplyDiagnostics =
@@ -31,6 +39,12 @@ namespace CustomMapMultiplayer
         {
             internal float ScannedAt;
             internal bool HasAcid;
+        }
+
+        private struct WorkshopAcidPoolCacheEntry
+        {
+            internal DoodadAcidPool Pool;
+            internal bool IsAcid;
         }
 
         private static void PatchAcidDiagnostics()
@@ -180,26 +194,31 @@ namespace CustomMapMultiplayer
             }
 
             var hasAcid = false;
-            var acidPools = UnityEngine.Object.FindObjectsOfType<DoodadAcidPool>();
+            var acidPools = GetWorkshopAcidPools();
             for (var index = 0; index < acidPools.Length; index++)
             {
                 var acidPool = acidPools[index];
-                if (acidPool == null || acidPool.fluidType.ToString() != "Acid" ||
-                    acidPool.fullness <= 0.2f)
+                if (acidPool.Pool == null || !acidPool.IsAcid ||
+                    acidPool.Pool.fullness <= 0.2f)
                 {
                     continue;
                 }
 
-                var horizontalDistance = UnityEngine.Mathf.Abs(
-                    acidPool.centerX - character.X);
-                var verticalOffset = acidPool.centerY - character.Y;
-                if (horizontalDistance <= WorkshopAcidHorizontalRadius &&
-                    verticalOffset >= WorkshopAcidMinVerticalOffset &&
-                    verticalOffset <= WorkshopAcidMaxVerticalOffset)
+                if (UnityEngine.Mathf.Abs(
+                        acidPool.Pool.centerX - character.X) > WorkshopAcidHorizontalRadius)
                 {
-                    hasAcid = true;
-                    break;
+                    continue;
                 }
+
+                var verticalOffset = acidPool.Pool.centerY - character.Y;
+                if (verticalOffset < WorkshopAcidMinVerticalOffset ||
+                    verticalOffset > WorkshopAcidMaxVerticalOffset)
+                {
+                    continue;
+                }
+
+                hasAcid = true;
+                break;
             }
 
             if (cached == null)
@@ -210,6 +229,129 @@ namespace CustomMapMultiplayer
             cached.ScannedAt = now;
             cached.HasAcid = hasAcid;
             return hasAcid;
+        }
+
+        private static WorkshopAcidPoolCacheEntry[] GetWorkshopAcidPools()
+        {
+            var sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            var now = UnityEngine.Time.unscaledTime;
+            if (string.Equals(
+                    _workshopAcidPoolSceneName,
+                    sceneName,
+                    StringComparison.Ordinal) &&
+                now >= _workshopAcidPoolsRefreshedAt &&
+                now - _workshopAcidPoolsRefreshedAt < WorkshopAcidPoolRefreshSeconds)
+            {
+                return _workshopAcidPools;
+            }
+
+            try
+            {
+                var discoveredPools = UnityEngine.Object.FindObjectsOfType<DoodadAcidPool>();
+                if (discoveredPools == null || discoveredPools.Length == 0)
+                {
+                    _workshopAcidPools = new WorkshopAcidPoolCacheEntry[0];
+                }
+                else
+                {
+                    var cachedPools = new List<WorkshopAcidPoolCacheEntry>(discoveredPools.Length);
+                    for (var index = 0; index < discoveredPools.Length; index++)
+                    {
+                        var pool = discoveredPools[index];
+                        if (pool == null)
+                        {
+                            continue;
+                        }
+
+                        cachedPools.Add(new WorkshopAcidPoolCacheEntry
+                        {
+                            Pool = pool,
+                            IsAcid = pool.fluidType == DoodadBloodPool.FluidType.Acid
+                        });
+                    }
+
+                    _workshopAcidPools = cachedPools.ToArray();
+                }
+
+                _workshopAcidPoolSceneName = sceneName;
+                _workshopAcidPoolsRefreshedAt = now;
+                _workshopAcidPoolRefreshWarningLogged = false;
+                WorkshopAcidScanCacheByHero.Clear();
+            }
+            catch (Exception exception)
+            {
+                _workshopAcidPools = new WorkshopAcidPoolCacheEntry[0];
+                _workshopAcidPoolSceneName = sceneName;
+                _workshopAcidPoolsRefreshedAt = now;
+                WorkshopAcidScanCacheByHero.Clear();
+                if (!_workshopAcidPoolRefreshWarningLogged)
+                {
+                    DiagnosticLog.Warning(
+                        "PLAYER_ACID Workshop acid pool cache refresh failed: " + exception.Message);
+                    _workshopAcidPoolRefreshWarningLogged = true;
+                }
+            }
+
+            return _workshopAcidPools;
+        }
+
+        private static void TryApplyWorkshopRemoteHeroAcid()
+        {
+            if (!IsWorkshopAcidAuthoritySession() || !IsOnlineHost() ||
+                HeroController.players == null ||
+                Map.Instance == null || !Map.Instance.HasBeenSetup)
+            {
+                return;
+            }
+
+            var now = UnityEngine.Time.unscaledTime;
+            if (now < _nextWorkshopAcidAuthorityScanAt)
+            {
+                return;
+            }
+
+            _nextWorkshopAcidAuthorityScanAt =
+                now + WorkshopAcidAuthorityScanIntervalSeconds;
+
+            for (var index = 0; index < HeroController.players.Length; index++)
+            {
+                var player = HeroController.players[index];
+                var character = player == null ? null : player.character;
+                if (character == null || !character.IsHero ||
+                    character.health <= 0 || character.hasBeenCoverInAcid ||
+                    character.invulnerable || !character.canBeCoveredInAcid)
+                {
+                    continue;
+                }
+
+                // The host's own CoverInAcid entry can be missed by Workshop maps;
+                // scan the host hero here as a local fallback while keeping remote
+                // heroes on the existing host-authoritative path.
+                if (character.IsMine)
+                {
+                    if (HasWorkshopAcidAt(character))
+                    {
+                        TryApplyWorkshopLocalHeroAcid(character, "host-local-scan");
+                    }
+                    continue;
+                }
+
+                try
+                {
+                    if (!HasWorkshopAcidAt(character))
+                    {
+                        continue;
+                    }
+
+                    TryBroadcastWorkshopHeroAcid(character, "host-map-scan");
+                }
+                catch (Exception exception)
+                {
+                    DiagnosticLog.Warning(
+                        "PLAYER_ACID Workshop host map scan failed for player=" + index +
+                        ": " + exception.Message);
+                }
+            }
         }
 
         private static void RequestWorkshopHeroAcid(TestVanDammeAnim character)
@@ -255,55 +397,6 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static void TryApplyWorkshopRemoteHeroAcid()
-        {
-            if (!IsWorkshopAcidAuthoritySession() || !IsOnlineHost() ||
-                HeroController.players == null ||
-                Map.Instance == null || !Map.Instance.HasBeenSetup)
-            {
-                return;
-            }
-
-            for (var index = 0; index < HeroController.players.Length; index++)
-            {
-                var player = HeroController.players[index];
-                var character = player == null ? null : player.character;
-                if (character == null || !character.IsHero ||
-                    character.health <= 0 || character.hasBeenCoverInAcid ||
-                    character.invulnerable || !character.canBeCoveredInAcid)
-                {
-                    continue;
-                }
-
-                // The host's own CoverInAcid entry can be missed by Workshop maps;
-                // scan the host hero here as a local fallback while keeping remote
-                // heroes on the existing host-authoritative path.
-                if (character.IsMine)
-                {
-                    if (HasWorkshopAcidAt(character))
-                    {
-                        TryApplyWorkshopLocalHeroAcid(character, "host-local-scan");
-                    }
-                    continue;
-                }
-
-                try
-                {
-                    if (!HasWorkshopAcidAt(character))
-                    {
-                        continue;
-                    }
-
-                    TryBroadcastWorkshopHeroAcid(character, "host-map-scan");
-                }
-                catch (Exception exception)
-                {
-                    DiagnosticLog.Warning(
-                        "PLAYER_ACID Workshop host map scan failed for player=" + index +
-                        ": " + exception.Message);
-                }
-            }
-        }
 
         private static void TryApplyWorkshopLocalHeroAcid(
             TestVanDammeAnim character,
@@ -368,7 +461,7 @@ namespace CustomMapMultiplayer
                 new RpcSignature<NID>(ApplyWorkshopHeroAcidRPC),
                 nid,
                 false);
-            DiagnosticLog.Info(
+            DiagnosticLog.InfoFileOnly(
                 "PLAYER_ACID authority-apply; nid=" + nid + "; source=" + source + ".");
         }
 
@@ -478,9 +571,19 @@ namespace CustomMapMultiplayer
         {
             PendingWorkshopAcidRequests.Clear();
             LastWorkshopAuthorityAcidAt.Clear();
-            WorkshopAcidScanCacheByHero.Clear();
+            ClearWorkshopAcidPoolCache();
             WorkshopAcidAuthorityGateDiagnostics.Clear();
             UnresolvedWorkshopAcidApplyDiagnostics.Clear();
+        }
+
+        private static void ClearWorkshopAcidPoolCache()
+        {
+            WorkshopAcidScanCacheByHero.Clear();
+            _workshopAcidPools = new WorkshopAcidPoolCacheEntry[0];
+            _workshopAcidPoolSceneName = string.Empty;
+            _workshopAcidPoolsRefreshedAt = float.NegativeInfinity;
+            _nextWorkshopAcidAuthorityScanAt = float.NegativeInfinity;
+            _workshopAcidPoolRefreshWarningLogged = false;
         }
 
         private static bool CoverInAcidDiagnosticsPrefix(
@@ -642,7 +745,7 @@ namespace CustomMapMultiplayer
                 "; isConfiguredWorkshopGameState=" +
                 isConfiguredWorkshopGameState +
                 "; decision=" + decision + ".";
-            DiagnosticLog.Info(message);
+            DiagnosticLog.InfoFileOnly(message);
             DiagnosticLog.Trace(message);
         }
 
@@ -701,7 +804,7 @@ namespace CustomMapMultiplayer
                     "; position=" + ReadAcidPosition(character) +
                     "; acidMeltTimer=" + ReadAcidField(character, "acidMeltTimer") +
                     "; hasBeenCoverInAcid=" + ReadAcidField(character, "hasBeenCoverInAcid");
-                DiagnosticLog.Info(message);
+                DiagnosticLog.InfoFileOnly(message);
                 DiagnosticLog.Trace(message);
             }
             catch (Exception exception)
