@@ -357,7 +357,7 @@ namespace CustomMapMultiplayer
                 ScheduleFrpDirectSettingsApply();
             }
             GUILayout.Space(7f);
-            GUILayout.Label(text.FrpStatus + GetFrpDirectStatus(), GetSettingsHelpStyle(), GUILayout.ExpandWidth(true));
+            GUILayout.Label(text.FrpStatus + GetLocalizedFrpDirectStatus(text), GetSettingsHelpStyle(), GUILayout.ExpandWidth(true));
         }
 
         private static void DrawLanguageSettings(SettingsUiText text)
@@ -750,9 +750,31 @@ namespace CustomMapMultiplayer
             return int.TryParse(text, out parsed) && parsed >= 1 && parsed <= 65535 ? parsed : value;
         }
 
-        private static string GetFrpDirectStatus()
+        private static string GetLocalizedFrpDirectStatus(SettingsUiText text)
         {
-            return _behaviour == null ? "Mod disabled" : _behaviour.GetFrpDirectStatus();
+            var status = _behaviour == null ? "Disabled" : _behaviour.GetFrpDirectStatus();
+            if (text == null)
+            {
+                return _behaviour == null ? "Mod disabled" : status;
+            }
+
+            if (string.Equals(status, "Disabled", StringComparison.Ordinal))
+            {
+                return text.FrpStatusDisabled;
+            }
+
+            const string listeningPrefix = "Listening on UDP ";
+            if (status.StartsWith(listeningPrefix, StringComparison.Ordinal))
+            {
+                return text.FrpStatusListening + status.Substring(listeningPrefix.Length);
+            }
+
+            if (string.Equals(status, "Waiting to connect", StringComparison.Ordinal))
+            {
+                return text.FrpStatusWaiting;
+            }
+
+            return status;
         }
 
         private static void ApplyFrpDirectSettings(bool forceRestart)
