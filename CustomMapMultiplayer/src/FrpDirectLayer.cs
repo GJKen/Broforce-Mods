@@ -710,6 +710,7 @@ namespace CustomMapMultiplayer
             }
             ResetRoomState();
             base.LeaveMatch(-1);
+            OnGameDestroyed();
             if (hadRoom)
             {
                 HarmonyDiagnostics.CompleteFrpDirectRemoteRoomExit(reason);
