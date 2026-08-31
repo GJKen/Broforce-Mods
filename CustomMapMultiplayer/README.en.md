@@ -25,14 +25,15 @@ Verified:
 - Workshop loading first reuses the Steam-installed directory or an older local UGC cache. It falls back to a Steam download only when the cache cannot be read, and suppresses duplicate requests while the same map is loading.
 - The Workshop entry banner, returning to the lobby with Esc, and the main-menu animation; deterministic standard ammunition crates, remote scanning suppression, and duplicate pickup protection are verified on both FRP sides, while the official Steam lobby and more maps still require retesting.
 - In a long high-density combat test, Host frame drops were noticeably reduced. This is currently an observed improvement; unified graphics settings, reversed Host/Client roles, and p50/p95/p99 comparisons are still required for formal acceptance.
+- The `Enter AFK now` button in UMM's multiplayer options; when the Host and joining player use it separately, it affects only that client's local character. Manual AFK does not trigger automatic re-entry; returning through the normal flow restores the original slot's lives, hero type, and character, while ordinary network dropout recovery remains automatic. See the [manual AFK issue record](issues/ISSUES-2026-09-01-新增主动AFK按钮.md).
 
 Workshop acid failure samples confirmed that player slots and hero NIDs did not cross. The old patch covered only `CheckForTraps`, while reachable direct `CoverInAcid` calls in `CalculateMovement` and `Damage` bypassed it. The implementation now keeps a scene-level `DoodadAcidPool` list, predicts local death for the joining player, and enforces Host authority at the common `CoverInAcid` entry while rate-limiting the Host scan. Host and joining-player acid deaths have been verified independently without killing the player left at the spawn area. See the [dedicated issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md).
 
 In the logs, `NullReferenceException` means code tried to use an object that was not initialized or was no longer valid. `DoodadCrate` is the game's native crate-handling class. Repeated crate effects and related errors on the joining side are tracked separately and are not direct evidence of Host combat frame drops.
 
-Open issues: ordinary Mook death final states, AFK diagnostics, level-end re-entry protection, official Steam items, high latency, and long-term re-entry still need expanded acceptance testing. Residual entities after McBrover's turkey self-detonation can still be reproduced, although the probability is significantly lower; see the [separate issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md). Four-player FRP Direct, the `2` to `4` player capacity boundaries, dynamic capacity reduction followed by re-entry, and host migration have not been verified.
+Open issues: ordinary Mook death final states, level-end re-entry protection, official Steam items, high latency, and long-term re-entry still need expanded acceptance testing. Residual entities after McBrover's turkey self-detonation can still be reproduced, although the probability is significantly lower; see the [separate issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md). Four-player FRP Direct, the `2` to `4` player capacity boundaries, dynamic capacity reduction followed by re-entry, and host migration have not been verified.
 
-The current scope does not include continuous synchronization of active AI, enemy projectiles, coins, golden rewards, terrain damage from ordinary `Grenade`, or historical dynamic-world experiments. See the [development and testing documentation](docs/DEVELOPMENT.md) and the [issue index](issues/README.md) for implementation details and evidence.
+The current scope does not include continuous synchronization of active AI, enemy projectiles, coins, golden rewards, terrain damage from ordinary `Grenade`, or historical dynamic-world experiments. See the [development documentation index](docs/DEVELOPMENT.md) and the [issue index](issues/README.md) for implementation details and evidence.
 
 ## Installation and First Run
 
@@ -85,7 +86,7 @@ Configuration image:
 
 The actual UMM settings page uses a vertical feature list on the left and displays the selected feature's content on the right:
 
-- `Multiplayer Options`: Workshop map injection and automatic AFK spectator mode.
+- `Multiplayer Options`: Workshop map injection, automatic AFK spectator mode, and the `Enter AFK now` button.
 - `FRP Direct`: Direct-transport toggle, Host/Client role, ports, player limit, and connection parameters.
 - `Language`: Click the Follow system, English, or Chinese button to change the interface language.
 - `Diagnostic Logs`: Diagnostic session identity, log presets, and diagnostic categories.
@@ -97,7 +98,8 @@ The actual UMM settings page uses a vertical feature list on the left and displa
 - When Workshop map injection is disabled in `Multiplayer Options`, the setting is saved immediately and injection state is cleared. The current scene is not forcibly interrupted or changed. Leave the current room and create an official room again from the menu to return to the native map-selection flow; the saved Workshop ID does not need to be deleted.
 - `Diagnostic session ID` associates logs from the same test round; use the same value on both sides. `Diagnostic label` only affects log file names and does not participate in multiplayer behavior.
 - The `Multiplayer Options` AFK toggle is controlled independently on each client. When it is unchecked, the label says `Enabled: automatic AFK spectator mode`; when it is checked, the label says `Disabled: automatic AFK spectator mode`. To protect both characters, both players must check the option. It does not intercept manual exit, disconnects, or normal deaths.
-- Diagnostic log presets and the nine diagnostic categories only filter log output; they do not change multiplayer behavior. Use matching categories on both sides when investigating the same problem.
+- The same panel's `Enter AFK now` button immediately puts the local player owned by the current client into the native AFK spectator flow, independently of the automatic AFK toggle. The target is selected using local ownership and the active input controller; if multiple local slots cannot be uniquely resolved, the request is ignored to avoid affecting another character. Manual AFK does not schedule `RequestJoinGame`; the user must return through the normal rejoin flow, which restores the original slot's lives, hero type, and character. Ordinary network dropout still uses automatic re-entry.
+- The diagnostic log presets (`Basic`, `Join / Rejoin`, `AFK / Failure`, `Workshop`, and `Full`) and the nine diagnostic categories only filter log output; they do not change multiplayer behavior. Use matching categories on both sides when investigating the same problem.
 
 After each test round, collect the diagnostic `.log` and `.trace.log` files from every participant, and also preserve UMM `Core\Log.txt` and the game's `error.log` when possible. On Windows, logs are stored in `%USERPROFILE%\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer\`, not in the DLL deployment directory. The UMM `Open diagnostic log directory` button opens this location. With logs from only one side, state the evidence gap clearly and do not determine the network root cause from that side alone.
 
@@ -166,12 +168,12 @@ README.md                         Default Chinese documentation
 README.en.md                      English documentation
 modinfo.json                      UMM manifest template
 LocalBroforcePath.props.example   Local path configuration example
-docs/                             Development, reverse-engineering, testing, and troubleshooting
+docs/                             Development documentation index and topic guides
 issues/                           Historical issues, test evidence, and acceptance records
 umm-settings-preview.html         UMM settings interface preview
 ```
 
-- [Development and testing documentation](docs/DEVELOPMENT.md)
+- [Development documentation index](docs/DEVELOPMENT.md)
 - [Issue index](issues/README.md)
 - [BroforceMods Wiki](https://github.com/alexneargarder/BroforceMods/wiki)
 - [Viewing Broforce's Code](https://github.com/alexneargarder/BroforceMods/wiki/Viewing-Broforce's-Code)

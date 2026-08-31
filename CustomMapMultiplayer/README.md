@@ -25,12 +25,13 @@
 - Workshop 加载会优先复用 Steam 已安装目录或旧版 UGC 本地缓存；缓存不可读时才回退到 Steam 下载，并抑制同一张地图加载期间的重复请求。
 - Workshop 的入场横幅、Esc 返回大厅和主菜单动画；标准弹药箱的确定性、远端扫描抑制和重复拾取防护已在 FRP 双端验证，官方 Steam 大厅和更多地图仍需复测。
 - 高密集战斗长测中，Host 掉帧已明显减轻；当前结论为观察到改善，仍需统一图形设置、交换 Host 并完成 p50/p95/p99 对照后再正式验收，详见 [Host 性能问题记录](issues/ISSUES-2026-08-30-联机房主低帧率与Host专属扫描性能问题.md)。
+- UMM 联机选项中的“立即进入 AFK”按钮；房主和加入方分别操作时只影响各自本地角色。主动 AFK 不会自动重新加入，用户通过正常流程回来后会恢复原槽位的生命、英雄类型和角色；普通网络掉线仍按原有流程自动恢复，详见[主动 AFK 按钮问题记录](issues/ISSUES-2026-09-01-新增主动AFK按钮.md)。
 
-Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁只覆盖 `CheckForTraps`，遗漏了 `CalculateMovement` 和 `Damage` 对 `CoverInAcid` 的直达调用。当前实现维护场景级 `DoodadAcidPool` 列表，在统一 `CoverInAcid` 基入口执行加入方本地预测和房主权威校验，并将 Host 周期扫描限频；双方已实机验证房主、加入方分别进入酸液时均能正确死亡，且不会连带出生区玩家，详见 [独立 issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。普通 Mook 死亡终态、AFK 诊断、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
+Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁只覆盖 `CheckForTraps`，遗漏了 `CalculateMovement` 和 `Damage` 对 `CoverInAcid` 的直达调用。当前实现维护场景级 `DoodadAcidPool` 列表，在统一 `CoverInAcid` 基入口执行加入方本地预测和房主权威校验，并将 Host 周期扫描限频；双方已实机验证房主、加入方分别进入酸液时均能正确死亡，且不会连带出生区玩家，详见 [独立 issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。普通 Mook 死亡终态、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
 
 日志中的 `NullReferenceException` 表示代码使用了尚未初始化或已经失效的对象；`DoodadCrate` 是游戏原生的箱子处理类。加入方箱子特效持续重复和相关错误循环属于独立问题，详见 [加入方箱子问题记录](issues/ISSUES-2026-08-30-加入方箱子坍塌特效持续重复.md)，不应作为 Host 战斗掉帧的直接证据。
 
-当前范围不包括活动 AI 持续同步、敌方弹体、钱币、金色奖励、普通 `Grenade` 地形伤害或历史动态世界实验。详细实现和证据见 [开发与测试文档](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
+当前范围不包括活动 AI 持续同步、敌方弹体、钱币、金色奖励、普通 `Grenade` 地形伤害或历史动态世界实验。详细实现和证据见 [开发文档索引](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
 
 ## 安装与首次运行
 
@@ -83,7 +84,7 @@ Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁
 
 实际 UMM 设置页采用左侧竖向功能列表、右侧显示当前功能内容的布局：
 
-- `Multiplayer Options`：Workshop 地图注入和自动 AFK 旁观模式。
+- `Multiplayer Options`：Workshop 地图注入、自动 AFK 旁观模式和“立即进入 AFK”按钮。
 - `FRP Direct`：直连开关、Host/Client 角色、端口、人数上限和连接参数。
 - `语言`：直接点击“跟随系统”“English”或“中文”按钮切换界面语言。
 - `Diagnostic Logs`：诊断会话标识、日志预设和诊断分类。
@@ -95,7 +96,8 @@ Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁
 - `Multiplayer Options` 中的 Workshop 地图注入开关关闭时会立即保存并清理注入状态，但不会强制中断或切走当前场景。退出当前房间并从菜单重新创建官方房间后，后续选图使用游戏原生战役流程；不需要删除已保存的 Workshop ID。
 - `Diagnostic session ID` 用于关联双方同一轮日志；两端填写相同值。`Diagnostic label` 只影响日志文件名，不参与联机行为。
 - `Multiplayer Options` 中的 AFK 开关由每台客户端独立控制。未勾选时显示“已启用自动 AFK 旁观模式”；勾选后显示“已禁用自动 AFK 旁观模式”。要保护双方角色，双方必须分别勾选；它不拦截手动退出、断线或正常死亡。
-- 诊断日志预设和九个诊断分类只影响日志输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
+- 同一面板中的“立即进入 AFK”按钮会让当前客户端实际拥有的本地玩家立即进入原生 AFK 旁观流程，与自动 AFK 开关相互独立。按钮会按本地所有权和当前输入控制器确定目标；多本地槽位无法唯一确定时不会执行，避免误操作另一角色。主动 AFK 不会触发自动 `RequestJoinGame`，需要用户通过正常重新加入流程显式回来；回来时会恢复原槽位的生命、英雄类型和角色。普通网络掉线仍保持自动重入。
+- 诊断日志预设（基础、加入/重新加入、AFK/失败、Workshop、完整）和九个诊断分类只影响日志输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
 
 每轮测试结束后，收集所有参与端的诊断 `.log`、`.trace.log`，并尽量同时保存 UMM `Core\Log.txt` 和游戏 `error.log`。Windows 日志目录为 `%USERPROFILE%\AppData\LocalLow\Free Lives\Broforce\CustomMapMultiplayer\`，不是 DLL 部署目录；UMM 中的“打开诊断日志目录”按钮也会打开这里。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
 
@@ -164,12 +166,12 @@ README.md                         默认中文说明文档
 README.en.md                      英文说明文档
 modinfo.json                      UMM 清单模板
 LocalBroforcePath.props.example   本机路径配置示例
-docs/DEVELOPMENT.md               开发、逆向、测试和故障排查
+docs/DEVELOPMENT.md               开发文档索引（专题文档见 docs/）
 issues/                           历史问题、测试证据和验收记录
 umm-settings-preview.html         UMM 设置界面预览
 ```
 
-- [开发与测试文档](docs/DEVELOPMENT.md)
+- [开发文档索引](docs/DEVELOPMENT.md)
 - [问题记录索引](issues/README.md)
 - [BroforceMods Wiki](https://github.com/alexneargarder/BroforceMods/wiki)
 - [Viewing Broforce's Code](https://github.com/alexneargarder/BroforceMods/wiki/Viewing-Broforce's-Code)
