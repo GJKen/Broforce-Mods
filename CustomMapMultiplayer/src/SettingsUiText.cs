@@ -34,6 +34,9 @@ namespace CustomMapMultiplayer
         internal string FrpServerEndpoint;
         internal string FrpRoomPassword;
         internal string FrpStatus;
+        internal string FrpStatusDisabled;
+        internal string FrpStatusListening;
+        internal string FrpStatusWaiting;
         internal string LanguageIntro;
         internal string[] LanguageChoices;
         internal string DiagnosticsIntro;
@@ -82,6 +85,9 @@ namespace CustomMapMultiplayer
             FrpServerEndpoint = "FRP server endpoint (host:port)",
             FrpRoomPassword = "FRP room password (optional)",
             FrpStatus = "FRP Direct status: ",
+            FrpStatusDisabled = "Disabled",
+            FrpStatusListening = "Listening on UDP ",
+            FrpStatusWaiting = "Waiting to connect",
             LanguageIntro = "Choose how the UMM settings text is displayed.",
             LanguageChoices = new[] { "Follow system", "English", "中文" },
             DiagnosticsIntro = "Choose the session identity and diagnostic output categories.",
@@ -110,8 +116,8 @@ namespace CustomMapMultiplayer
 
         private static readonly SettingsUiText Chinese = new SettingsUiText
         {
-            MultiplayerOptions = "Multiplayer Options",
-            FrpDirect = "FRP Direct",
+            MultiplayerOptions = "多人游戏选项",
+            FrpDirect = "FRP 直连",
             Language = "语言",
             DiagnosticLogs = "诊断日志",
             WorkshopIntro = "配置 Workshop 地图注入和联机时的 AFK 行为。",
@@ -126,19 +132,22 @@ namespace CustomMapMultiplayer
             WorkshopCampaignName = "Workshop 战役名称（可选）",
             WorkshopScene = "自定义关卡场景",
             FrpIntro = "配置可选的直连传输方式和连接角色。",
-            FrpEnabled = "已启用FRP Direct 联机",
-            FrpDisabled = "已禁用FRP Direct 联机",
-            FrpEnabledHelp = "当前使用 FRP Direct 传输。",
+            FrpEnabled = "已启用 FRP 直连网络",
+            FrpDisabled = "已禁用 FRP 直连网络",
+            FrpEnabledHelp = "当前使用 FRP 直连传输。",
             FrpDisabledHelp = "当前使用原生 Steam 联机。",
-            FrpRole = "FRP Direct 角色",
-            FrpRoleHelp = "在下面按钮中选择你的FRP Direct角色",
+            FrpRole = "FRP 直连角色",
+            FrpRoleHelp = "使用下面的按钮选择 FRP 直连角色。",
             Host = "房主",
             Client = "加入方",
             LocalUdpPort = "本地 UDP 监听端口",
             FrpPlayerLimit = "FRP 房间人数上限（立即生效）",
             FrpServerEndpoint = "FRP 服务器地址（host:port）",
             FrpRoomPassword = "FRP 房间密码（可选）",
-            FrpStatus = "FRP Direct 状态：",
+            FrpStatus = "FRP 直连状态：",
+            FrpStatusDisabled = "已关闭",
+            FrpStatusListening = "正在监听 UDP ",
+            FrpStatusWaiting = "等待连接",
             LanguageIntro = "选择 UMM 设置界面的显示语言。",
             LanguageChoices = new[] { "跟随系统", "English", "中文" },
             DiagnosticsIntro = "设置会话标识和诊断日志输出分类。",
@@ -159,7 +168,7 @@ namespace CustomMapMultiplayer
                 "AFK 和掉线",
                 "生命/失败/关卡结果",
                 "Workshop 道具和物件同步",
-                "FRP Direct 传输",
+                "FRP 直连传输",
                 "可选 Mod 兼容性",
                 "Harmony 详细跟踪"
             },
