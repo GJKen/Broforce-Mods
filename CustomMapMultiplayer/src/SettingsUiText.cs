@@ -16,6 +16,8 @@ namespace CustomMapMultiplayer
         internal string WorkshopDisabledHelp;
         internal string AfkEnabled;
         internal string AfkDisabled;
+        internal string ManualAfkButton;
+        internal string ManualAfkHelp;
         internal string WorkshopNotice;
         internal string WorkshopId;
         internal string WorkshopCampaignName;
@@ -67,6 +69,8 @@ namespace CustomMapMultiplayer
             WorkshopDisabledHelp = "Official online map selection remains unchanged.",
             AfkEnabled = "Enabled: automatic AFK spectator mode",
             AfkDisabled = "Disabled: automatic AFK spectator mode",
+            ManualAfkButton = "Enter AFK now",
+            ManualAfkHelp = "Immediately put your local player into AFK spectator mode during an online game.",
             WorkshopNotice = "For a third-party Workshop map, all players must use the same Mod build, subscribe to and finish downloading the same map. The host enters the numeric Workshop ID below; joining players leave their local ID blank and follow the host's published map.",
             WorkshopId = "Workshop ID (host only; joining players leave this blank and follow the host's map)",
             WorkshopCampaignName = "Workshop campaign name (optional)",
@@ -127,6 +131,8 @@ namespace CustomMapMultiplayer
             WorkshopDisabledHelp = "官方联机选图流程保持不变。",
             AfkEnabled = "已启用自动 AFK 旁观模式",
             AfkDisabled = "已禁用自动 AFK 旁观模式",
+            ManualAfkButton = "立即进入 AFK",
+            ManualAfkHelp = "在联机游戏中立即让本地玩家进入 AFK 旁观模式。",
             WorkshopNotice = "使用第三方 Workshop 地图时，所有玩家必须使用相同的 Mod 构建，订阅并完成下载同一张地图。房主在下面填写数字 Workshop ID；加入方将本地 ID 留空，并跟随房主发布的地图。",
             WorkshopId = "Workshop ID（仅房主填写；加入方将本地 ID 留空并跟随房主发布的地图）",
             WorkshopCampaignName = "Workshop 战役名称（可选）",

@@ -260,6 +260,15 @@ namespace CustomMapMultiplayer
             }
 
             var currentPid = HeroController.PIDS[player.playerNum];
+            if (currentPid != null && !currentPid.IsMine)
+            {
+                DiagnosticLog.Info(
+                    "Skipped pending local Workshop ownership repair because the slot already has a remote PID: " +
+                    "player=" + player.playerNum + "; expectedPlayer=" +
+                    (expectedPlayerNum < 0 ? "unknown" : expectedPlayerNum.ToString()) + ".");
+                return;
+            }
+
             if (currentPid != null && currentPid.IsMine && player.IsMine)
             {
                 return;
@@ -505,6 +514,11 @@ namespace CustomMapMultiplayer
                 playerNum < HeroController.PIDS.Length && HeroController.PIDS[playerNum] != null &&
                 HeroController.PIDS[playerNum].IsMine)
             {
+                if (IsManualAfkDropoutPending(playerNum))
+                {
+                    return;
+                }
+
                 ClearWorkshopLocalJoinRequests();
                 if (_lateJoinStarted && !_lateJoinAutoJoinCompleted)
                 {
@@ -539,13 +553,21 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            CaptureWorkshopDropoutHeroType(playerNum);
-
             var pid = HeroController.PIDS[playerNum];
             if (pid == null || !pid.IsMine)
             {
                 return;
             }
+
+            var manualAfkDropout = IsManualAfkDropoutPending(playerNum);
+            if (manualAfkDropout)
+            {
+                DiagnosticLog.Info(
+                    "Skipped Workshop automatic rejoin for locally requested AFK; preserving the" +
+                    " slot for an explicit return: player=" + playerNum + ".");
+            }
+
+            CaptureWorkshopDropoutHeroType(playerNum);
 
             if (HeroController.playerControllerIDs != null &&
                 playerNum < HeroController.playerControllerIDs.Length)
@@ -561,7 +583,7 @@ namespace CustomMapMultiplayer
             }
 
             PendingLocalWorkshopRejoins.Add(playerNum);
-            if (_lateJoinStarted)
+            if (_lateJoinStarted && !manualAfkDropout)
             {
                 // A native dropout can remove the local Player object after the
                 // initial late-join request was already marked complete. Re-arm
@@ -683,6 +705,14 @@ namespace CustomMapMultiplayer
 
             PendingLocalWorkshopRejoins.Remove(player.playerNum);
             PreparedLocalWorkshopRejoins.Add(player.playerNum);
+            if (IsManualAfkDropoutPending(player.playerNum))
+            {
+                ManualAfkDropoutActive[player.playerNum] = false;
+                ManualAfkDropoutPendingUntilUtc[player.playerNum] = DateTime.MinValue;
+                DiagnosticLog.Info(
+                    "Cleared the local manual AFK dropout state during explicit return: player=" +
+                    player.playerNum + ".");
+            }
             var lives = GetIntFieldOrProperty(player, "lives");
             if (lives <= 0)
             {

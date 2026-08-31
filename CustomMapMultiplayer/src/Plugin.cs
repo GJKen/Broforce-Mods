@@ -253,6 +253,13 @@ namespace CustomMapMultiplayer
                 SaveSettings(modEntry);
             }
 
+            GUILayout.Space(6f);
+            if (GUILayout.Button(text.ManualAfkButton, GetSettingsButtonStyle(), GUILayout.Width(280f)))
+            {
+                HarmonyDiagnostics.RequestLocalAfk();
+            }
+            DrawIndentedHelp(text.ManualAfkHelp);
+
             GUILayout.Space(7f);
             GUILayout.Label(text.WorkshopNotice, GetSettingsHelpStyle(), GUILayout.ExpandWidth(true));
             Settings.WorkshopId = DrawTextField(text.WorkshopId, Settings.WorkshopId);

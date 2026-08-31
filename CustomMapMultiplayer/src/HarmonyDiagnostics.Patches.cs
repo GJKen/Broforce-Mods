@@ -366,9 +366,16 @@ namespace CustomMapMultiplayer
             out AfkUpdateObservation __state)
         {
             __state = BeginAfkUpdateObservation(__instance);
+            var manualRequest = __instance != null && IsManualAfkPending(__instance.playerNum);
+            if (manualRequest)
+            {
+                PendingManualAfkRequests[__instance.playerNum] = false;
+                ManualAfkDropoutPendingUntilUtc[__instance.playerNum] = DateTime.UtcNow.AddSeconds(
+                    ManualAfkDropoutCallbackWindowSeconds);
+            }
             var settings = Plugin.Settings;
             if (__instance == null || settings == null ||
-                !settings.DisableOnlineAfkSpectatorMode || !IsOnline() || !__instance.IsMine)
+                manualRequest || !settings.DisableOnlineAfkSpectatorMode || !IsOnline() || !__instance.IsMine)
             {
                 return;
             }
