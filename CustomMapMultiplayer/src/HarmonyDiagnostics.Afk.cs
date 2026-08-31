@@ -13,6 +13,7 @@ namespace CustomMapMultiplayer
         private const float AfkCountingLogSeconds = 5f;
         private const float AfkWarningLogSeconds = 30f;
         private const double NativeAfkDropoutCallbackWindowSeconds = 2d;
+        private const double ManualAfkDropoutCallbackWindowSeconds = 5d;
 
         private static readonly AfkPlayerLogState[] AfkPlayerLogStates =
             new AfkPlayerLogState[4];
@@ -20,7 +21,149 @@ namespace CustomMapMultiplayer
             new DateTime[4];
         private static readonly bool[] NativeAfkDropoutObserved = new bool[4];
         private static readonly bool[] AfkPreventionLogged = new bool[4];
+        private static readonly bool[] PendingManualAfkRequests = new bool[4];
+        private static readonly bool[] ManualAfkDropoutActive = new bool[4];
+        private static readonly DateTime[] ManualAfkDropoutPendingUntilUtc =
+            new DateTime[4];
         private static System.Reflection.FieldInfo _playerIdleTimerField;
+
+        internal static bool RequestLocalAfk()
+        {
+            if (!_networkSessionActive || !IsOnline() || HeroController.players == null)
+            {
+                DiagnosticLog.Info("Manual AFK request ignored because no online game is active.");
+                return false;
+            }
+
+            var player = FindLocalAfkPlayer();
+            if (player != null)
+            {
+                if (_playerIdleTimerField == null)
+                {
+                    DiagnosticLog.Warning("Manual AFK request ignored because Player.idleTimer was not resolved.");
+                    return false;
+                }
+
+                _playerIdleTimerField.SetValue(player, NativeAfkTimeoutSeconds + 1f);
+                PendingManualAfkRequests[player.playerNum] = true;
+                ManualAfkDropoutActive[player.playerNum] = true;
+                ManualAfkDropoutPendingUntilUtc[player.playerNum] = DateTime.UtcNow.AddSeconds(
+                    ManualAfkDropoutCallbackWindowSeconds);
+                LogAfkEvent("AFK_STATE event=manual-requested; player=" + player.playerNum +
+                    "; controller=" + GetAfkControllerNumber(player) +
+                    "; idleSeconds=" + FormatAfkSeconds(NativeAfkTimeoutSeconds + 1f));
+                return true;
+            }
+
+            DiagnosticLog.Info("Manual AFK request ignored because no local player is currently playing.");
+            return false;
+        }
+
+        private static Player FindLocalAfkPlayer()
+        {
+            var activeInputController = InputReader.ActiveInputID;
+            Player onlyCandidate = null;
+            Player controllerCandidate = null;
+            var candidateCount = 0;
+            var controllerCandidateCount = 0;
+
+            for (var index = 0; index < HeroController.players.Length; index++)
+            {
+                var player = HeroController.players[index];
+                if (!IsLocalAfkPlayer(player) || !IsAfkSlotPlaying(player.playerNum))
+                {
+                    continue;
+                }
+
+                candidateCount++;
+                onlyCandidate = player;
+                if (activeInputController >= 0 &&
+                    GetAfkControllerNumber(player) == activeInputController)
+                {
+                    controllerCandidate = player;
+                    controllerCandidateCount++;
+                }
+            }
+
+            if (controllerCandidateCount == 1)
+            {
+                return controllerCandidate;
+            }
+
+            if (candidateCount == 1)
+            {
+                return onlyCandidate;
+            }
+
+            if (candidateCount > 1)
+            {
+                DiagnosticLog.Warning(
+                    "Manual AFK request ignored because multiple local player slots were eligible: " +
+                    "candidates=" + candidateCount + "; activeController=" + activeInputController + ".");
+            }
+
+            return null;
+        }
+
+        private static bool IsLocalAfkPlayer(Player player)
+        {
+            if (player == null || !player.IsMine || player.playerNum < 0 ||
+                player.playerNum >= PendingManualAfkRequests.Length || HeroController.PIDS == null ||
+                player.playerNum >= HeroController.PIDS.Length)
+            {
+                return false;
+            }
+
+            var slotPid = HeroController.PIDS[player.playerNum];
+            return slotPid != null && slotPid.IsMine;
+        }
+
+        private static int GetAfkControllerNumber(Player player)
+        {
+            if (player == null)
+            {
+                return -1;
+            }
+
+            if (player.controllerNum >= 0)
+            {
+                return player.controllerNum;
+            }
+
+            var playerNum = player.playerNum;
+            return HeroController.playerControllerIDs != null && playerNum >= 0 &&
+                   playerNum < HeroController.playerControllerIDs.Length
+                ? HeroController.playerControllerIDs[playerNum]
+                : -1;
+        }
+
+        private static bool IsManualAfkPending(int playerNum)
+        {
+            return playerNum >= 0 && playerNum < PendingManualAfkRequests.Length &&
+                PendingManualAfkRequests[playerNum];
+        }
+
+        private static bool IsManualAfkDropoutPending(int playerNum)
+        {
+            if (playerNum < 0 || playerNum >= ManualAfkDropoutPendingUntilUtc.Length)
+            {
+                return false;
+            }
+
+            if (ManualAfkDropoutActive[playerNum])
+            {
+                return true;
+            }
+
+            var pendingUntilUtc = ManualAfkDropoutPendingUntilUtc[playerNum];
+            if (pendingUntilUtc == DateTime.MinValue || DateTime.UtcNow > pendingUntilUtc)
+            {
+                ManualAfkDropoutPendingUntilUtc[playerNum] = DateTime.MinValue;
+                return false;
+            }
+
+            return true;
+        }
 
         private static AfkUpdateObservation BeginAfkUpdateObservation(Player player)
         {
@@ -41,8 +184,9 @@ namespace CustomMapMultiplayer
             observation.PlayerNum = playerNum;
             observation.BeforeTimer = ReadPlayerIdleTimer(player);
             observation.Delta = Time.unscaledDeltaTime;
+            observation.ManualRequest = IsManualAfkPending(playerNum);
             observation.PreventionEnabled = Plugin.Settings != null &&
-                Plugin.Settings.DisableOnlineAfkSpectatorMode;
+                Plugin.Settings.DisableOnlineAfkSpectatorMode && !observation.ManualRequest;
             observation.MayReachNativeTimeout =
                 !observation.PreventionEnabled &&
                 observation.BeforeTimer > 0f &&
@@ -345,6 +489,9 @@ namespace CustomMapMultiplayer
                 NativeAfkDropoutPendingUntilUtc[index] = DateTime.MinValue;
                 NativeAfkDropoutObserved[index] = false;
                 AfkPreventionLogged[index] = false;
+                PendingManualAfkRequests[index] = false;
+                ManualAfkDropoutActive[index] = false;
+                ManualAfkDropoutPendingUntilUtc[index] = DateTime.MinValue;
             }
         }
 
@@ -355,6 +502,7 @@ namespace CustomMapMultiplayer
             public int PlayerNum;
             public float BeforeTimer;
             public float Delta;
+            public bool ManualRequest;
             public bool PreventionEnabled;
             public bool MayReachNativeTimeout;
             public string BeforeSnapshot;

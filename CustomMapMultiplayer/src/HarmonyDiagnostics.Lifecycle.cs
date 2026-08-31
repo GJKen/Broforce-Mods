@@ -39,7 +39,11 @@ namespace CustomMapMultiplayer
                 }
                 else if (arguments != null && arguments.Length > 0 && arguments[0] is int)
                 {
-                    CaptureWorkshopDropoutHeroType((int)arguments[0]);
+                    var playerNum = (int)arguments[0];
+                    if (!IsManualAfkDropoutPending(playerNum))
+                    {
+                        CaptureWorkshopDropoutHeroType(playerNum);
+                    }
                 }
 
                 return;
