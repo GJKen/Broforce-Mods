@@ -45,6 +45,10 @@
       <HintPath>$(BroforceManagedPath)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="RocketLib">
+      <HintPath>$(RocketLibPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
