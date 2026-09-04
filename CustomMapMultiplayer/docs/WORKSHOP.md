@@ -21,6 +21,16 @@
 
 关闭注入时必须清理 `_injectedForSession`、`GameState.loadCustomCampaign`、`customLevelID`、`sceneToLoad`、Workshop Lobby 元数据及暂停/切关状态。统一入口为 `ClearInjectedWorkshopRuntimeState`，覆盖 UMM 关闭开关、停用/卸载 Mod 和 Steam `LeaveMatch`。热关闭不会主动切换当前场景；退出并重新创建官方房间后恢复原生选图。
 
+## 房主退出与 Host migration
+
+Steam 房主离开后，网络层可能先把原加入方标记为新的 Host。Mod 会在 `ConnectionLayer.RemovePlayer` 清理旧房主前记录其 PID，并在判断 Host 角色变化时排除这个已离开的成员：
+
+- 排除后没有其它远端成员时，这是“房主退出、当前只剩一个 Client”的房间退出，不是真正的 Host migration。此路径清理网络、Workshop、暂停和切关状态，不执行 Workshop Host promotion，也不重新设置 `GameState.loadCustomCampaign=true`，随后放行原生 `MainMenu`。
+- 退出期间会拦截过期的 Workshop `SteamController.LoadLevel` 请求和 UGC 回调，避免原生主菜单加载与 Workshop 加载循环相互触发。
+- 排除后仍有其它远端成员时，才按真正的多人 Host migration 继续接管房主发布的 Workshop 状态。
+
+FRP Direct 的房主退出仍按现有协议结束房间，不支持主机迁移；用户在排除本轮新增退出保护的实验构建中确认加入方会直接返回主菜单，没有复现本 issue 的黑屏。Steam 单 Client 房主退出黑屏已由用户验收；完整边界见[Workshop 房主退出后加入方返回黑屏](../issues/ISSUES-2026-09-05-Workshop房主退出后加入方返回黑屏.md)。
+
 ## 晚加入与重入
 
 晚加入流程等待玩家列表稳定 250ms，再用本机主控制器调用一次 `HeroController.AddLocalPlayer(-1, controllerId)`。已有本地槽位或待处理请求时复用，避免重复生成 P2-P4；45 秒内没有观察到本地 `Player.Start` 或 `SetPlayerCharacter` 时允许重试一次。创建方仍在 `newJoin`/选关界面时不启动地图加载，进入 Workshop 过场后最长等待约 120 秒。

@@ -29,6 +29,13 @@ namespace CustomMapMultiplayer
                 return;
             }
 
+            if (method.DeclaringType.Name == "ConnectionLayer" && method.Name == "RemovePlayer" &&
+                !(Connect.Layer is FrpDirectLayer) &&
+                arguments != null && arguments.Length > 0)
+            {
+                ObserveOnlineServerRemoved(arguments[0] as PID);
+            }
+
             if (method.DeclaringType.Name == "HeroController" &&
                 (method.Name == "Dropout" || method.Name == "DropoutRPC"))
             {
@@ -133,6 +140,7 @@ namespace CustomMapMultiplayer
             WorkshopKnownHeroTypes.Clear();
             WorkshopDropoutHeroTypes.Clear();
             WorkshopDropoutControllerIds.Clear();
+            ClearOnlineHostObservation();
         }
 
         private static bool HasRegisteredLocalPid(int playerNum)
@@ -218,7 +226,7 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static void LeaveMatchPostfix()
+        private static void LeaveMatchPostfix(object __instance)
         {
             SetWorkshopLobbyReady(false, "leaving lobby");
             SetWorkshopLobbyPhase(string.Empty, "leaving lobby");
@@ -230,7 +238,10 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            ClearInjectedWorkshopRuntimeState("SteamLayer.LeaveMatch", true);
+            ClearInjectedWorkshopRuntimeState(
+                "SteamLayer.LeaveMatch",
+                true,
+                !(__instance is FrpDirectLayer));
             DiagnosticLog.EndSession("SteamLayer.LeaveMatch");
         }
 
@@ -247,7 +258,7 @@ namespace CustomMapMultiplayer
                     SetWorkshopLobbyPhase(WorkshopLobbyPhaseIdle, trigger);
                 }
 
-                ClearInjectedWorkshopRuntimeState(trigger, false);
+                ClearInjectedWorkshopRuntimeState(trigger, false, true);
                 DiagnosticLog.Info(
                     "Workshop injection disabled and injected runtime state cleared; trigger=" +
                     trigger + ". The active scene was not changed.");
@@ -260,9 +271,13 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static void ClearInjectedWorkshopRuntimeState(string trigger, bool endNetworkSession)
+        private static void ClearInjectedWorkshopRuntimeState(
+            string trigger,
+            bool endNetworkSession,
+            bool protectNativeMainMenu)
         {
             var hadInjectedState = HasInjectedWorkshopRuntimeState();
+            _nativeMainMenuExitPending = protectNativeMainMenu && endNetworkSession && hadInjectedState;
 
             _injectedForSession = false;
             _workshopCompletionHandledForSession = true;
@@ -431,7 +446,7 @@ namespace CustomMapMultiplayer
 
         private static void ObserveOnlineHostRole()
         {
-            if (!_networkSessionActive)
+            if (!_networkSessionActive || Connect.Layer is FrpDirectLayer)
             {
                 return;
             }
@@ -443,10 +458,48 @@ namespace CustomMapMultiplayer
                     return;
                 }
 
+                RememberCurrentOnlineServerPid();
                 var onlineHost = IsOnlineHost();
                 if (onlineHost == _sessionIsHost)
                 {
                     return;
+                }
+
+                var connectedRemoteMembers = -1;
+                if (onlineHost && !_sessionIsHost)
+                {
+                    byte formerHostPidByte;
+                    var hasFormerHostPid = TryGetFormerOnlineServerPid(
+                        out formerHostPidByte);
+                    if (!TryGetConnectedRemoteMemberCount(
+                        hasFormerHostPid,
+                        formerHostPidByte,
+                        out connectedRemoteMembers))
+                    {
+                        DiagnosticLog.Warning(
+                            "Online host-role change is waiting for the connection member view; " +
+                            "promotion was not applied.");
+                        return;
+                    }
+
+                    if (connectedRemoteMembers == 0)
+                    {
+                        DiagnosticLog.Info(
+                            "Online session role changed from client to host after the old host left, " +
+                            "but no remote member remains after excluding old Host PID " +
+                            (hasFormerHostPid ? formerHostPidByte.ToString() : "unknown") +
+                            "; treating this as room exit instead of Host migration.");
+                        _sessionIsHost = true;
+                        HandleWorkshopHostDepartureWithNoRemainingClients();
+                        return;
+                    }
+
+                    DiagnosticLog.Info(
+                        "Online host-role change has " + connectedRemoteMembers +
+                        " remaining remote member(s) after excluding old Host PID " +
+                        (hasFormerHostPid ? formerHostPidByte.ToString() : "unknown") +
+                        "; treating it as genuine Host migration.");
+                    ClearOnlineHostObservation();
                 }
 
                 var previousRole = _sessionIsHost ? "host" : "client";
@@ -555,6 +608,125 @@ namespace CustomMapMultiplayer
             }
         }
 
+        private static void HandleWorkshopHostDepartureWithNoRemainingClients()
+        {
+            ClearLateJoinState();
+            DiagnosticLog.Info(
+                "Suppressed Workshop Host promotion because the room has no remaining remote member; " +
+                "clearing network and Workshop runtime state for the native MainMenu.");
+            ClearInjectedWorkshopRuntimeState(
+                "old Host left and no remote member remains",
+                true,
+                true);
+        }
+
+        private static bool TryGetConnectedRemoteMemberCount(
+            bool excludePid,
+            byte excludedPidByte,
+            out int count)
+        {
+            count = 0;
+            var layer = Connect.Layer;
+            if (layer == null || layer.PlayerIDPairs == null)
+            {
+                return false;
+            }
+
+            foreach (var pair in layer.PlayerIDPairs)
+            {
+                var pid = pair.Key;
+                var wrapper = pair.Value;
+                if (excludePid && pid != null && pid.AsByte == excludedPidByte)
+                {
+                    continue;
+                }
+                if (pid == null || pid.IsMine || !IsOnlinePlayerPid(pid) ||
+                    wrapper == null || !wrapper.Connected)
+                {
+                    continue;
+                }
+
+                if (layer.IsPlayerDisconnected(pid))
+                {
+                    continue;
+                }
+
+                count++;
+            }
+
+            return true;
+        }
+
+        private static void RememberCurrentOnlineServerPid()
+        {
+            if (_sessionIsHost || !PID.ServerHasBeenSet || PID.ServerID == null ||
+                PID.ServerID == PID.MyID || !IsOnlinePlayerPid(PID.ServerID))
+            {
+                return;
+            }
+
+            _lastKnownOnlineServerPidByte = PID.ServerID.AsByte;
+            _hasLastKnownOnlineServerPid = true;
+        }
+
+        private static void ObserveOnlineServerRemoved(PID removedPid)
+        {
+            if (_sessionIsHost || !_networkSessionActive || removedPid == null ||
+                removedPid.IsMine || !IsOnlinePlayerPid(removedPid))
+            {
+                return;
+            }
+
+            var currentServerMatches = PID.ServerHasBeenSet && PID.ServerID != null &&
+                PID.ServerID != PID.MyID && IsOnlinePlayerPid(PID.ServerID) &&
+                PID.ServerID.AsByte == removedPid.AsByte;
+            var previousServerMatches = _hasLastKnownOnlineServerPid &&
+                _lastKnownOnlineServerPidByte == removedPid.AsByte;
+            if (!currentServerMatches && !previousServerMatches)
+            {
+                return;
+            }
+
+            _removedOnlineServerPidByte = removedPid.AsByte;
+            _hasRemovedOnlineServerPid = true;
+            _lastKnownOnlineServerPidByte = removedPid.AsByte;
+            _hasLastKnownOnlineServerPid = true;
+            DiagnosticLog.InfoFileOnly(
+                "Observed removal of the current or previous online Host PID before " +
+                "ConnectionLayer cleanup; pid=" + removedPid.AsByte + ".");
+        }
+
+        private static bool TryGetFormerOnlineServerPid(out byte pidByte)
+        {
+            if (_hasRemovedOnlineServerPid)
+            {
+                pidByte = _removedOnlineServerPidByte;
+                return true;
+            }
+            if (_hasLastKnownOnlineServerPid)
+            {
+                pidByte = _lastKnownOnlineServerPidByte;
+                return true;
+            }
+            if (PID.ServerHasBeenSet && PID.ServerID != null && PID.ServerID != PID.MyID &&
+                IsOnlinePlayerPid(PID.ServerID))
+            {
+                pidByte = PID.ServerID.AsByte;
+                return true;
+            }
+
+            pidByte = 0;
+            return false;
+        }
+
+        private static void ClearOnlineHostObservation()
+        {
+            _lastKnownOnlineServerPidByte = 0;
+            _hasLastKnownOnlineServerPid = false;
+            _removedOnlineServerPidByte = 0;
+            _hasRemovedOnlineServerPid = false;
+        }
+
         private static void JoinedLobbyPostfix(object[] __args)
         {
             try
@@ -598,6 +770,15 @@ namespace CustomMapMultiplayer
                         "until native initialization completes and the online lobby opens.");
                     SuppressWorkshopOnlineLobbyMainMenuVisuals(
                         GetMainMenuInstance(AccessTools.TypeByName("MainMenu")));
+                }
+
+                if (string.Equals(scene.name, "MainMenu", StringComparison.OrdinalIgnoreCase) &&
+                    _nativeMainMenuExitPending)
+                {
+                    _nativeMainMenuExitPending = false;
+                    ClearWorkshopLoadRequest();
+                    DiagnosticLog.Info(
+                        "Native MainMenu loaded after online Host departure; released the stale Workshop exit guard.");
                 }
 
                 var isConfiguredWorkshopScene = string.Equals(
@@ -1134,6 +1315,7 @@ namespace CustomMapMultiplayer
             ClearWorkshopLocalJoinRequests();
             ClearLateJoinState();
             ClearLifecycleState();
+            _nativeMainMenuExitPending = false;
 
             try
             {

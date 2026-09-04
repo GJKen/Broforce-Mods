@@ -113,6 +113,14 @@ namespace CustomMapMultiplayer
         {
             try
             {
+                if (_nativeMainMenuExitPending)
+                {
+                    ClearWorkshopLoadRequest();
+                    DiagnosticLog.InfoFileOnly(
+                        "Blocked stale SteamController.LoadLevel after online Host departure; native MainMenu is pending.");
+                    return false;
+                }
+
                 if (!IsWorkshopOnlineSession())
                 {
                     return true;
@@ -170,6 +178,14 @@ namespace CustomMapMultiplayer
         {
             try
             {
+                if (_nativeMainMenuExitPending)
+                {
+                    ClearWorkshopLoadRequest();
+                    DiagnosticLog.InfoFileOnly(
+                        "Blocked stale Workshop UGC details callback after online Host departure.");
+                    return false;
+                }
+
                 if (!IsWorkshopOnlineSession() || __1 || !_workshopLoadRequestPending ||
                     _cachedWorkshopCompletionPending || __0 == null)
                 {

@@ -587,6 +587,16 @@ namespace CustomMapMultiplayer
         {
             try
             {
+                if (_nativeMainMenuExitPending &&
+                    string.Equals(nextScene, LevelSelectionController.MainMenuScene, StringComparison.OrdinalIgnoreCase))
+                {
+                    ClearWorkshopLoadRequest();
+                    ClearDuplicateWorkshopLoadSuppression();
+                    DiagnosticLog.InfoFileOnly(
+                        "Allowed native MainMenu load after online Host departure; Workshop injection is disabled.");
+                    return true;
+                }
+
                 PrepareWorkshopOnlineLobbyMainMenuLoad(nextScene);
                 TrySynchronizeClientWorkshopIdentity(true, "before GameState.LoadLevel");
                 if (ShouldBlockMissingWorkshopLoad(nextScene))

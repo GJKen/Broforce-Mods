@@ -16,6 +16,7 @@
 | --- | --- | --- |
 | `ISSUES-2026-09-04-Workshop缺图仍进入加载动画.md` | 前置拦截已通过双端实测；其它场景仍需覆盖 | 记录加入方缺图时在进入 Workshop 加载动画前终止地图切换，以及 `GameState.LoadLevel` 后置保护。 |
 | `ISSUES-2026-09-04-Workshop缺图运行时提示未按语言切换.md` | 中英文提示已通过双端实测 | 记录缺图提示使用 `SettingsLanguage`/`SettingsUiLocalization`，并显示房主 Workshop ID。 |
+| `ISSUES-2026-09-05-Workshop房主退出后加入方返回黑屏.md` | Steam 单 Client 房主退出修复已通过用户验收；FRP Direct 对照测试正常返回主菜单 | 记录 Steam 房主退出后单客户端被误判为 Host migration、Workshop 加载循环和黑屏修复；FRP 不支持 Host migration，但房主退出后加入方直接返回主菜单，不属于本 issue 的受影响路径。 |
 | `ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md` | AFK 功能及相关问题已统一记录；双端实机已验收 | 统一记录主动 AFK 按钮、单人房间提示、目标角色误判、主动 AFK 触发自动及重复重入、显式回来时 `lives=0`/`character=null`，以及 Esc 菜单语言切换后的重复按钮和功能错位。当前按本地所有权和输入控制器确定目标，主动 AFK 等待显式回来恢复角色，普通网络掉线仍自动恢复。 |
 | `ISSUES-2026-08-30-Assembly-CSharp反编译与重建方案.md` | 方案已整理，临时替换实验待验收 | 记录 `Assembly-CSharp.dll` 的反编译、IL 修改、C# 重建、隔离测试与回滚流程；已加入独立中文输入临时切换 Mod，但尚未完成官方程序集重建。 |
 | `ISSUES-2026-08-31-Test_Evan2原生地图对象与投掷物清理空引用.md` | 目标异常已完成双端回归；箱体保护分支待直接命中 | `5582c...` 双端回归未再出现 `TorturedVillager`、`Map.RemoveProjectile` 或 `DoodadCrate` 错误；村民和投掷物保护各命中一次，箱体异常分支本轮未直接触发。 |

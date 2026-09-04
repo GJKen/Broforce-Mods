@@ -179,6 +179,11 @@ namespace CustomMapMultiplayer
         private static bool _lateJoinLobbyRefreshWarningLogged;
         private static bool _sessionIsHost;
         private static bool _networkSessionActive;
+        private static bool _nativeMainMenuExitPending;
+        private static byte _lastKnownOnlineServerPidByte;
+        private static bool _hasLastKnownOnlineServerPid;
+        private static byte _removedOnlineServerPidByte;
+        private static bool _hasRemovedOnlineServerPid;
         private static DateTime _joinLobbyCleanupIgnoreUntilUtc;
         private static bool _returnToWorkshopOnlineLobbyPending;
         private static bool _returnToWorkshopOnlineLobbyAttempted;
@@ -204,6 +209,7 @@ namespace CustomMapMultiplayer
             _joinLobbyInProgress = false;
             _sessionIsHost = false;
             _networkSessionActive = false;
+            _nativeMainMenuExitPending = false;
             _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
             ClearWorkshopOnlineLobbyReturnState();
             _restoreMainMenuAfterLobbyReturnPending = false;
@@ -386,6 +392,7 @@ namespace CustomMapMultiplayer
                 _joinLobbyInProgress = false;
                 _sessionIsHost = false;
                 _networkSessionActive = false;
+                _nativeMainMenuExitPending = false;
                 _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
                 ClearWorkshopOnlineLobbyReturnState();
                 _restoreMainMenuAfterLobbyReturnPending = false;
