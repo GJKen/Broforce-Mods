@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
+using System.Reflection;
 using System.Text;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -26,12 +28,484 @@ namespace CustomMapMultiplayer
         private static readonly DateTime[] ManualAfkDropoutPendingUntilUtc =
             new DateTime[4];
         private static System.Reflection.FieldInfo _playerIdleTimerField;
+        private static MethodInfo _menuInstantiateItemsMethod;
+        private static string _pauseMenuAfkActionRoute;
+
+        private static void PatchPauseMenuAfkMenu()
+        {
+            var pauseMenuInstantiateItems = typeof(PauseMenu).GetMethod(
+                "InstantiateItems",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                Type.EmptyTypes,
+                null);
+            var pauseMenuPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "PauseMenuInstantiateItemsPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var menuUpdate = typeof(Menu).GetMethod(
+                "Update",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                Type.EmptyTypes,
+                null);
+            var menuUpdatePostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "MenuUpdateAfkFontMaterialPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (pauseMenuInstantiateItems == null || pauseMenuPostfixMethod == null ||
+                menuUpdate == null || menuUpdatePostfixMethod == null)
+            {
+                DiagnosticLog.Warning(
+                    "PauseMenu AFK menu patch could not resolve its target methods.");
+                return;
+            }
+
+            try
+            {
+                _menuInstantiateItemsMethod = typeof(Menu).GetMethod(
+                    "InstantiateItems",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+                if (_menuInstantiateItemsMethod == null)
+                {
+                    DiagnosticLog.Warning(
+                        "PauseMenu AFK menu patch could not resolve Menu.InstantiateItems.");
+                    return;
+                }
+
+                var pauseMenuPostfix = new HarmonyMethod(pauseMenuPostfixMethod)
+                {
+                    priority = Priority.Last
+                };
+                _harmony.Patch(pauseMenuInstantiateItems, null, pauseMenuPostfix, null, null);
+
+                var menuUpdatePostfix = new HarmonyMethod(menuUpdatePostfixMethod)
+                {
+                    priority = Priority.Last
+                };
+                _harmony.Patch(menuUpdate, null, menuUpdatePostfix, null, null);
+                DiagnosticLog.Info(
+                    "PauseMenu AFK menu patch enabled after PauseMenu.InstantiateItems and Menu.Update.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "PauseMenu AFK menu patch failed: " + exception);
+            }
+        }
+
+        private static void PauseMenuInstantiateItemsPostfix(object __instance)
+        {
+            if (__instance == null || !(__instance is PauseMenu))
+            {
+                return;
+            }
+
+            try
+            {
+                SynchronizePauseMenuItems(__instance);
+                UpdatePauseMenuAfkTextAndVisuals(__instance);
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "PauseMenu AFK menu synchronization failed after InstantiateItems: " +
+                    exception);
+            }
+        }
+
+        private static void MenuUpdateAfkFontMaterialPostfix(object __instance)
+        {
+            var pauseMenuType = AccessTools.TypeByName("PauseMenu");
+            if (__instance == null || pauseMenuType == null ||
+                !pauseMenuType.IsInstanceOfType(__instance))
+            {
+                return;
+            }
+
+            try
+            {
+                SynchronizePauseMenuItems(__instance);
+                UpdatePauseMenuAfkTextAndVisuals(__instance);
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "PauseMenu AFK menu update failed after Menu.Update: " +
+                    exception);
+            }
+        }
+
+        private static void SynchronizePauseMenuItems(object pauseMenu)
+        {
+            var masterItems = GetMemberValue(pauseMenu, "masterItems") as Array;
+            var items = GetMemberValue(pauseMenu, "items") as Array;
+            if (masterItems == null || items == null || masterItems.Length == items.Length)
+            {
+                return;
+            }
+
+            if (_menuInstantiateItemsMethod == null)
+            {
+                return;
+            }
+
+            _menuInstantiateItemsMethod.Invoke(pauseMenu, null);
+            masterItems = GetMemberValue(pauseMenu, "masterItems") as Array;
+            items = GetMemberValue(pauseMenu, "items") as Array;
+            if (masterItems != null && items != null && masterItems.Length == items.Length)
+            {
+                DiagnosticLog.Info(
+                    "PauseMenu menu arrays synchronized after RocketLib injection; count=" +
+                    masterItems.Length + ".");
+            }
+            else
+            {
+                DiagnosticLog.Warning(
+                    "PauseMenu menu arrays remain mismatched after synchronization attempt; masterItems=" +
+                    (masterItems == null ? -1 : masterItems.Length) +
+                    "; items=" + (items == null ? -1 : items.Length) + ".");
+            }
+        }
+
+        private static void UpdatePauseMenuAfkTextAndVisuals(object pauseMenu)
+        {
+            var masterItems = GetMemberValue(pauseMenu, "masterItems") as Array;
+            var items = GetMemberValue(pauseMenu, "items") as Array;
+            if (masterItems == null || items == null || masterItems.Length != items.Length)
+            {
+                return;
+            }
+
+            var afkIndex = FindPauseMenuAfkIndex(masterItems);
+            if (afkIndex < 0 || afkIndex >= items.Length)
+            {
+                return;
+            }
+
+            var afkItemUi = items.GetValue(afkIndex);
+            var preference = Plugin.Settings == null ? null : Plugin.Settings.SettingsLanguage;
+            var localizedText = SettingsUiLocalization.Get(preference).ManualAfkButton;
+            SetPauseMenuAfkText(afkItemUi, localizedText);
+
+            var sourceIndex = FindNativePauseMenuFontSourceIndex(
+                masterItems,
+                items,
+                masterItems.Length,
+                afkIndex);
+            if (sourceIndex < 0)
+            {
+                return;
+            }
+
+            var sourceItemUi = items.GetValue(sourceIndex);
+            if (HasMatchingPauseMenuTextVisuals(sourceItemUi, afkItemUi))
+            {
+                return;
+            }
+
+            string copiedParts;
+            if (CopyPauseMenuTextVisuals(sourceItemUi, afkItemUi, out copiedParts))
+            {
+                DiagnosticLog.Info(
+                    "PauseMenu AFK font/material repaired; index=" + afkIndex +
+                    "; sourceIndex=" + sourceIndex +
+                    "; text=" + localizedText +
+                    "; copied=" + copiedParts + ".");
+            }
+        }
+
+        private static int FindPauseMenuAfkIndex(Array masterItems)
+        {
+            for (var index = 0; index < masterItems.Length; index++)
+            {
+                var masterItem = masterItems.GetValue(index);
+                var invokeMethod = GetMemberValue(masterItem, "invokeMethod") as string;
+                if (string.IsNullOrEmpty(invokeMethod) ||
+                    !invokeMethod.StartsWith("RocketLib_", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (_pauseMenuAfkActionRoute == null)
+                {
+                    var name = GetMemberValue(masterItem, "name") as string;
+                    if (string.Equals(
+                            name,
+                            Plugin.PauseMenuAfkActionDisplayText,
+                            StringComparison.Ordinal))
+                    {
+                        _pauseMenuAfkActionRoute = invokeMethod;
+                    }
+                }
+
+                if (string.Equals(
+                        invokeMethod,
+                        _pauseMenuAfkActionRoute,
+                        StringComparison.Ordinal))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private static void SetPauseMenuAfkText(object itemUi, string text)
+        {
+            if (itemUi == null)
+            {
+                return;
+            }
+
+            if (!string.Equals(GetMemberValue(itemUi, "text") as string, text, StringComparison.Ordinal))
+            {
+                SetMemberValue(itemUi, "text", text);
+            }
+
+            var itemText = GetMemberValue(itemUi, "ItemText") as TextMesh;
+            var backdropText = GetMemberValue(itemUi, "BackdropText") as TextMesh;
+            if (itemText != null && !string.Equals(itemText.text, text, StringComparison.Ordinal))
+            {
+                itemText.text = text;
+            }
+
+            if (backdropText != null && !string.Equals(backdropText.text, text, StringComparison.Ordinal))
+            {
+                backdropText.text = text;
+            }
+        }
+
+        private static int FindNativePauseMenuFontSourceIndex(
+            Array masterItems,
+            Array items,
+            int itemCount,
+            int afkIndex)
+        {
+            var optionsIndex = -1;
+            var fallbackIndex = -1;
+            for (var index = 0; index < itemCount; index++)
+            {
+                if (index == afkIndex)
+                {
+                    continue;
+                }
+
+                var masterItem = masterItems.GetValue(index);
+                var invokeMethod = GetMemberValue(masterItem, "invokeMethod") as string;
+                if (!string.IsNullOrEmpty(invokeMethod) &&
+                    invokeMethod.StartsWith("RocketLib_", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var itemUi = items.GetValue(index);
+                if (!HasUsablePauseMenuTextVisuals(itemUi))
+                {
+                    continue;
+                }
+
+                if (fallbackIndex < 0)
+                {
+                    fallbackIndex = index;
+                }
+
+                var name = GetMemberValue(masterItem, "name") as string;
+                if (string.Equals(name, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+                {
+                    optionsIndex = index;
+                    break;
+                }
+            }
+
+            return optionsIndex >= 0 ? optionsIndex : fallbackIndex;
+        }
+
+        private static bool HasUsablePauseMenuTextVisuals(object itemUi)
+        {
+            var itemText = GetMemberValue(itemUi, "ItemText") as TextMesh;
+            var backdropText = GetMemberValue(itemUi, "BackdropText") as TextMesh;
+            return itemText != null && backdropText != null &&
+                itemText.font != null && backdropText.font != null &&
+                itemText.GetComponent<MeshRenderer>() != null &&
+                backdropText.GetComponent<MeshRenderer>() != null;
+        }
+
+        private static bool HasMatchingPauseMenuTextVisuals(
+            object sourceItemUi,
+            object targetItemUi)
+        {
+            var sourceItemText = GetMemberValue(sourceItemUi, "ItemText") as TextMesh;
+            var sourceBackdropText = GetMemberValue(sourceItemUi, "BackdropText") as TextMesh;
+            var targetItemText = GetMemberValue(targetItemUi, "ItemText") as TextMesh;
+            var targetBackdropText = GetMemberValue(targetItemUi, "BackdropText") as TextMesh;
+            if (sourceItemText == null || sourceBackdropText == null ||
+                targetItemText == null || targetBackdropText == null)
+            {
+                return false;
+            }
+
+            var sourceItemRenderer = sourceItemText.GetComponent<MeshRenderer>();
+            var sourceBackdropRenderer = sourceBackdropText.GetComponent<MeshRenderer>();
+            var targetItemRenderer = targetItemText.GetComponent<MeshRenderer>();
+            var targetBackdropRenderer = targetBackdropText.GetComponent<MeshRenderer>();
+            return sourceItemRenderer != null && sourceBackdropRenderer != null &&
+                targetItemRenderer != null && targetBackdropRenderer != null &&
+                targetItemText.font == sourceItemText.font &&
+                targetBackdropText.font == sourceBackdropText.font &&
+                targetItemRenderer.sharedMaterial == sourceItemRenderer.sharedMaterial &&
+                targetBackdropRenderer.sharedMaterial == sourceBackdropRenderer.sharedMaterial;
+        }
+
+        private static bool CopyPauseMenuTextVisuals(
+            object sourceItemUi,
+            object targetItemUi,
+            out string copiedParts)
+        {
+            copiedParts = string.Empty;
+            var sourceItemText = GetMemberValue(sourceItemUi, "ItemText") as TextMesh;
+            var sourceBackdropText = GetMemberValue(sourceItemUi, "BackdropText") as TextMesh;
+            var targetItemText = GetMemberValue(targetItemUi, "ItemText") as TextMesh;
+            var targetBackdropText = GetMemberValue(targetItemUi, "BackdropText") as TextMesh;
+            if (sourceItemText == null || sourceBackdropText == null ||
+                targetItemText == null || targetBackdropText == null)
+            {
+                return false;
+            }
+
+            var sourceItemRenderer = sourceItemText.GetComponent<MeshRenderer>();
+            var sourceBackdropRenderer = sourceBackdropText.GetComponent<MeshRenderer>();
+            var targetItemRenderer = targetItemText.GetComponent<MeshRenderer>();
+            var targetBackdropRenderer = targetBackdropText.GetComponent<MeshRenderer>();
+            if (sourceItemRenderer == null || sourceBackdropRenderer == null ||
+                targetItemRenderer == null || targetBackdropRenderer == null ||
+                sourceItemText.font == null || sourceBackdropText.font == null)
+            {
+                return false;
+            }
+
+            targetItemText.font = sourceItemText.font;
+            targetBackdropText.font = sourceBackdropText.font;
+            targetItemRenderer.sharedMaterial = GetRendererMaterial(sourceItemRenderer);
+            targetBackdropRenderer.sharedMaterial = GetRendererMaterial(sourceBackdropRenderer);
+            copiedParts = "ItemText.font,BackdropText.font,ItemText.material,BackdropText.material";
+            return targetItemRenderer.sharedMaterial != null &&
+                targetBackdropRenderer.sharedMaterial != null;
+        }
+
+        private static Material GetRendererMaterial(MeshRenderer renderer)
+        {
+            if (renderer == null)
+            {
+                return null;
+            }
+
+            return renderer.sharedMaterial;
+        }
+
+        private static object GetMemberValue(object instance, string name)
+        {
+            if (instance == null)
+            {
+                return null;
+            }
+
+            var type = instance.GetType();
+            while (type != null)
+            {
+                var field = type.GetField(
+                    name,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (field != null)
+                {
+                    return field.GetValue(instance);
+                }
+
+                var property = type.GetProperty(
+                    name,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (property != null && property.CanRead)
+                {
+                    return property.GetValue(instance, null);
+                }
+
+                type = type.BaseType;
+            }
+
+            return null;
+        }
+
+        private static bool SetMemberValue(object instance, string name, object value)
+        {
+            if (instance == null)
+            {
+                return false;
+            }
+
+            var type = instance.GetType();
+            while (type != null)
+            {
+                var property = type.GetProperty(
+                    name,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (property != null && property.CanWrite)
+                {
+                    property.SetValue(instance, value, null);
+                    return true;
+                }
+
+                var field = type.GetField(
+                    name,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (field != null && !field.IsInitOnly)
+                {
+                    field.SetValue(instance, value);
+                    return true;
+                }
+
+                type = type.BaseType;
+            }
+
+            return false;
+        }
+
+        internal static bool CanShowManualAfkMenuItem()
+        {
+            try
+            {
+                if (!IsManualAfkContextActive() || HeroController.players == null)
+                {
+                    return false;
+                }
+
+                return FindLocalAfkPlayer() != null;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning("Manual AFK menu visibility check failed; item hidden: " + exception);
+                return false;
+            }
+        }
 
         internal static bool RequestLocalAfk()
         {
-            if (!_networkSessionActive || !IsOnline() || HeroController.players == null)
+            if (!IsManualAfkContextActive())
             {
-                DiagnosticLog.Info("Manual AFK request ignored because no online game is active.");
+                DiagnosticLog.Info(
+                    "Manual AFK request ignored because the online game is not ready for a local AFK request.");
+                return false;
+            }
+
+            var participantCount = CountAfkRoomParticipants();
+            if (participantCount < 2)
+            {
+                var preference = Plugin.Settings == null ? null : Plugin.Settings.SettingsLanguage;
+                var notice = SettingsUiLocalization.Get(preference).ManualAfkSinglePlayerNotice;
+                Plugin.ShowFrpDirectNotice(notice);
+                LogAfkEvent(
+                    "AFK_STATE event=manual-request-rejected-single-player; participants=" +
+                    participantCount + ".");
                 return false;
             }
 
@@ -57,6 +531,66 @@ namespace CustomMapMultiplayer
 
             DiagnosticLog.Info("Manual AFK request ignored because no local player is currently playing.");
             return false;
+        }
+
+        private static int CountAfkRoomParticipants()
+        {
+            if (HeroController.PIDS == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            var slotCount = global::System.Math.Min(4, HeroController.PIDS.Length);
+            for (var index = 0; index < slotCount; index++)
+            {
+                if (HeroController.PIDS[index] != null)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static bool IsManualAfkContextActive()
+        {
+            if (!_networkSessionActive || !IsOnline() || Connect.IsOffline ||
+                HeroController.players == null || HeroController.PIDS == null ||
+                _joinLobbyInProgress || _lateJoinPending ||
+                _returnToWorkshopOnlineLobbyPending)
+            {
+                return false;
+            }
+
+            if (string.Equals(
+                    SceneManager.GetActiveScene().name,
+                    "MainMenu",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var gameModeControllerType = AccessTools.TypeByName("GameModeController");
+            var instanceField = gameModeControllerType == null
+                ? null
+                : gameModeControllerType.GetField(
+                    "instance",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Static);
+            var gameModeController = instanceField == null
+                ? null
+                : instanceField.GetValue(null);
+            if (gameModeController == null)
+            {
+                return false;
+            }
+
+            return gameModeController != null &&
+                !GetBoolFieldOrProperty(gameModeController, "switchingLevel") &&
+                !GetBoolFieldOrProperty(gameModeController, "levelFinished") &&
+                !GetBoolFieldOrProperty(gameModeController, "waitingForAllPlayersToReady");
         }
 
         private static Player FindLocalAfkPlayer()

@@ -4,6 +4,7 @@
     <!-- Replace these placeholders with paths on the local machine. -->
     <BroforceManagedPath>C:\Path\To\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
     <UnityModManagerPath>C:\Path\To\UnityModManager\Core</UnityModManagerPath>
+    <RocketLibPath>C:\Path\To\RocketLib\RocketLib.dll</RocketLibPath>
 
     <!-- Optional local test deployment target; leave empty for package-only builds. -->
     <TestDeployModPath></TestDeployModPath>

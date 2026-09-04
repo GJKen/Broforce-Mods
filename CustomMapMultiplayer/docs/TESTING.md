@@ -66,7 +66,7 @@ handoff=正式源码文件、构建哈希和后续验收要求
 
 ### AFK
 
-主动 AFK 专项验收已完成基础双端验收：房主和加入方分别点击“立即进入 AFK”时，只影响各自本地角色；日志出现 `AFK_STATE event=manual-requested`，主动 AFK 不安排自动 `RequestJoinGame`；通过正常流程显式回来后，原槽位的生命、英雄类型、控制器和角色对象恢复。多本地槽位时确认按当前输入控制器选择目标，无法唯一确定时不执行。完整过程见 [主动 AFK 按钮问题记录](../issues/ISSUES-2026-09-01-新增主动AFK按钮.md)。
+主动 AFK 专项验收已完成基础双端验收：房主和加入方分别点击“立即进入 AFK”时，只影响各自本地角色；日志出现 `AFK_STATE event=manual-requested`，主动 AFK 不安排自动 `RequestJoinGame`；通过正常流程显式回来后，原槽位的生命、英雄类型、控制器和角色对象恢复。多本地槽位时确认按当前输入控制器选择目标，无法唯一确定时不执行。完整过程见 [主动 AFK 按钮问题记录](../issues/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md)。
 
 - 启动日志应有 `AFK_DIAGNOSTICS_PATCH playerUpdate=True; dropoutRpc=True`；目标端无输入至少 35 秒，对齐双方 `AFK_TIMER`、`AFK_STATE`、`PLAYER_DROPOUT` 和槽位/存活人数。开启防 AFK 时应有 `prevention-active`，不应有本机 `timeout-triggered`。
 - 道具：双方核对同一位置的数量/类型；满弹药站在箱子上不得持续播放反馈，消耗弹药后可拾取一次；MechDrop、RCCar 等显式特殊箱保持原类型。金色奖励没有当前专项同步实现，不能按稳定键或权威类型作为验收依据。

@@ -19,11 +19,13 @@ $propertyGroup = @($propsXml.Project.PropertyGroup) |
 
 $broforceManagedPath = [string]$propertyGroup.BroforceManagedPath
 $unityModManagerPath = [string]$propertyGroup.UnityModManagerPath
+$rocketLibPath = [string]$propertyGroup.RocketLibPath
 $testDeployModPath = [string]$propertyGroup.TestDeployModPath
 $infoSourcePath = Join-Path $repoRoot 'modinfo.json'
 if ([string]::IsNullOrWhiteSpace($broforceManagedPath) -or
-    [string]::IsNullOrWhiteSpace($unityModManagerPath)) {
-    throw 'LocalBroforcePath.props must define BroforceManagedPath and UnityModManagerPath.'
+    [string]::IsNullOrWhiteSpace($unityModManagerPath) -or
+    [string]::IsNullOrWhiteSpace($rocketLibPath)) {
+    throw 'LocalBroforcePath.props must define BroforceManagedPath, UnityModManagerPath and RocketLibPath.'
 }
 if (-not (Test-Path -LiteralPath $infoSourcePath)) {
     throw "Missing UMM metadata template: $infoSourcePath"
@@ -51,6 +53,7 @@ $requiredPaths = @(
     (Join-Path $broforceManagedPath 'UnityEngine.TextRenderingModule.dll'),
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
     (Join-Path $unityModManagerPath '0Harmony.dll'),
+    $rocketLibPath,
     (Join-Path $broforceManagedPath 'Assembly-CSharp.dll')
 )
 foreach ($requiredPath in $requiredPaths) {
@@ -81,6 +84,7 @@ $references = @(
     (Join-Path $broforceManagedPath 'UnityEngine.TextRenderingModule.dll'),
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
     (Join-Path $unityModManagerPath '0Harmony.dll'),
+    $rocketLibPath,
     (Join-Path $broforceManagedPath 'Assembly-CSharp.dll')
 )
 

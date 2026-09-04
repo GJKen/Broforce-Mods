@@ -340,6 +340,7 @@ namespace CustomMapMultiplayer
             PatchWorkshopJoinPromptSuppression();
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
+            PatchPauseMenuAfkMenu();
             PatchOnlinePlayerListDisplay();
             PatchLevelOutcomeDiagnostics();
             PatchAcidDiagnostics();

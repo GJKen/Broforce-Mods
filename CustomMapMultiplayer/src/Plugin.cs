@@ -1,4 +1,5 @@
 using UnityModManagerNet;
+using RocketLib.Menus.Core;
 using System;
 using UnityEngine;
 
@@ -32,6 +33,9 @@ namespace CustomMapMultiplayer
         private static GUIStyle _settingsTextFieldStyle;
         private static GUIStyle _settingsToolbarStyle;
         private static float _frpSettingsApplyAt = -1f;
+        private static bool _pauseMenuAfkActionRegistered;
+
+        internal const string PauseMenuAfkActionDisplayText = "Enter AFK now";
 
         internal static DiagnosticSettings Settings { get; private set; }
 
@@ -113,6 +117,7 @@ namespace CustomMapMultiplayer
                 MigrateDiagnosticSettings(Settings);
 
                 DiagnosticLog.Initialize(modEntry);
+                RegisterPauseMenuAfkAction(modEntry);
                 DiagnosticLog.Info(
                     "Plugin loaded. Steam diagnostics are active; optional injections and FRP prototype follow saved settings; buildHash=" +
                     BuildMetadata.BuildHash + ".");
@@ -123,6 +128,42 @@ namespace CustomMapMultiplayer
                 modEntry.Logger.LogException("Diagnostic plugin Load failed", exception);
                 return false;
             }
+        }
+
+        private static void RegisterPauseMenuAfkAction(UnityModManager.ModEntry modEntry)
+        {
+            if (_pauseMenuAfkActionRegistered)
+            {
+                return;
+            }
+
+            // RocketLib uses the registration text as its injection/deduplication key.
+            // Keep this value fixed and localize only the instantiated UI below.
+            _pauseMenuAfkActionRegistered = true;
+            try
+            {
+                MenuRegistry.RegisterAction(
+                    PauseMenuAfkActionDisplayText,
+                    menu => HarmonyDiagnostics.RequestLocalAfk(),
+                    TargetMenu.PauseMenu,
+                    PositionMode.After,
+                    "OPTIONS",
+                    0,
+                    menu => CanShowPauseMenuAfkAction());
+                DiagnosticLog.Info(
+                    "Registered RocketLib PauseMenu action: Enter AFK now after OPTIONS.");
+            }
+            catch (Exception exception)
+            {
+                modEntry.Logger.LogException(
+                    "RocketLib PauseMenu AFK action registration failed",
+                    exception);
+            }
+        }
+
+        private static bool CanShowPauseMenuAfkAction()
+        {
+            return HarmonyDiagnostics.CanShowManualAfkMenuItem();
         }
 
         private static bool OnToggle(UnityModManager.ModEntry modEntry, bool enabled)
@@ -252,13 +293,6 @@ namespace CustomMapMultiplayer
                 Settings.DisableOnlineAfkSpectatorMode = disableAfkSpectator;
                 SaveSettings(modEntry);
             }
-
-            GUILayout.Space(6f);
-            if (GUILayout.Button(text.ManualAfkButton, GetSettingsButtonStyle(), GUILayout.Width(280f)))
-            {
-                HarmonyDiagnostics.RequestLocalAfk();
-            }
-            DrawIndentedHelp(text.ManualAfkHelp);
 
             GUILayout.Space(7f);
             GUILayout.Label(text.WorkshopNotice, GetSettingsHelpStyle(), GUILayout.ExpandWidth(true));
