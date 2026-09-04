@@ -18,6 +18,7 @@ namespace CustomMapMultiplayer
         private static string _sessionWorkshopScene = string.Empty;
         private static string _sessionWorkshopCampaign = string.Empty;
         private static bool _workshopSubscriptionMissing;
+        private static bool _missingWorkshopLoadBlockLogged;
         private static WorkshopSubscriptionStatus _workshopSubscriptionStatus;
         private static DateTime _workshopIdentityPollAtUtc;
         private static DateTime _workshopSubscriptionRetryAtUtc;
@@ -171,6 +172,7 @@ namespace CustomMapMultiplayer
                 _sessionWorkshopCampaign = campaign;
                 _workshopSubscriptionStatus = WorkshopSubscriptionStatus.Unknown;
                 _workshopSubscriptionMissing = false;
+                _missingWorkshopLoadBlockLogged = false;
                 _workshopSubscriptionRetryAtUtc = DateTime.MinValue;
                 DiagnosticLog.Info(
                     "Adopted host Workshop map identity for this room: id=" + workshopId +
@@ -199,10 +201,7 @@ namespace CustomMapMultiplayer
             {
                 _workshopSubscriptionMissing = true;
                 ClearLateJoinState();
-                var message =
-                    "房主使用的 Steam 创意工坊地图 ID 为 " + workshopId +
-                    "，但本机尚未订阅。请先在 Steam 创意工坊订阅并等待下载完成，然后重新加入房间。";
-                Plugin.ShowWorkshopNotice(message);
+                Plugin.ShowWorkshopNotice(GetMissingWorkshopSubscriptionNotice(workshopId));
                 DiagnosticLog.Warning(
                     "Host Workshop map is not subscribed locally; automatic loading is blocked: id=" +
                     workshopId + ".");
@@ -295,36 +294,98 @@ namespace CustomMapMultiplayer
 
         private static bool ShouldBlockMissingWorkshopLoad(string nextScene)
         {
-            if (!_workshopSubscriptionMissing || _sessionIsHost || !IsOnline())
+            if (!IsMissingWorkshopClientSession())
             {
                 return false;
             }
 
+            if (!TargetsMissingWorkshopLoad(nextScene, false))
+            {
+                return false;
+            }
+
+            Plugin.ShowWorkshopNotice(GetMissingWorkshopSubscriptionNotice(GetConfiguredWorkshopId()));
+            return true;
+        }
+
+        private static bool ShouldBlockMissingWorkshopTransition(MethodBase method)
+        {
+            if (!IsMissingWorkshopClientSession() || !IsWorkshopMapTransitionEntry(method) ||
+                !TargetsMissingWorkshopLoad(string.Empty, true))
+            {
+                return false;
+            }
+
+            Plugin.ShowWorkshopNotice(GetMissingWorkshopSubscriptionNotice(GetConfiguredWorkshopId()));
+            LogMissingWorkshopLoadBlocked(method.DeclaringType.Name + "." + method.Name, string.Empty);
+            return true;
+        }
+
+        private static bool IsMissingWorkshopClientSession()
+        {
+            return _workshopSubscriptionMissing && !_sessionIsHost && IsOnline();
+        }
+
+        private static bool IsWorkshopMapTransitionEntry(MethodBase method)
+        {
+            if (method == null || method.DeclaringType == null)
+            {
+                return false;
+            }
+
+            if (method.DeclaringType.Name == "LevelSelectionController")
+            {
+                return method.Name == "GotoNextCampaignScene";
+            }
+
+            return false;
+        }
+
+        private static bool TargetsMissingWorkshopLoad(string nextScene, bool allowSessionIdentity)
+        {
+            var configuredWorkshopId = GetConfiguredWorkshopId();
             var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
             var stateWorkshopId = state == null
                 ? string.Empty
                 : GetStringFieldOrProperty(state, "customLevelID").Trim();
-            var targetsHostWorkshop = string.Equals(
-                stateWorkshopId,
-                GetConfiguredWorkshopId(),
-                StringComparison.Ordinal);
-            if (!targetsHostWorkshop && !string.IsNullOrEmpty(nextScene))
+            if (string.Equals(stateWorkshopId, configuredWorkshopId, StringComparison.Ordinal))
             {
-                targetsHostWorkshop = string.Equals(
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(nextScene) &&
+                string.Equals(
                     nextScene,
                     GetConfiguredWorkshopSceneName(),
-                    StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (!targetsHostWorkshop)
+                    StringComparison.OrdinalIgnoreCase))
             {
-                return false;
+                return true;
             }
 
-            Plugin.ShowWorkshopNotice(
-                "房主使用的 Steam 创意工坊地图 ID 为 " + GetConfiguredWorkshopId() +
-                "，但本机尚未订阅。请先在 Steam 创意工坊订阅并等待下载完成，然后重新加入房间。");
-            return true;
+            return allowSessionIdentity && _sessionWorkshopIdentityAdopted &&
+                   string.Equals(_sessionWorkshopId, configuredWorkshopId, StringComparison.Ordinal);
+        }
+
+        private static string GetMissingWorkshopSubscriptionNotice(string workshopId)
+        {
+            var preference = Plugin.Settings == null ? null : Plugin.Settings.SettingsLanguage;
+            return SettingsUiLocalization.Get(preference).WorkshopSubscriptionMissingNotice.Replace(
+                "{id}",
+                workshopId ?? string.Empty);
+        }
+
+        private static void LogMissingWorkshopLoadBlocked(string source, string nextScene)
+        {
+            if (_missingWorkshopLoadBlockLogged)
+            {
+                return;
+            }
+
+            _missingWorkshopLoadBlockLogged = true;
+            DiagnosticLog.Warning(
+                "Blocked Workshop map load because the host map is not subscribed locally: " +
+                "id=" + GetConfiguredWorkshopId() + "; source=" + source +
+                "; nextScene=" + (nextScene ?? string.Empty) + ".");
         }
 
         private static void ClearWorkshopIdentityState()
@@ -334,6 +395,7 @@ namespace CustomMapMultiplayer
             _sessionWorkshopScene = string.Empty;
             _sessionWorkshopCampaign = string.Empty;
             _workshopSubscriptionMissing = false;
+            _missingWorkshopLoadBlockLogged = false;
             _workshopSubscriptionStatus = WorkshopSubscriptionStatus.Unknown;
             _workshopIdentityPollAtUtc = DateTime.MinValue;
             _workshopSubscriptionRetryAtUtc = DateTime.MinValue;

@@ -17,7 +17,7 @@
 
 从 `JoinLobby` 开始到房主元数据到达前，Client 配置读取返回空值，不允许回退到本机保存的 ID、场景名或战役名；元数据到达后只使用房主值，避免加入方旧配置在最初几帧误加载本机地图。
 
-加入方采用地图身份后枚举 Steam 本机订阅列表。确认未订阅时显示中文提示和 Workshop ID，清除待执行的晚加入状态，并阻止指向该房主地图的 `GameState.LoadLevel`；订阅状态无法读取时保持原生下载流程，不误报缺图。订阅或下载不会由 Mod 自动执行。
+加入方采用地图身份后枚举 Steam 本机订阅列表。确认未订阅时按 UMM 语言显示带 Workshop ID 的提示，清除待执行的晚加入状态，并在早于 `GameModeController.LoadNextScene` 的 `LevelSelectionController.GotoNextCampaignScene` 入口阻止指向该房主地图的切换，同时保留 `GameState.LoadLevel` 后置保护；该前置拦截已通过双端实测确认不会进入 Workshop 加载动画。订阅状态无法读取时保持原生下载流程，不误报缺图。订阅或下载不会由 Mod 自动执行。
 
 关闭注入时必须清理 `_injectedForSession`、`GameState.loadCustomCampaign`、`customLevelID`、`sceneToLoad`、Workshop Lobby 元数据及暂停/切关状态。统一入口为 `ClearInjectedWorkshopRuntimeState`，覆盖 UMM 关闭开关、停用/卸载 Mod 和 Steam `LeaveMatch`。热关闭不会主动切换当前场景；退出并重新创建官方房间后恢复原生选图。
 

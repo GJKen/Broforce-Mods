@@ -476,6 +476,10 @@ namespace CustomMapMultiplayer
             try
             {
                 ShowFullFrpRoomNoticeIfNeeded(__originalMethod, __args);
+                if (ShouldBlockMissingWorkshopTransition(__originalMethod))
+                {
+                    return false;
+                }
 
                 if (__originalMethod != null &&
                     __originalMethod.DeclaringType != null &&
