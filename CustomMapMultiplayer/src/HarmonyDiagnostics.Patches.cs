@@ -591,9 +591,7 @@ namespace CustomMapMultiplayer
                 TrySynchronizeClientWorkshopIdentity(true, "before GameState.LoadLevel");
                 if (ShouldBlockMissingWorkshopLoad(nextScene))
                 {
-                    DiagnosticLog.Warning(
-                        "Blocked Workshop GameState.LoadLevel because the host map is not subscribed locally: " +
-                        "id=" + GetConfiguredWorkshopId() + "; nextScene=" + (nextScene ?? string.Empty) + ".");
+                    LogMissingWorkshopLoadBlocked("GameState.LoadLevel", nextScene);
                     return false;
                 }
 

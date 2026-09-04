@@ -19,6 +19,7 @@ namespace CustomMapMultiplayer
         internal string ManualAfkButton;
         internal string ManualAfkSinglePlayerNotice;
         internal string WorkshopNotice;
+        internal string WorkshopSubscriptionMissingNotice;
         internal string WorkshopId;
         internal string WorkshopCampaignName;
         internal string WorkshopScene;
@@ -72,6 +73,7 @@ namespace CustomMapMultiplayer
             ManualAfkButton = "Enter AFK now",
             ManualAfkSinglePlayerNotice = "AFK is unavailable while you are the only player in the room.",
             WorkshopNotice = "For a third-party Workshop map, all players must use the same Mod build, subscribe to and finish downloading the same map. The host enters the numeric Workshop ID below; joining players leave their local ID blank and follow the host's published map.",
+            WorkshopSubscriptionMissingNotice = "The host is using Steam Workshop map ID {id}, but the map is not subscribed on this local machine. Please subscribe to the map in the Steam Workshop, restart the game, and then rejoin the room.",
             WorkshopId = "Workshop ID (host only; joining players leave this blank and follow the host's map)",
             WorkshopCampaignName = "Workshop campaign name (optional)",
             WorkshopScene = "Custom level scene",
@@ -134,6 +136,7 @@ namespace CustomMapMultiplayer
             ManualAfkButton = "立即进入 AFK",
             ManualAfkSinglePlayerNotice = "房间只有你一人时无法进入 AFK。",
             WorkshopNotice = "使用第三方 Workshop 地图时，所有玩家必须使用相同的 Mod 构建，订阅并完成下载同一张地图。房主在下面填写数字 Workshop ID；加入方将本地 ID 留空，并跟随房主发布的地图。",
+            WorkshopSubscriptionMissingNotice = "房主使用的 Steam 创意工坊地图 ID 为 {id}，但本机尚未订阅。请先在 Steam 创意工坊订阅地图，重启游戏后，再重新加入房间。",
             WorkshopId = "Workshop ID（仅房主填写；加入方将本地 ID 留空并跟随房主发布的地图）",
             WorkshopCampaignName = "Workshop 战役名称（可选）",
             WorkshopScene = "自定义关卡场景",
