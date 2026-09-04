@@ -12,8 +12,9 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=993e95efdc78a50e7ba6b25fb2495cb01e90d2a0cf551c058b6a43377904c9e3` |
-| DLL SHA-256 | `8BD597F4843C0C7F625EE5391A6FCC73F93BFEBB0DFD571C069228303BFF3EB0` |
+| 当前分发构建 | `buildHash=9cc86f24743c6d9109e9c1c204a385999b1ce010b58aa0303133dac47192cf84` |
+| DLL SHA-256 | `69A01A8A39271A8FDD2A141078C72CA35C93D9447C584A04C6DC0C85283E062E` |
+| DLL 程序集版本 | `0.5.0.0` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
 
@@ -36,40 +37,9 @@ Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁
 ## 安装与首次运行
 
 1. 所有玩家安装 `r2modman`，为 Broforce 创建或选择默认的 profile，并在其中安装 UMM。启动一次游戏确认 UMM 加载成功。
-2. 将项目内最新编译的 `CustomMapMultiplayer` 目录复制到 r2modman 对应 profile 的 `UMM\Mods\`。目录名必须是 `GJKen-CustomMapMultiplayer`。
-3. 在 profile 的 `mods.yml` 追加👇：
-
-<details><summary>点击展开</summary>
-
-```yaml
-- manifestVersion: 1
-  name: GJKen-CustomMapMultiplayer
-  authorName: GJKen
-  websiteUrl: ''
-  displayName: Custom Map Multiplayer
-  description:
-  gameVersion: ''
-  networkMode: ''
-  packageType: ''
-  installMode: ''
-  installedAtTime: 1786929010047
-  loaders: []
-  dependencies: []
-  incompatibilities: []
-  optionalDependencies: []
-  versionNumber:
-    major: 0
-    minor: 5
-    patch: 0
-  enabled: true
-  onlineSource: false
-```
-</details>
-
-> 做这一步只是为了让 r2modman 能够看见当前本地已经安装了此 mod，实际上步骤2已经能正常使用了。
-
-4. 重启 r2modman，在 UMM 中确认 `Custom Map Multiplayer 0.5.0` 已加载。
-5. 双方需订阅并下载相同 Workshop 地图，并在 `Multiplayer Options` 中开启 Workshop 地图注入。
+2. 将 `Release\CustomMapMultiplayer.zip` 导入 r2modman 的 Broforce profile。ZIP 内已经包含 `UMM\Mods\CustomMapMultiplayer` 下的 DLL 和 `Info.json`。
+3. 重启 r2modman，在 UMM 中确认 `Custom Map Multiplayer 0.5.0` 已加载。
+4. 双方需订阅并下载相同 Workshop 地图，并在 `Multiplayer Options` 中开启 Workshop 地图注入。
 只需房主在 UMM 填写地图的 Workshop ID；战役名可留空，场景名默认 `Test Evan2`，地图使用其它场景时再修改；加入方的 Workshop ID 可留空，mod会自动采用房主发布的地图配置；
 如果加入方没有订阅房主地图，屏幕顶部会提示缺少订阅地图，你需要根据提示去订阅地图；
 关闭 Workshop 地图注入和 FRP Direct 后，恢复官方创建街机线上地图。
@@ -152,7 +122,7 @@ FRP 房间列表显示人数已满时，加入方点击房间会直接在屏幕�
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
-标准脚本会生成项目内安装包并部署到本机 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署时会同步覆盖 DLL 和 `Info.json`，使名称、版本和入口与当前构建一致。可选测试部署目录仅从未提交的 `LocalBroforcePath.props` 读取；不要把测试机地址、共享路径或用户名写入仓库。已配置的部署路径不可访问、目录创建失败或 DLL 复制失败时，构建视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
+标准脚本会生成 `Release\CustomMapMultiplayer.zip` 并部署到本机 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署时会同步覆盖 DLL 和 `Info.json`，使名称、版本和入口与当前构建一致；DLL 程序集版本从 `modinfo.json` 的版本自动生成。可选测试部署目录仅从未提交的 `LocalBroforcePath.props` 读取；不要把测试机地址、共享路径或用户名写入仓库。已配置的部署路径不可访问、目录创建失败或 DLL 复制失败时，构建视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
 
 ## 项目结构与文档
 
@@ -161,7 +131,7 @@ src/                              Mod 源码
 src/SettingsUiText.cs             UMM 设置界面中英文文案
 CustomMapMultiplayer.csproj C# 工程文件
 BuildAndDeploy.ps1                .NET 3.5 构建和部署脚本
-CustomMapMultiplayer/    可复制的 UMM 安装包（DLL + Info.json）
+Release/                  r2modman 安装包与 UMM 插件文件
 README.md                         默认中文说明文档
 README.en.md                      英文说明文档
 modinfo.json                      UMM 清单模板

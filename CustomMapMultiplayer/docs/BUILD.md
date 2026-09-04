@@ -27,23 +27,27 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Rel
 有效输出位置：
 
 ```text
-<项目根目录>\CustomMapMultiplayer\CustomMapMultiplayer.dll
-<本机 UMM_PROFILE_DIR>\Mods\GJKen-CustomMapMultiplayer\CustomMapMultiplayer.dll
+<项目根目录>\Release\UMM\Mods\CustomMapMultiplayer\CustomMapMultiplayer.dll
+<本机 UMM_PROFILE_DIR>\Mods\GJKen-CustomMapMultiplayer\CustomMapMultiplayer\CustomMapMultiplayer.dll
 ```
 
-脚本输出并嵌入 `Build hash`，覆盖 DLL；项目安装包固定包含 `Info.json`。部署目标的 `Info.json` 每次均从 `modinfo.json` 同步，保证名称、版本和入口与当前构建一致。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
+脚本输出 `Release\CustomMapMultiplayer.zip` 并嵌入 `Build hash`，覆盖 `Release\UMM\Mods\CustomMapMultiplayer` 下的 DLL；项目安装包固定包含顶层 `manifest.json`、`README.md`、`icon.png`，以及 UMM 子目录中的 `Info.json`。部署目标的 `Info.json` 每次均从 `modinfo.json` 同步，DLL 程序集版本也从该文件的版本生成。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
 
-`CustomMapMultiplayer.csproj` 的 `OutputPath` 也指向项目安装包；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
+`CustomMapMultiplayer.csproj` 的 `OutputPath` 也指向 `Release\UMM\Mods\CustomMapMultiplayer`；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
 
 ## 安装包结构
 
 ```text
-CustomMapMultiplayer\
-  CustomMapMultiplayer.dll
-  Info.json
+Release\
+  manifest.json
+  icon.png
+  README.md
+  UMM\Mods\CustomMapMultiplayer\
+    CustomMapMultiplayer.dll
+    Info.json
 ```
 
-复制到 UMM 后目录名必须为 `GJKen-CustomMapMultiplayer`，程序集名保持 `CustomMapMultiplayer.dll`。脚本不更新 r2modman 缓存包。
+ZIP 导入到 r2modman 后，插件 DLL 位于 `UMM\Mods\CustomMapMultiplayer`，安装后的外层目录名由包标识决定。程序集名保持 `CustomMapMultiplayer.dll`，程序集版本与 `modinfo.json` 的版本同步（例如 `0.5.0.0`）。
 
 ## 逆向参考
 
