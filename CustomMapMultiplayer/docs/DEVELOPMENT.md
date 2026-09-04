@@ -10,6 +10,7 @@
 | 需要了解的内容 | 文档 |
 | --- | --- |
 | 项目基线、整体架构、源码职责和设计边界 | [架构与代码职责](ARCHITECTURE.md) |
+| RocketLib 自定义菜单按钮、菜单注入、本地化和动作一致性 | [自定义菜单按钮开发手册](CUSTOM-MENU-BUTTONS.md) |
 | Workshop 地图、晚加入/重入、角色恢复、道具和实体同步 | [Workshop 与游戏状态](WORKSHOP.md) |
 | FRP Direct、Steam/FRP 在线名单和返回大厅流程 | [网络与房间](NETWORKING.md) |
 | 自动 AFK、主动 AFK 和相关生命周期 | [AFK 行为](AFK.md) |
