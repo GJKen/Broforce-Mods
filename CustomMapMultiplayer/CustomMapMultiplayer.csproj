@@ -6,8 +6,9 @@
     <AssemblyName>CustomMapMultiplayer</AssemblyName>
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <PackageModPath>$(MSBuildProjectDirectory)\CustomMapMultiplayer</PackageModPath>
-    <OutputPath>$(PackageModPath)\</OutputPath>
+    <PackageModPath>$(MSBuildProjectDirectory)\Release</PackageModPath>
+    <PackageUmmModPath>$(PackageModPath)\UMM\Mods\CustomMapMultiplayer</PackageUmmModPath>
+    <OutputPath>$(PackageUmmModPath)\</OutputPath>
   </PropertyGroup>
 
   <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
@@ -89,8 +90,8 @@
   </ItemGroup>
 
   <Target Name="DeployCustomMapMultiplayer" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
-    <MakeDir Directories="$(PackageModPath);$(LocalBroforceModPath)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json')" />
+    <MakeDir Directories="$(PackageModPath);$(PackageUmmModPath);$(LocalBroforceModPath)\CustomMapMultiplayer" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)\CustomMapMultiplayer" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\CustomMapMultiplayer\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json')" />
   </Target>
 </Project>

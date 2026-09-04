@@ -12,8 +12,9 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=993e95efdc78a50e7ba6b25fb2495cb01e90d2a0cf551c058b6a43377904c9e3` |
-| DLL SHA-256 | `8BD597F4843C0C7F625EE5391A6FCC73F93BFEBB0DFD571C069228303BFF3EB0` |
+| Current distributed build | `buildHash=9cc86f24743c6d9109e9c1c204a385999b1ce010b58aa0303133dac47192cf84` |
+| DLL SHA-256 | `69A01A8A39271A8FDD2A141078C72CA35C93D9447C584A04C6DC0C85283E062E` |
+| DLL assembly version | `0.5.0.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
 
@@ -38,40 +39,9 @@ The current scope does not include continuous synchronization of active AI, enem
 ## Installation and First Run
 
 1. Have every player install `r2modman`, create or select the default profile for Broforce, and install UMM in that profile. Start the game once to confirm that UMM loads successfully.
-2. Copy the latest compiled `CustomMapMultiplayer` directory in this project to the corresponding profile's `UMM\Mods\` directory. The directory must be named `GJKen-CustomMapMultiplayer`.
-3. Append the following entry to the profile's `mods.yml`:
-
-<details><summary>Click to expand</summary>
-
-```yaml
-- manifestVersion: 1
-  name: GJKen-CustomMapMultiplayer
-  authorName: GJKen
-  websiteUrl: ''
-  displayName: Custom Map Multiplayer
-  description:
-  gameVersion: ''
-  networkMode: ''
-  packageType: ''
-  installMode: ''
-  installedAtTime: 1786929010047
-  loaders: []
-  dependencies: []
-  incompatibilities: []
-  optionalDependencies: []
-  versionNumber:
-    major: 0
-    minor: 5
-    patch: 0
-  enabled: true
-  onlineSource: false
-```
-</details>
-
-> This step only makes r2modman recognize that the Mod is already installed locally. The Mod can already work normally after step 2.
-
-4. Restart r2modman and confirm that `Custom Map Multiplayer 0.5.0` is loaded in UMM.
-5. Every player must subscribe to and download the same Workshop map, then enable Workshop map injection in `Multiplayer Options`.
+2. Import `Release\CustomMapMultiplayer.zip` into the Broforce profile in r2modman. The ZIP already contains the DLL and `Info.json` under `UMM\Mods\CustomMapMultiplayer`.
+3. Restart r2modman and confirm that `Custom Map Multiplayer 0.5.0` is loaded in UMM.
+4. Every player must subscribe to and download the same Workshop map, then enable Workshop map injection in `Multiplayer Options`.
 Only the host needs to enter the map's Workshop ID in UMM. The campaign name can be left blank, the default scene name is `Test Evan2`, and the scene name can be changed when another map scene is used. The joining player's Workshop ID can be left blank; the Mod automatically uses the map configuration published by the host.
 If a joining player has not subscribed to the host's map, a missing-subscription notice appears at the top of the screen. Follow the notice to subscribe to the map.
 When both Workshop map injection and FRP Direct are disabled, the official Arcade online map creation flow is restored.
@@ -154,7 +124,7 @@ This file contains machine-specific paths and is only used for building or deplo
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
-The standard script creates the project package and deploys it to the local UMM directory while calculating and embedding the SHA-256 `buildHash`. Deployment overwrites the DLL and `Info.json` so that the name, version, and entry point match the current build. An optional test deployment directory is read only from the uncommitted `LocalBroforcePath.props`; do not write test-machine addresses, shared paths, or usernames to the repository. If a configured deployment path cannot be accessed, directory creation fails, or the DLL cannot be copied, the build is considered failed and two-sided testing must not continue. Do not replace a standard-script-verified build with an unverified IDE or manual build; such a build is recorded as `UNBUILT`.
+The standard script creates `Release\CustomMapMultiplayer.zip` and deploys it to the local UMM directory while calculating and embedding the SHA-256 `buildHash`. Deployment overwrites the DLL and `Info.json` so that the name, version, and entry point match the current build; the DLL assembly version is generated from the version in `modinfo.json`. An optional test deployment directory is read only from the uncommitted `LocalBroforcePath.props`; do not write test-machine addresses, shared paths, or usernames to the repository. If a configured deployment path cannot be accessed, directory creation fails, or the DLL cannot be copied, the build is considered failed and two-sided testing must not continue. Do not replace a standard-script-verified build with an unverified IDE or manual build; such a build is recorded as `UNBUILT`.
 
 ## Project Structure and Documentation
 
@@ -163,7 +133,7 @@ src/                              Mod source code
 src/SettingsUiText.cs             UMM settings text in English and Chinese
 CustomMapMultiplayer.csproj       C# project file
 BuildAndDeploy.ps1                .NET 3.5 build and deployment script
-CustomMapMultiplayer/             Copyable UMM package (DLL + Info.json)
+Release/                           r2modman package and UMM plugin files
 README.md                         Default Chinese documentation
 README.en.md                      English documentation
 modinfo.json                      UMM manifest template

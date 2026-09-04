@@ -30,6 +30,12 @@ if ([string]::IsNullOrWhiteSpace($broforceManagedPath) -or
 if (-not (Test-Path -LiteralPath $infoSourcePath)) {
     throw "Missing UMM metadata template: $infoSourcePath"
 }
+$infoMetadata = Get-Content -Encoding UTF8 -Raw -LiteralPath $infoSourcePath | ConvertFrom-Json
+$modVersion = [string]$infoMetadata.Version
+if ($modVersion -notmatch '^\d+\.\d+\.\d+$') {
+    throw "modinfo.json Version must use major.minor.patch format: $modVersion"
+}
+$assemblyVersion = $modVersion + '.0'
 
 $compiler = Join-Path $env:windir 'Microsoft.NET\Framework64\v3.5\csc.exe'
 $mscorlib = Join-Path $env:windir 'Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll'
@@ -63,14 +69,15 @@ foreach ($requiredPath in $requiredPaths) {
     }
 }
 
-$packageModPath = Join-Path $repoRoot 'CustomMapMultiplayer'
+$releasePath = Join-Path $repoRoot 'Release'
+$packageModPath = Join-Path $releasePath 'UMM\Mods\CustomMapMultiplayer'
 $packageInfoPath = Join-Path $packageModPath 'Info.json'
-if (-not (Test-Path -LiteralPath $packageInfoPath)) {
-    throw "Missing copyable package metadata: $packageInfoPath"
-}
-
 New-Item -ItemType Directory -Force -Path $packageModPath | Out-Null
+Copy-Item -LiteralPath $infoSourcePath -Destination $packageInfoPath -Force
+Write-Host "Updated package metadata $packageInfoPath from modinfo.json"
+
 $outputPath = Join-Path $packageModPath 'CustomMapMultiplayer.dll'
+$packageZipPath = Join-Path $releasePath 'CustomMapMultiplayer.zip'
 $sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src') -Filter '*.cs' -File |
     Sort-Object Name |
     Select-Object -ExpandProperty FullName)
@@ -118,7 +125,11 @@ try {
         ForEach-Object { $_.ToString('x2') })
     Write-Host "Build hash: $buildHash"
 
-    $metadataSource = @"
+$metadataSource = @"
+[assembly: System.Reflection.AssemblyVersion("$assemblyVersion")]
+[assembly: System.Reflection.AssemblyFileVersion("$assemblyVersion")]
+[assembly: System.Reflection.AssemblyInformationalVersion("$modVersion")]
+
 namespace CustomMapMultiplayer
 {
     internal static partial class BuildMetadata
@@ -152,7 +163,31 @@ if ($LASTEXITCODE -ne 0) {
     throw "C# compilation failed with exit code $LASTEXITCODE."
 }
 
-$localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-CustomMapMultiplayer'
+$packageFiles = @(
+    (Join-Path $releasePath 'manifest.json'),
+    (Join-Path $releasePath 'README.md'),
+    (Join-Path $releasePath 'icon.png'),
+    (Join-Path $packageModPath 'CustomMapMultiplayer.dll'),
+    (Join-Path $packageModPath 'Info.json')
+)
+foreach ($packageFile in $packageFiles) {
+    if (-not (Test-Path -LiteralPath $packageFile)) {
+        throw "Missing package file: $packageFile"
+    }
+}
+$archivePaths = @(
+    (Join-Path $releasePath 'manifest.json'),
+    (Join-Path $releasePath 'README.md'),
+    (Join-Path $releasePath 'icon.png'),
+    (Join-Path $releasePath 'UMM')
+)
+$packageZipTempPath = Join-Path $releasePath (
+    'CustomMapMultiplayer.' + [Guid]::NewGuid().ToString('N') + '.tmp.zip')
+Compress-Archive -Path $archivePaths -DestinationPath $packageZipTempPath
+Move-Item -LiteralPath $packageZipTempPath -Destination $packageZipPath -Force
+Write-Host "Created package $packageZipPath"
+
+$localModPath = Join-Path (Split-Path -Parent $unityModManagerPath) 'Mods\GJKen-CustomMapMultiplayer\CustomMapMultiplayer'
 Write-Host "Updated copyable package $outputPath"
 
 if ($SkipDeploy) {
@@ -181,5 +216,8 @@ Write-Host 'Build and deployment completed.'
 finally {
     if (Test-Path -LiteralPath $buildMetadataPath) {
         Remove-Item -LiteralPath $buildMetadataPath -Force -ErrorAction SilentlyContinue
+    }
+    if ($packageZipTempPath -and (Test-Path -LiteralPath $packageZipTempPath)) {
+        Remove-Item -LiteralPath $packageZipTempPath -Force -ErrorAction SilentlyContinue
     }
 }
