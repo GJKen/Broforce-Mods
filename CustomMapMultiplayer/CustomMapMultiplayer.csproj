@@ -70,6 +70,7 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopCache.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopPickup.cs" />
     <Compile Include="src\HarmonyDiagnostics.Afk.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Chat.cs" />
     <Compile Include="src\HarmonyDiagnostics.Acid.cs" />
     <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopLevelEnd.cs" />
