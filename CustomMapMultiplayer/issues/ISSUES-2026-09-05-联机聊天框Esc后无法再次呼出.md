@@ -33,4 +33,12 @@ KeyboardInput.Update -> ChatTextBox.Update -> PauseController.Update
 - 再次执行 `Enter -> Esc -> Esc -> Enter` 后，聊天框仍可呼出。
 - 未再复现“无法再次呼出”或“只能通过 Esc 退出输入框”。
 
+## MCP 验证步骤
+
+1. 用 Unity Inspector `ping`、`game_state` 确认已进入联机地图，并用运行时状态确认 `Connect.IsOffline=false`。
+2. 通过状态查询记录 `KeyboardInput.open`、`skipNextFrame`、`PauseController.pauseStatus`、`DelayInput`、`InputReader.IsBlocked` 和 `PauseMenu.MenuActive`；通过 `ChatTextBox` 字段检查 `target`、`chatBarFullyOffscreen`、`ForceOnScreen` 和 `chatOpenTrigger`。
+3. 使用真实键盘执行 `Enter -> 输入文字 -> Enter`，确认聊天消息出现且输入框关闭。
+4. 再执行 `Enter -> Esc -> Esc -> Enter`：第一次 `Esc` 后应进入 `MenuPause` 且不残留输入线，第二次 `Esc` 后回到 `UnPaused`，最后 `Enter` 应重新打开输入框。
+5. 聊天未打开时按 `Esc`，确认暂停菜单可打开，并检查继续、重开关卡、返回主菜单和 AFK 项未错位。`simulate_input` 仅适合控制器动作，不能替代真实键盘的 `Return`/`Escape` 验证。
+
 主机与加入方的独立双端回归尚未分别记录，仍需在实际联机房间补测。
