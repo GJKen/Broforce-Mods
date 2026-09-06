@@ -95,10 +95,29 @@ namespace CustomMapMultiplayer
             var insertLetter = typeof(MessageController).GetMethod(
                 "InsertLetter", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                 null, new[] { typeof(string) }, null);
+            var playerGetInput = typeof(Player).GetMethod(
+                "GetInput", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                new[]
+                {
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType(),
+                    typeof(bool).MakeByRefType()
+                },
+                null);
             var keyboardPrefix = typeof(HarmonyDiagnostics).GetMethod(
                 "KeyboardInputChatBoundaryPrefix", BindingFlags.NonPublic | BindingFlags.Static);
             var keyboardPostfix = typeof(HarmonyDiagnostics).GetMethod(
                 "KeyboardInputChatRepeatPostfix", BindingFlags.NonPublic | BindingFlags.Static);
+            var playerInputPrefix = typeof(HarmonyDiagnostics).GetMethod(
+                "PlayerChatInputBlockPrefix", BindingFlags.NonPublic | BindingFlags.Static);
             var insertLetterPrefix = typeof(HarmonyDiagnostics).GetMethod(
                 "MessageControllerChatImeInsertLetterPrefix", BindingFlags.NonPublic | BindingFlags.Static);
             var pausePostfix = typeof(HarmonyDiagnostics).GetMethod(
@@ -106,8 +125,9 @@ namespace CustomMapMultiplayer
             var submitPostfix = typeof(HarmonyDiagnostics).GetMethod(
                 "MessageControllerChatInputRepeatCleanupPostfix", BindingFlags.NonPublic | BindingFlags.Static);
             if (keyboardUpdate == null || pauseToggle == null || submitMessage == null || insertLetter == null ||
-                keyboardPrefix == null || keyboardPostfix == null || insertLetterPrefix == null ||
-                pausePostfix == null || submitPostfix == null)
+                playerGetInput == null || keyboardPrefix == null || keyboardPostfix == null ||
+                playerInputPrefix == null || insertLetterPrefix == null || pausePostfix == null ||
+                submitPostfix == null)
             {
                 DiagnosticLog.Warning("Chat boundary patch could not resolve its target methods.");
                 return;
@@ -131,11 +151,17 @@ namespace CustomMapMultiplayer
                     null,
                     null,
                     null);
+                _harmony.Patch(
+                    playerGetInput,
+                    new HarmonyMethod(playerInputPrefix),
+                    null,
+                    null,
+                    null);
                 _harmony.Patch(pauseToggle, null, new HarmonyMethod(pausePostfix), null, null);
                 _harmony.Patch(submitMessage, null, new HarmonyMethod(submitPostfix), null, null);
                 DiagnosticLog.Info(
                     "Chat boundary patch enabled for KeyboardInput.Update, MessageController.SubmitMessage, " +
-                    "and PauseController.TogglePause.");
+                    "Player.GetInput, and PauseController.TogglePause.");
             }
             catch (Exception exception)
             {
@@ -1620,6 +1646,38 @@ namespace CustomMapMultiplayer
             }
 
             KeyboardInput.Toggle();
+            return false;
+        }
+
+        private static bool PlayerChatInputBlockPrefix(
+            Player __instance,
+            ref bool up,
+            ref bool down,
+            ref bool left,
+            ref bool right,
+            ref bool fire,
+            ref bool buttonJump,
+            ref bool special,
+            ref bool highFive,
+            ref bool buttonGesture,
+            ref bool sprint)
+        {
+            if (!KeyboardInput.open || __instance == null || !__instance.IsMine ||
+                __instance.playerNum != NewChatController.GetFirstKeyboardPlayer())
+            {
+                return true;
+            }
+
+            up = false;
+            down = false;
+            left = false;
+            right = false;
+            fire = false;
+            buttonJump = false;
+            special = false;
+            highFive = false;
+            buttonGesture = false;
+            sprint = false;
             return false;
         }
 

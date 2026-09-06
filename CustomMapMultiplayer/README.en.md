@@ -12,8 +12,8 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=3ae2ab79ee0c0794c2d604b513d6ab443417f20defc2ac88f61e773b175c8e03` |
-| DLL SHA-256 | `ADF00C43245D189FF377153428457D2586065D25CD4B6043DC984759B1DC36B5` |
+| Current distributed build | `buildHash=e48ebb62cd3e72d6e9443582d9c8cbc155a4886adeeaa84c184c8cc697bba82a` |
+| DLL SHA-256 | `A0B6EE092BE60A7782EC4787AE8ED3992A396C6D9D2B8DE7669EBFB1A4D963B2` |
 | DLL assembly version | `0.5.0.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
@@ -27,7 +27,7 @@ Verified:
 - The Workshop entry banner, returning to the lobby with Esc, and the main-menu animation; deterministic standard ammunition crates, remote scanning suppression, and duplicate pickup protection are verified on both FRP sides, while the official Steam lobby and more maps still require retesting.
 - In a long high-density combat test, Host frame drops were noticeably reduced. This is currently an observed improvement; unified graphics settings, reversed Host/Client roles, and p50/p95/p99 comparisons are still required for formal acceptance.
 - The `Enter AFK now` button in the in-game Esc menu; when the Host and joining player use it separately, it affects only that client's local character. Manual AFK does not trigger automatic re-entry; returning through the normal flow restores the original slot's lives, hero type, and character, while ordinary network dropout recovery remains automatic. See the [manual AFK issue record](issues/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md).
-- Online chat now supports Chinese IME input, Chinese symbols, digits, and native editing, with a 500 UTF-16 character limit, long-message viewport, visual-line Up/Down navigation, and an input-box character counter. Narrow real-keyboard checks pass, and the Esc-reopen/Enter-send issue is fixed; the full input matrix and chat-history acceptance still require completion. See the [chat input guide](docs/CHAT.md).
+- Online chat now supports Chinese IME input, Chinese symbols, digits, and native editing, with a 500 UTF-16 character limit, long-message viewport, visual-line Up/Down navigation, an input-box character counter, and control suppression for the active keyboard chat player. These features passed the narrow real-keyboard checks; the Esc-reopen/Enter-send issue is fixed, while the full input matrix and chat-history acceptance still require completion. See the [chat input guide](docs/CHAT.md).
 
 Workshop acid failure samples confirmed that player slots and hero NIDs did not cross. The old patch covered only `CheckForTraps`, while reachable direct `CoverInAcid` calls in `CalculateMovement` and `Damage` bypassed it. The implementation now keeps a scene-level `DoodadAcidPool` list, predicts local death for the joining player, and enforces Host authority at the common `CoverInAcid` entry while rate-limiting the Host scan. Host and joining-player acid deaths have been verified independently without killing the player left at the spawn area. See the [dedicated issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md).
 
