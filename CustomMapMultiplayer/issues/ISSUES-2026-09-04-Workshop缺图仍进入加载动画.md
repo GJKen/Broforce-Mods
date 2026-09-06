@@ -13,9 +13,7 @@
 
 ## 日志证据
 
-- Host：`<diagnostic-log-file>`
-- Client：`<diagnostic-log-file>`
-- Client trace：`<diagnostic-trace-file>`
+- 证据：Host 和 Client 的诊断日志及 trace。
 - Client 在约 `+0.518s` 识别未订阅；约 `+9.353s` 进入 `LoadingScreen`；约 `+9.819s` 进入 `MissionScreenVietnam`；约 `+11.068s` 才开始被 `GameState.LoadLevel` 阻止。
 
 ## 修复方案

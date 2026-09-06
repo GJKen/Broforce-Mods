@@ -102,8 +102,7 @@
 本次测试使用的双方日志都记录相同构建：
 
 - `buildHash`：`dee7cf00ea45792e591e3f5cd0fa8b44749503cdc5bad858a570622f31c0891b`。
-- 本机日志：`<diagnostic-log-file>`。
-- 加入方日志：`另外的加入方日志/<diagnostic-log-file>`。
+- 证据：本机和加入方的双端诊断日志。
 - 双方日志中的 `BUILD_INFO` 和 `SESSION_BEGIN` 均存在，说明这次不是两端 DLL 版本不一致。
 
 ### 关键证据

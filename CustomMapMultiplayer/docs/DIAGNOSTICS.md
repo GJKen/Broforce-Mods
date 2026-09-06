@@ -2,28 +2,15 @@
 
 [返回开发文档索引](DEVELOPMENT.md) · [测试与验收](TESTING.md)
 
-## 日志目录
+## 日志获取
 
-```text
-<local-diagnostic-directory>\
-```
-
-远端测试参与者应从自己的 Windows 用户数据目录导出日志；公开文档不记录内网地址、共享路径或用户名：
-
-```text
-<local-diagnostic-directory>
-```
-
-该目录是 Windows 下实际诊断日志目录，UMM 的“打开诊断日志目录”按钮、日志写入和启动日志中的 `Diagnostic log directory` 使用同一路径；不要在 UMM DLL 部署目录中查找诊断日志。
+使用 UMM 设置中的“打开诊断日志目录”获取 Mod 诊断日志。每个参与端从自己的本地目录导出日志；公开文档不记录用户目录、内网地址、共享路径或用户名。诊断日志不位于 DLL 安装包内部。
 
 ## 会话文件
 
 插件加载时创建启动日志；`SteamLayer` 或 `FrpDirectLayer` 的 `CreateMatch`/`JoinLobby` 创建新会话。每个会话有普通事件日志和 Harmony 追踪日志：
 
-```text
-<diagnostic-log-file>
-<diagnostic-trace-file>
-```
+每个会话包含普通事件日志和 Harmony 追踪日志，文件名带有 Host/Client、会话标识和时间信息。提交证据时只保留必要的事件片段，移除用户名、地址、端口、绝对路径和无关环境信息。
 
 普通日志约每 750ms 刷新，警告、错误和会话结束时立即刷新。诊断日志预设包括基础、加入/重新加入、AFK/失败、Workshop 和完整；九类设置只过滤诊断输出，不关闭补丁或改变游戏行为。无论类别如何选择，`BUILD_INFO`、`SESSION_BEGIN`、`SESSION_END`、`DIAGNOSTIC_CATEGORIES`、Warning、Error 和 Unity 异常始终保留。
 

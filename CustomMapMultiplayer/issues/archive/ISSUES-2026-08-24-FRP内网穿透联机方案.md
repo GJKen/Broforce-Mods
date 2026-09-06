@@ -217,7 +217,7 @@ FRP 只负责把公共公网端口转到房主机器，不能自动替代 Steam 
 - 房主开始进入地图后画面进入 `Test Evan2`，加入方停在黑屏。
 - 房主随后尝试退出，游戏出现卡死并崩溃；加入方在房主退出后离开黑屏。
 
-本轮可取得的完整诊断文件来自实际网络角色为 Host 的本机：`<diagnostic-log-file>` 和同名 `.trace.log`。文件名中的 `client` 只是诊断标签，`SESSION_BEGIN.networkRole=host` 才是实际角色。该端 `BUILD_INFO` 为 `867a32fd986fcf0d75e292da196f1cda2eab7c390fb4a04e6f36a4428f2b4df2`。远端 UMM 日志只确认 Mod 正常加载；远端游戏退出后 MCP 已不可访问，且当前共享路径无法取得其 `Application.persistentDataPath` 诊断日志。本轮没有生成新的 `error.log`，因此根因结论以 Host 完整日志、trace 和 Broforce 源码分支为依据，Client 侧黑屏时的精确场景状态仍待下一轮双端日志确认。
+本轮只取得 Host 侧完整诊断日志和远端 UMM 加载结果，远端游戏退出后无法取得完整的 Client 侧诊断证据。本轮没有新的游戏崩溃日志，因此根因结论以 Host 侧日志、trace 和 Broforce 源码分支为依据；Client 侧黑屏时的精确场景状态仍待后续双端证据确认。
 
 Host 时间线：
 

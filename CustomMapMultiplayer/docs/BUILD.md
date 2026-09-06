@@ -6,11 +6,11 @@
 
 构建或部署前必须读取项目根目录的 `LocalBroforcePath.props`：
 
-1. `BroforceManagedPath` 是本机 Broforce `Broforce_beta_Data/Managed` 目录，其中必须含 `UnityEngine.TextRenderingModule.dll`。
+1. `BroforceManagedPath` 是本机 Broforce `Broforce_beta_Data/Managed` 目录，其中必须含 `UnityEngine.TextRenderingModule.dll` 和 `UnityEngine.UI.dll`；聊天 viewport 和字数显示使用后者。
 2. `UnityModManagerPath` 是含 `UnityModManager.dll` 和 `0Harmony.dll` 的本机 UMM 核心目录。
 3. `TestDeployModPath` 是本机测试机部署目录；值为空表示明确关闭额外测试部署。
 4. 该文件包含本机专用路径，只允许用于执行构建或部署，不得写入公开文件、提交信息、日志摘录或对外回复。
-5. 使用兼容 .NET Framework 3.5 的编译器。当前验证路径：`<local-installation-path>`；不要直接使用 v4 编译器。
+5. 使用兼容 .NET Framework 3.5 的 `csc.exe`；不要直接使用 v4 编译器。
 
 唯一标准入口：
 
@@ -34,6 +34,8 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Rel
 脚本输出 `Release\CustomMapMultiplayer.zip` 并嵌入 `Build hash`，覆盖 `Release\UMM\Mods\CustomMapMultiplayer` 下的 DLL；项目安装包固定包含顶层 `manifest.json`、`README.md`、`icon.png`，以及 UMM 子目录中的 `Info.json`。部署目标的 `Info.json` 每次均从 `modinfo.json` 同步，DLL 程序集版本也从该文件的版本生成。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
 
 `CustomMapMultiplayer.csproj` 的 `OutputPath` 也指向 `Release\UMM\Mods\CustomMapMultiplayer`；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
+
+聊天功能依赖 `UnityEngine.UI.dll` 的 `UnityEngine.UI.Text`、`RectTransform` 和文本布局 API。该程序集必须同时出现在项目引用和标准构建脚本的必需文件、编译引用列表中；缺失时应视为构建失败，不要使用缺少聊天显示功能的旧 DLL 进行验收。
 
 ## 安装包结构
 

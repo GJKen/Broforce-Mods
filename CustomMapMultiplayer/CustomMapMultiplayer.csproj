@@ -34,6 +34,10 @@
       <HintPath>$(BroforceManagedPath)\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityModManager">
       <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
       <Private>false</Private>

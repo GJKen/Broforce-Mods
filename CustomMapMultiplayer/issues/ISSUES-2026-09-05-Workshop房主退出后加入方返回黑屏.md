@@ -79,8 +79,7 @@ FRP Direct 的协议不执行 Host migration，房主退出时结束房间。202
 
 此前修复分支的一次双端日志记录了该修复路径：
 
-- Host：`<diagnostic-log-file>`
-- Client：`<diagnostic-log-file>`
+- 证据：Host 和 Client 的双端诊断日志。
 - 日志构建：`a031ae78b859fd2e43513ea08208a0599931b45758bda431ca1993fbb38c0189`
 
 Client 退出时记录了：

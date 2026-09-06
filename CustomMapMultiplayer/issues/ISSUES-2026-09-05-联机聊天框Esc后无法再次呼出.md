@@ -4,41 +4,19 @@
 
 **已修复，联机房间人工回归通过。**
 
-## 现象与根因
+## 根因
 
-联机地图中执行 `Enter -> Esc -> Esc -> Enter` 后，聊天输入框无法再次呼出；修复前重新打开后还无法用 `Enter` 发送文字，只能用 `Esc` 退出。
-
-实测原生执行顺序为：
-
-```text
-KeyboardInput.Update -> ChatTextBox.Update -> PauseController.Update
-```
-
-`KeyboardInput.Update` 处理聊天状态时会清除 `KeyboardInput.open`，随后 `PauseController.Update` 仍处理同一枚 `Esc` 并进入暂停。返回游戏后 `PauseMenu.MenuActive` 可能仍为 `true`，而原生 `KeyboardInput.Update` 在 `PauseMenu.instance` 存在时要求菜单激活且聊天已打开才执行 `Toggle()`，导致后续 `Enter` 被吞掉。聊天关闭超过 6 秒后，`ChatTextBox` 目标自然移到屏外，加重了表象。
+执行 `Enter -> Esc -> Esc -> Enter` 时，聊天关闭和暂停处理发生在同一输入周期：聊天状态已关闭，但同一枚 `Esc` 又被暂停逻辑处理。返回游戏后 `PauseMenu.MenuActive` 可能仍为 `true`，原生 `KeyboardInput.Update()` 因此吞掉后续聊天 `Enter`。重新打开后也可能无法用 `Enter` 发送。
 
 ## 修复
 
-- 新增 `src/HarmonyDiagnostics.Chat.cs`。
-- 联机且游戏处于 `UnPaused` 时，聊天关闭的 `Enter` 和聊天打开后的发送 `Enter` 都调用原生 `KeyboardInput.Toggle()`。
-- `PauseController.TogglePause` 返回 `UnPaused` 后同步清除残留的 `PauseMenu.MenuActive`。
-- 未修改 `ChatTextBox.target`，未全局设置 `ForceOnScreen`，未清除 `InputReader.IsBlocked`，未替换 `Assembly-CSharp.dll`。
+- 在联机且处于 `UnPaused` 时，聊天边界显式调用原生 `KeyboardInput.Toggle()`，保证打开和发送的 `Enter` 都能进入原生路径。
+- `PauseController.TogglePause` 返回 `UnPaused` 后清理残留的 `PauseMenu.MenuActive`。
+- 暂停、关闭聊天或发送完成后清理聊天输入重复状态。
+- 未修改 `ChatTextBox.target`、网络协议或 `Assembly-CSharp.dll`。
 
-## 验证
+## 关键验证
 
-本次在真正的联机房间验证通过：
-
-- `Enter` 可打开聊天输入框。
-- 输入文字后按 `Enter` 可正常发送。
-- 聊天中按 `Esc` 可退出，不再留下导致后续失效的状态。
-- 再次执行 `Enter -> Esc -> Esc -> Enter` 后，聊天框仍可呼出。
-- 未再复现“无法再次呼出”或“只能通过 Esc 退出输入框”。
-
-## MCP 验证步骤
-
-1. 用 Unity Inspector `ping`、`game_state` 确认已进入联机地图，并用运行时状态确认 `Connect.IsOffline=false`。
-2. 通过状态查询记录 `KeyboardInput.open`、`skipNextFrame`、`PauseController.pauseStatus`、`DelayInput`、`InputReader.IsBlocked` 和 `PauseMenu.MenuActive`；通过 `ChatTextBox` 字段检查 `target`、`chatBarFullyOffscreen`、`ForceOnScreen` 和 `chatOpenTrigger`。
-3. 使用真实键盘执行 `Enter -> 输入文字 -> Enter`，确认聊天消息出现且输入框关闭。
-4. 再执行 `Enter -> Esc -> Esc -> Enter`：第一次 `Esc` 后应进入 `MenuPause` 且不残留输入线，第二次 `Esc` 后回到 `UnPaused`，最后 `Enter` 应重新打开输入框。
-5. 聊天未打开时按 `Esc`，确认暂停菜单可打开，并检查继续、重开关卡、返回主菜单和 AFK 项未错位。`simulate_input` 仅适合控制器动作，不能替代真实键盘的 `Return`/`Escape` 验证。
-
-主机与加入方的独立双端回归尚未分别记录，仍需在实际联机房间补测。
+- `Enter` 打开聊天，输入后 `Enter` 正常发送。
+- 聊天中按 `Esc` 后再次按 `Enter` 可以打开聊天。
+- 完整执行 `Enter -> Esc -> Esc -> Enter` 后，聊天可以再次呼出并继续发送。

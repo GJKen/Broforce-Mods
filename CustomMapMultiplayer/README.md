@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=9cc86f24743c6d9109e9c1c204a385999b1ce010b58aa0303133dac47192cf84` |
-| DLL SHA-256 | `69A01A8A39271A8FDD2A141078C72CA35C93D9447C584A04C6DC0C85283E062E` |
+| 当前分发构建 | `buildHash=3ae2ab79ee0c0794c2d604b513d6ab443417f20defc2ac88f61e773b175c8e03` |
+| DLL SHA-256 | `ADF00C43245D189FF377153428457D2586065D25CD4B6043DC984759B1DC36B5` |
 | DLL 程序集版本 | `0.5.0.0` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP Direct | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
@@ -27,6 +27,7 @@
 - Workshop 的入场横幅、Esc 返回大厅和主菜单动画；标准弹药箱的确定性、远端扫描抑制和重复拾取防护已在 FRP 双端验证，官方 Steam 大厅和更多地图仍需复测。
 - 高密集战斗长测中，Host 掉帧已明显减轻；当前结论为观察到改善，仍需统一图形设置、交换 Host 并完成 p50/p95/p99 对照后再正式验收，详见 [Host 性能问题记录](issues/ISSUES-2026-08-30-联机房主低帧率与Host专属扫描性能问题.md)。
 - Esc 菜单中的“立即进入 AFK”按钮；房主和加入方分别操作时只影响各自本地角色。主动 AFK 不会自动重新加入，用户通过正常流程回来后会恢复原槽位的生命、英雄类型和角色；普通网络掉线仍按原有流程自动恢复，详见[主动 AFK 按钮问题记录](issues/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md)。
+- 联机聊天已接入中文输入法、中文符号、数字和原生编辑操作，并提供 500 个 UTF-16 字符上限、长消息 viewport、视觉行 Up/Down 和输入框右下角字数显示；这些功能的窄范围真实键盘测试已通过，Esc 后再次呼出和 Enter 发送问题也已修复，完整输入矩阵与聊天历史专项仍待补充，详见[聊天输入专题](docs/CHAT.md)。
 
 Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁只覆盖 `CheckForTraps`，遗漏了 `CalculateMovement` 和 `Damage` 对 `CoverInAcid` 的直达调用。当前实现维护场景级 `DoodadAcidPool` 列表，在统一 `CoverInAcid` 基入口执行加入方本地预测和房主权威校验，并将 Host 周期扫描限频；双方已实机验证房主、加入方分别进入酸液时均能正确死亡，且不会连带出生区玩家，详见 [独立 issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。普通 Mook 死亡终态、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
 
@@ -69,7 +70,7 @@ Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁
 - Esc 菜单中的“立即进入 AFK”按钮会让当前客户端实际拥有的本地玩家立即进入原生 AFK 旁观流程，与自动 AFK 开关相互独立。按钮会按本地所有权和当前输入控制器确定目标；多本地槽位无法唯一确定时不会执行，避免误操作另一角色。主动 AFK 不会触发自动 `RequestJoinGame`，需要用户通过正常重新加入流程显式回来；回来时会恢复原槽位的生命、英雄类型和角色。普通网络掉线仍保持自动重入。
 - 诊断日志预设（基础、加入/重新加入、AFK/失败、Workshop、完整）和九个诊断分类只影响日志输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
 
-每轮测试结束后，收集所有参与端的诊断 `.log`、`.trace.log`，并尽量同时保存 UMM `Core\Log.txt` 和游戏 `error.log`。Windows 日志目录为 `<local-diagnostic-directory>\`，不是 DLL 部署目录；UMM 中的“打开诊断日志目录”按钮也会打开这里。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
+每轮测试结束后，收集所有参与端同一会话的诊断日志，并尽量同时保存 UMM 和游戏日志。通过 UMM 中的“打开诊断日志目录”获取 Mod 日志，不在公开文档记录用户目录、共享路径或用户名。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
 
 排查酸液池导致的异常死亡时，重点对齐双方同一会话的 `PLAYER_ACID` 事件：它记录 `CoverInAcid`、`CoverInAcidRPC` 和 `PlayerHasDiedRPC` 前后对应的玩家槽位、RPC 请求槽位、角色 NID、`IsMine`、坐标、`acidMeltTimer` 和 `hasBeenCoverInAcid`，并通过低频 `authority-gate` 标明 `host-check`、`client-request`、`authority-wait` 或 `native-fallback` 决策。
 
@@ -137,6 +138,7 @@ README.en.md                      英文说明文档
 modinfo.json                      UMM 清单模板
 LocalBroforcePath.props.example   本机路径配置示例
 docs/DEVELOPMENT.md               开发文档索引（专题文档见 docs/）
+docs/CHAT.md                      联机聊天输入、viewport 和历史消息显示
 issues/                           历史问题、测试证据和验收记录
 umm-settings-preview.html         UMM 设置界面预览
 ```

@@ -14,6 +14,7 @@
 | Workshop 地图、晚加入/重入、角色恢复、道具和实体同步 | [Workshop 与游戏状态](WORKSHOP.md) |
 | FRP Direct、Steam/FRP 在线名单和返回大厅流程 | [网络与房间](NETWORKING.md) |
 | 自动 AFK、主动 AFK 和相关生命周期 | [AFK 行为](AFK.md) |
+| 联机聊天输入、IME、viewport、视觉行移动和历史消息显示 | [聊天输入](CHAT.md) |
 | 测试基线、证据要求、MCP 观测、专项验收和当前限制 | [测试与验收](TESTING.md) |
 | 日志目录、分类、预设、性能和日志约束 | [诊断日志](DIAGNOSTICS.md) |
 | 构建、部署、安装包和逆向参考 | [构建与部署](BUILD.md) |
@@ -24,6 +25,7 @@
 - 默认网络路径是官方 Steam Lobby/P2P；`FRP Direct` 默认关闭，启用后接管房间、PID 和游戏 RPC，Steam 仍负责 Workshop 内容下载。
 - Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名、正常退出后重入、Workshop 道具防重复和酸液池基础回归已有当前地图证据；官方 Steam 大厅、更多地图和更广泛的长期场景仍需单独覆盖。
 - UMM 设置页的左侧导航、`Multiplayer Options`、`FRP Direct`、语言和 `Diagnostic Logs` 页面已实现；“立即进入 AFK”按钮已完成基础双端验收。
+- 联机聊天的 IME、500 UTF-16 字符上限、长消息 viewport、视觉行上下移动、字数显示和历史消息边界修复已实现；完整输入矩阵与部分聊天历史/重开场景仍需验收，具体以[聊天输入](CHAT.md)为准。
 - 当前版本、分发 `buildHash`、DLL SHA-256 和用户侧限制以 [README 当前状态](../README.md#当前状态) 为唯一来源，避免多处维护。
 
 ## 按问题查找
@@ -32,6 +34,7 @@
 - 加入方没有角色、控制器错位、退出后重入失败：看 [Workshop 与游戏状态](WORKSHOP.md) 的晚加入、重入和角色恢复章节，再结合 [测试与验收](TESTING.md)。
 - FRP 握手、容量、PID、心跳或在线名单问题：看 [网络与房间](NETWORKING.md)。
 - AFK、掉线、自动重入或“立即进入 AFK”问题：看 [AFK 行为](AFK.md)，日志字段见 [诊断日志](DIAGNOSTICS.md)。
+- 中文输入、数字/符号输入、长消息显示、视觉行导航、字数显示或聊天历史问题：先看 [聊天输入](CHAT.md)，再看对应的 [问题记录索引](../issues/README.md)。
 - 需要复现或判断“已修复/未修复”：看 [测试与验收](TESTING.md)，不要只依据单端画面或单端日志下结论。
 - 需要收集日志：看 [诊断日志](DIAGNOSTICS.md)；需要重新生成 DLL：看 [构建与部署](BUILD.md)。
 

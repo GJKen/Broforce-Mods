@@ -12,7 +12,7 @@
 - 传输：`FRP Direct`，角色 `client`。
 - 触发链：`SESSION_BEGIN trigger=FrpDirectLayer_JoinLobby`，随后 `FRP_DIRECT transport disconnected; role=client; handshakeCompleted=True`，最终 `SESSION_END reason=FRP_Direct_host_transport_disconnected`。
 - 旧问题会话 `buildHash`：`7f50860ebec2ea353eb7f087b48ced192b2e246ef50cf4dfd05a9f7a780f03ce`。
-- 日志文件：`<diagnostic-log-file>`。
+- 证据：Client 侧诊断日志和断线后的主菜单状态。
 
 MCP 在断线后的主菜单状态中观察到：
 

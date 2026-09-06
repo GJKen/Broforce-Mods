@@ -23,8 +23,7 @@
 - Host 会话：`auto-20260830-161541-404-bea3dc7b`。
 - Client 会话：`auto-20260830-161555-676-4e00f435`。
 - 双端 `buildHash`：`1e424ad4eca60c5112057233c054225665ea79cb4c253e4d0ac5efeb80a0b7e9`。
-- Host 日志文件：`<diagnostic-log-file>`。
-- Client 日志文件：`<diagnostic-log-file>`。
+- 证据：Host 和 Client 的双端诊断日志。
 
 ## 用户可见现象
 
@@ -123,8 +122,7 @@ Client 最后一条相关异常约在 `16:19:27.332Z`；之后的性能窗口保
 - 日志时间：UTC `2026-08-30 17:12:58` 至 `17:18:09`（本地时间 2026-08-31 01:12 至 01:18）。
 - 地图：`Test_Evan2`；Workshop ID：`3715087178`；传输：官方 Steam Lobby/Steam P2P。
 - Host 会话：`auto-20260830-171258-046-96c5ca4f`；Client 会话：`auto-20260830-171307-980-7423ce0f`。
-- Host 日志文件：`<diagnostic-log-file>`。
-- Client 日志文件：`<diagnostic-log-file>`。
+- 证据：Host 和 Client 的双端诊断日志。
 - 双端 `BUILD_INFO buildHash` 一致：`5582c884d77196a8c222ae957a670043caae125ca885740bba53476204ef3ccf`。
 - 双端启动日志均出现 `Native map object safety enabled; patched methods=4`。
 - Host/Client 各命中一次 `WORKSHOP_OBJECT repaired captured-villager prefab fallback; missing=male`，之后没有 `TorturedVillager.Awake` 实例化异常。

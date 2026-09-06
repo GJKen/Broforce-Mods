@@ -347,6 +347,8 @@ namespace CustomMapMultiplayer
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
             PatchChatPauseBoundary();
+            PatchChatMessageLengthLimit();
+            PatchChatMessageViewport();
             PatchPauseMenuAfkMenu();
             PatchOnlinePlayerListDisplay();
             PatchLevelOutcomeDiagnostics();
@@ -386,6 +388,7 @@ namespace CustomMapMultiplayer
             }
             finally
             {
+                DisableChatIme();
                 _harmony = null;
                 _injectedForSession = false;
                 _workshopCompletionHandledForSession = false;
