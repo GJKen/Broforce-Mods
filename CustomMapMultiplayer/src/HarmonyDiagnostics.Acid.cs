@@ -67,6 +67,22 @@ namespace CustomMapMultiplayer
                 null,
                 new[] { typeof(int) },
                 null);
+            var acidDamageMethod = typeof(TestVanDammeAnim).GetMethod(
+                "Damage",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                new[]
+                {
+                    typeof(int),
+                    typeof(DamageType),
+                    typeof(float),
+                    typeof(float),
+                    typeof(int),
+                    typeof(UnityEngine.MonoBehaviour),
+                    typeof(float),
+                    typeof(float)
+                },
+                null);
             var coverInAcidPrefix = typeof(HarmonyDiagnostics).GetMethod(
                 "CoverInAcidDiagnosticsPrefix",
                 BindingFlags.NonPublic | BindingFlags.Static);
@@ -84,6 +100,9 @@ namespace CustomMapMultiplayer
                 BindingFlags.NonPublic | BindingFlags.Static);
             var playerHasDiedRpcPostfix = typeof(HarmonyDiagnostics).GetMethod(
                 "PlayerHasDiedRpcDiagnosticsPostfix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var acidDamagePrefix = typeof(HarmonyDiagnostics).GetMethod(
+                "WorkshopAcidDamageDiagnosticsPrefix",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var patchedCount = 0;
             var coverInAcidEntryCount = 0;
@@ -125,6 +144,16 @@ namespace CustomMapMultiplayer
                     "PLAYER_ACID could not install PlayerHasDiedRPC diagnostics.");
             }
 
+            if (acidDamageMethod != null && acidDamagePrefix != null)
+            {
+                patchedCount += PatchAcidMethod(acidDamageMethod, acidDamagePrefix, null);
+            }
+            else
+            {
+                DiagnosticLog.Warning(
+                    "PLAYER_ACID could not install TestVanDammeAnim.Damage diagnostics.");
+            }
+
             if (coverInAcidEntryCount != 1)
             {
                 DiagnosticLog.Warning(
@@ -150,7 +179,7 @@ namespace CustomMapMultiplayer
                 _harmony.Patch(
                     target,
                     new HarmonyMethod(prefix),
-                    new HarmonyMethod(postfix),
+                    postfix == null ? null : new HarmonyMethod(postfix),
                     null,
                     null);
                 return 1;
@@ -364,7 +393,7 @@ namespace CustomMapMultiplayer
                         continue;
                     }
 
-                    TryBroadcastWorkshopHeroAcid(character, "host-map-scan");
+                    TryBroadcastWorkshopHeroAcid(character, "host-map-scan", false);
                 }
                 catch (Exception exception)
                 {
@@ -375,7 +404,9 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static void RequestWorkshopHeroAcid(TestVanDammeAnim character)
+        private static void RequestWorkshopHeroAcid(
+            TestVanDammeAnim character,
+            bool fromDamage)
         {
             if (character == null || !character.IsMine || character.health <= 0 ||
                 character.hasBeenCoverInAcid || character.invulnerable ||
@@ -403,13 +434,15 @@ namespace CustomMapMultiplayer
                 }
 
                 PendingWorkshopAcidRequests[nid] = now;
-                Networking.Networking.RPC<NID>(
+                Networking.Networking.RPC<NID, bool>(
                     PID.TargetServer,
-                    new RpcSignature<NID>(RequestWorkshopHeroAcidRPC),
+                    new RpcSignature<NID, bool>(RequestWorkshopHeroAcidRPC),
                     nid,
+                    fromDamage,
                     false);
                 DiagnosticLog.Trace(
-                    "PLAYER_ACID authority-request; nid=" + nid + "; role=client.");
+                    "PLAYER_ACID authority-request; nid=" + nid +
+                    "; fromDamage=" + fromDamage + "; role=client.");
             }
             catch (Exception exception)
             {
@@ -431,7 +464,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            TryBroadcastWorkshopHeroAcid(character, source);
+            TryBroadcastWorkshopHeroAcid(character, source, false);
             if (character.hasBeenCoverInAcid)
             {
                 return;
@@ -453,7 +486,8 @@ namespace CustomMapMultiplayer
 
         private static void TryBroadcastWorkshopHeroAcid(
             TestVanDammeAnim character,
-            string source)
+            string source,
+            bool fromDamage)
         {
             if (!IsWorkshopAcidAuthoritySession() || !IsOnlineHost() ||
                 character == null || !character.IsHero || character.health <= 0 ||
@@ -477,17 +511,19 @@ namespace CustomMapMultiplayer
                 return;
             }
             LastWorkshopAuthorityAcidAt[nid] = now;
-            Networking.Networking.RPC<NID>(
+            Networking.Networking.RPC<NID, bool>(
                 PID.TargetAll,
-                new RpcSignature<NID>(ApplyWorkshopHeroAcidRPC),
+                new RpcSignature<NID, bool>(ApplyWorkshopHeroAcidRPC),
                 nid,
+                fromDamage,
                 false);
             DiagnosticLog.InfoFileOnly(
-                "PLAYER_ACID authority-apply; nid=" + nid + "; source=" + source + ".");
+                "PLAYER_ACID authority-apply; nid=" + nid + "; source=" + source +
+                "; fromDamage=" + fromDamage + ".");
         }
 
         [AllowedRPC]
-        private static void RequestWorkshopHeroAcidRPC(NID nid)
+        private static void RequestWorkshopHeroAcidRPC(NID nid, bool fromDamage)
         {
             if (!IsWorkshopAcidAuthoritySession() || !IsOnlineHost() || nid == NID.NoID)
             {
@@ -504,14 +540,21 @@ namespace CustomMapMultiplayer
                     return;
                 }
 
-                if (!HasWorkshopAcidAt(character))
+                if (!fromDamage && !HasWorkshopAcidAt(character))
                 {
                     DiagnosticLog.Trace(
                         "PLAYER_ACID authority-reject; nid=" + nid + "; reason=host-map-no-acid.");
                     return;
                 }
 
-                TryBroadcastWorkshopHeroAcid(character, "host-map-request");
+                TryBroadcastWorkshopHeroAcid(
+                    character,
+                    fromDamage ? "host-damage-request" : "host-map-request",
+                    fromDamage);
+                if (fromDamage && !character.hasBeenCoverInAcid)
+                {
+                    InvokeNativeCoverInAcidRPC(character);
+                }
             }
             catch (Exception exception)
             {
@@ -521,7 +564,7 @@ namespace CustomMapMultiplayer
         }
 
         [AllowedRPC]
-        private static void ApplyWorkshopHeroAcidRPC(NID nid)
+        private static void ApplyWorkshopHeroAcidRPC(NID nid, bool fromDamage)
         {
             if (!IsWorkshopAcidAuthoritySession() || nid == NID.NoID)
             {
@@ -551,7 +594,7 @@ namespace CustomMapMultiplayer
 
                 // The native RPC API exposes no caller PID. Revalidate any apply that
                 // executes on the host so a remote cannot bypass the host map check.
-                if (IsOnlineHost() && !HasWorkshopAcidAt(character))
+                if (IsOnlineHost() && !fromDamage && !HasWorkshopAcidAt(character))
                 {
                     DiagnosticLog.Trace(
                         "PLAYER_ACID authority-reject; nid=" + nid +
@@ -605,6 +648,48 @@ namespace CustomMapMultiplayer
             _workshopAcidPoolsRefreshedAt = float.NegativeInfinity;
             _nextWorkshopAcidAuthorityScanAt = float.NegativeInfinity;
             _workshopAcidPoolRefreshWarningLogged = false;
+        }
+
+        private static void WorkshopAcidDamageDiagnosticsPrefix(
+            TestVanDammeAnim __instance,
+            DamageType damageType)
+        {
+            if (damageType != DamageType.Acid || __instance == null || !__instance.IsHero ||
+                !IsWorkshopAcidAuthoritySession() || __instance.health <= 0 ||
+                __instance.hasBeenCoverInAcid || __instance.invulnerable ||
+                !__instance.canBeCoveredInAcid)
+            {
+                return;
+            }
+
+            try
+            {
+                if (IsOnlineHost())
+                {
+                    // A thrown acid projectile has no DoodadAcidPool. The damage hit
+                    // itself is the host authority signal, so apply it to the host's
+                    // mirror as well as broadcasting it to every client.
+                    TryBroadcastWorkshopHeroAcid(__instance, "acid-damage", true);
+                    if (!__instance.hasBeenCoverInAcid)
+                    {
+                        InvokeNativeCoverInAcidRPC(__instance);
+                    }
+                }
+                else if (__instance.IsMine)
+                {
+                    RequestWorkshopHeroAcid(__instance, true);
+                    InvokeNativeCoverInAcidRPC(__instance);
+                }
+
+                DiagnosticLog.Trace(
+                    "PLAYER_ACID damage-authority; nid=" + Registry.GetNID(__instance) + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "PLAYER_ACID DamageType.Acid authority handling failed: " +
+                    exception.Message);
+            }
         }
 
         private static bool CoverInAcidDiagnosticsPrefix(
@@ -673,7 +758,7 @@ namespace CustomMapMultiplayer
                 }
                 else if (__instance.IsMine)
                 {
-                    RequestWorkshopHeroAcid(__instance);
+                    RequestWorkshopHeroAcid(__instance, false);
                     if (HasWorkshopAcidAt(__instance))
                     {
                         try

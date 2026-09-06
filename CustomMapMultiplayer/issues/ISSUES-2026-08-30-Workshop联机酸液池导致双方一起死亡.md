@@ -2,7 +2,7 @@
 
 ## 状态
 
-**已修复并通过双端实机验收（2026-08-30）。**
+**酸液池场景已修复并通过双端实机验收（2026-08-30）。投掷酸液命中角色的独立问题见 [ISSUES-2026-09-07-投掷酸液命中角色未正常死亡](ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md)。**
 
 Workshop 地图中，一名英雄接触酸液时，另一名留在出生区的英雄不会再被错误带入死亡链。房主和加入方分别进入酸液时，也都能正常死亡。
 
@@ -14,7 +14,7 @@ Workshop 地图中，一名英雄接触酸液时，另一名留在出生区的�
 
 ## 正式修复
 
-实现位于 [`src/HarmonyDiagnostics.Acid.cs`](../src/HarmonyDiagnostics.Acid.cs)：
+实现位于 [`src/HarmonyDiagnostics.Acid.cs`](../src/HarmonyDiagnostics.Acid.cs)，本记录覆盖酸液池路径：
 
 - 在 `TestVanDammeAnim.CoverInAcid` 基入口统一拦截 Workshop 在线英雄，覆盖所有原生调用路径。
 - 维护场景级 `DoodadAcidPool` 列表，检查 `fluidType=Acid`、`fullness > 0.2`，使用横向 4、纵向 `-2.5..10` 的角色范围；对象列表约每秒刷新，英雄结果缓存 50ms。

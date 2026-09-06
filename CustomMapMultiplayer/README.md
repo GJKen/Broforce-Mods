@@ -29,7 +29,7 @@
 - Esc 菜单中的“立即进入 AFK”按钮；房主和加入方分别操作时只影响各自本地角色。主动 AFK 不会自动重新加入，用户通过正常流程回来后会恢复原槽位的生命、英雄类型和角色；普通网络掉线仍按原有流程自动恢复，详见[主动 AFK 按钮问题记录](issues/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md)。
 - 联机聊天已接入中文输入法、中文符号、数字和原生编辑操作，并提供 500 个 UTF-16 字符上限、长消息 viewport、视觉行 Up/Down、输入框右下角字数显示和输入框激活时的当前键盘角色操作拦截；上述功能均已通过窄范围真实键盘测试，Esc 后再次呼出和 Enter 发送问题已修复，完整输入矩阵与聊天历史专项仍待补充，详见[聊天输入专题](docs/CHAT.md)。
 
-Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁只覆盖 `CheckForTraps`，遗漏了 `CalculateMovement` 和 `Damage` 对 `CoverInAcid` 的直达调用。当前实现维护场景级 `DoodadAcidPool` 列表，在统一 `CoverInAcid` 基入口执行加入方本地预测和房主权威校验，并将 Host 周期扫描限频；双方已实机验证房主、加入方分别进入酸液时均能正确死亡，且不会连带出生区玩家，详见 [独立 issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。普通 Mook 死亡终态、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
+Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁只覆盖 `CheckForTraps`，遗漏了 `CalculateMovement` 和 `Damage` 对 `CoverInAcid` 的直达调用。当前实现维护场景级 `DoodadAcidPool` 列表，在统一 `CoverInAcid` 基入口执行加入方本地预测和房主权威校验；投掷酸液通过 `DamageType.Acid` 命中时也会进入同一酸液死亡流程。双方已实机验证房主、加入方分别进入酸液时均能正确死亡，且不会连带出生区玩家；投掷酸液命中死亡已通过用户实机验收，详见 [酸液池 issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md) 和 [投掷酸液 issue](issues/ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md)。普通 Mook 死亡终态、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
 
 日志中的 `NullReferenceException` 表示代码使用了尚未初始化或已经失效的对象；`DoodadCrate` 是游戏原生的箱子处理类。加入方箱子特效持续重复和相关错误循环属于独立问题，详见 [加入方箱子问题记录](issues/ISSUES-2026-08-30-加入方箱子坍塌特效持续重复.md)，不应作为 Host 战斗掉帧的直接证据。
 

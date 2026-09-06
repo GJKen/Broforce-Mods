@@ -23,7 +23,7 @@
 
 - 项目面向 Steam 版 Broforce，是 Unity Mod Manager + Harmony Mod，目标框架为 .NET Framework 3.5。
 - 默认网络路径是官方 Steam Lobby/P2P；`FRP Direct` 默认关闭，启用后接管房间、PID 和游戏 RPC，Steam 仍负责 Workshop 内容下载。
-- Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名、正常退出后重入、Workshop 道具防重复和酸液池基础回归已有当前地图证据；官方 Steam 大厅、更多地图和更广泛的长期场景仍需单独覆盖。
+- Workshop 双端进入、过场晚加入、FRP 公网 UDP 双端游玩、在线玩家名、正常退出后重入、Workshop 道具防重复、酸液池回归和投掷酸液命中死亡已有当前地图证据；官方 Steam 大厅、更多地图和更广泛的长期场景仍需单独覆盖。
 - UMM 设置页的左侧导航、`Multiplayer Options`、`FRP Direct`、语言和 `Diagnostic Logs` 页面已实现；“立即进入 AFK”按钮已完成基础双端验收。
 - 联机聊天的 IME、500 UTF-16 字符上限、长消息 viewport、视觉行上下移动、字数显示和历史消息边界修复已实现；完整输入矩阵与部分聊天历史/重开场景仍需验收，具体以[聊天输入](CHAT.md)为准。
 - 当前版本、分发 `buildHash`、DLL SHA-256 和用户侧限制以 [README 当前状态](../README.md#当前状态) 为唯一来源，避免多处维护。

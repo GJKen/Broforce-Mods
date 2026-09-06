@@ -83,7 +83,7 @@ handoff=正式源码文件、构建哈希和后续验收要求
 - 道具：双方核对同一位置的数量/类型；满弹药站在箱子上不得持续播放反馈，消耗弹药后可拾取一次；MechDrop、RCCar 等显式特殊箱保持原类型。金色奖励没有当前专项同步实现，不能按稳定键或权威类型作为验收依据。
 - 实体终态与主动引爆：Mook 应在双方完成一次死亡链并收敛尸体终态；DemolitionBro 应只发生一次主动爆炸；McBrover 按其 [独立 issue](../issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md) 的 NID、`Death()` 与最终销毁条件验收。
 - 关卡结果：确认 `Level outcome diagnostics enabled; patched methods=2.`，分别触发扣命、通关和失败，检查 `LEVEL_OUTCOME` 前后快照。
-- 酸液/死亡链（已完成回归，2026-08-30）：在 `Test Evan2 / Bromandy_Ptr1 / levelIndex=7` 交换验证房主和加入方分别接触酸液。实际接触者死亡，出生区玩家保持存活；复查 `authority-gate`、`authority-request/reject/apply/applied`、`CoverInAcidRPC`、`PlayerHasDiedRPC` 与 `LEVEL_OUTCOME`，确认只有实际接触酸液的英雄 NID 进入死亡链。详见 [酸液问题 issue](../issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。
+- 酸液/死亡链（酸液池双端回归已完成，投掷酸液已通过用户实机验收）：在 `Test Evan2 / Bromandy_Ptr1 / levelIndex=7` 交换验证房主和加入方分别接触酸液。实际接触者死亡，出生区玩家保持存活；投掷酸液命中角色后也应正常进入酸液死亡流程。详见 [酸液池问题 issue](../issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md) 和 [投掷酸液问题 issue](../issues/ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md)。
 - 可选 Mod：先比较双方安装/启用状态、版本、`rosterHash` 和 `selectedHash`。指纹不同只证明角色环境不同，不能单独作为英雄生成失败的根因。
 
 ## 当前限制

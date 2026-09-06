@@ -20,6 +20,7 @@
 | `ISSUES-2026-09-06-联机聊天输入框右下角字数显示.md` | 已实现并通过用户真实键盘验收 | 独立字数 Text 挂在已确认的聊天输入 Text `RectTransform` 下，使用完整 `MessageController.message.Length` 和唯一的 `ChatMessageMaxLength`；最终字号、尺寸和右下角本地偏移已根据用户实测调整。 |
 | `ISSUES-2026-09-06-联机聊天长消息发送后历史显示被隐藏.md` | 修复已部署，输入流程已通过真实键盘；聊天历史显示仍待专项确认 | 用户确认本轮真实键盘输入、发送和清空正常；发送瞬间顶部闪现、动态历史边界以及多条消息的最终可见性仍需按 issue 中步骤确认。 |
 | `ISSUES-2026-09-07-联机聊天输入框激活时角色仍可操作.md` | 已修复并通过用户真实键盘验收 | `Player.GetInput` 仅在输入框激活时拦截当前键盘聊天角色的操作输入；移动、动作、关闭后恢复、聊天历史/提示显示和多本地槽位范围均已确认。 |
+| `ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md` | 已修复并通过用户实机验收 | `DamageType.Acid` 命中入口补充 Workshop 英雄权威酸液同步，避免投掷酸液因没有 `DoodadAcidPool` 被现有入口误拦截；用户已确认命中后正常死亡。 |
 | `ISSUES-2026-09-04-Workshop缺图仍进入加载动画.md` | 前置拦截已通过双端实测；其它场景仍需覆盖 | 记录加入方缺图时在进入 Workshop 加载动画前终止地图切换，以及 `GameState.LoadLevel` 后置保护。 |
 | `ISSUES-2026-09-04-Workshop缺图运行时提示未按语言切换.md` | 中英文提示已通过双端实测 | 记录缺图提示使用 `SettingsLanguage`/`SettingsUiLocalization`，并显示房主 Workshop ID。 |
 | `ISSUES-2026-09-05-Workshop房主退出后加入方返回黑屏.md` | Steam 单 Client 房主退出修复已通过用户验收；FRP Direct 对照测试正常返回主菜单 | 记录 Steam 房主退出后单客户端被误判为 Host migration、Workshop 加载循环和黑屏修复；FRP 不支持 Host migration，但房主退出后加入方直接返回主菜单，不属于本 issue 的受影响路径。 |

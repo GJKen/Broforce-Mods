@@ -74,6 +74,6 @@ Workshop 玩家发生 `Dropout` 后，按槽位保存英雄类型和本地 `play
 
 ## 酸液死亡链
 
-统一拦截英雄 `CoverInAcid` 基入口，在 Workshop 在线场景中执行场景级 `DoodadAcidPool` 扫描、加入方本地预测、Host 权威请求/校验/应用，并记录酸液 RPC 与玩家死亡 RPC 前后状态。Host 周期扫描本机和远程英雄，Client 本机命中后先执行本地原生酸液 RPC，再请求 Host 确认；远程镜像只等待授权应用。离线、普通官方联机、非配置场景和非英雄对象执行原生行为。
+统一拦截英雄 `CoverInAcid` 基入口，在 Workshop 在线场景中执行场景级 `DoodadAcidPool` 扫描、加入方本地预测、Host 权威请求/校验/应用，并在 `DamageType.Acid` 命中入口处理不产生酸液池的投掷酸液。系统记录酸液 RPC 与玩家死亡 RPC 前后状态。Host 周期扫描本机和远程英雄，Client 本机命中后先执行本地原生酸液 RPC，再请求 Host 确认；远程镜像只等待授权应用。离线、普通官方联机、非配置场景和非英雄对象执行原生行为。
 
-当前回归已覆盖 `Test Evan2 / Bromandy_Ptr1 / levelIndex=7` 的房主和加入方分别接触酸液；实际接触者死亡，出生区玩家不再被连带死亡。完整记录见 [酸液问题 issue](../issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md)。
+当前回归已覆盖 `Test Evan2 / Bromandy_Ptr1 / levelIndex=7` 的房主和加入方分别接触酸液；实际接触者死亡，出生区玩家不再被连带死亡。投掷酸液命中角色的修复也已通过用户实机验收。完整记录见 [酸液池问题 issue](../issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md) 和 [投掷酸液问题 issue](../issues/ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md)。
