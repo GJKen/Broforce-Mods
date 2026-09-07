@@ -12,29 +12,47 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=e48ebb62cd3e72d6e9443582d9c8cbc155a4886adeeaa84c184c8cc697bba82a` |
-| DLL SHA-256 | `A0B6EE092BE60A7782EC4787AE8ED3992A396C6D9D2B8DE7669EBFB1A4D963B2` |
+| Current distributed build | `buildHash=e305f8e8b4b55cc49c29dc469a005ce1c5bcd481f6025e49c01f7dfa4976b924` |
+| DLL SHA-256 | `0B6B74BD28D7B8AB06A1E9E8AC94772E156E9B761A0CB4DB4B737AF60C08188D` |
 | DLL assembly version | `0.5.0.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
 
-Verified:
+### Verified
 
-- Two-player entry, late joining, leaving and rejoining the current map, and independent character control on both sides.
-- The colored latency list and animated host name in the Esc menu for Steam and FRP Direct; three-player FRP Direct play, the static full-room notice for a `1`-player room, and automatic Host/Client configuration application.
-- The host publishes the Workshop map identity and joining players use it automatically. Missing subscriptions show a notice and stop loading. Injection can be disabled while running and the official map flow is restored.
-- Workshop loading first reuses the Steam-installed directory or an older local UGC cache. It falls back to a Steam download only when the cache cannot be read, and suppresses duplicate requests while the same map is loading.
-- The Workshop entry banner, returning to the lobby with Esc, and the main-menu animation; deterministic standard ammunition crates, remote scanning suppression, and duplicate pickup protection are verified on both FRP sides, while the official Steam lobby and more maps still require retesting.
+- Two-player entry, late joining, leaving and rejoining the current map, and independent character control on both sides. See [Workshop and game state](docs/WORKSHOP.md).
+- The colored latency list and animated host name in the Esc menu for Steam and FRP Direct; three-player FRP Direct play, the static full-room notice for a `1`-player room, and automatic Host/Client configuration application. See [networking and rooms](docs/NETWORKING.md) and the [FRP Direct acceptance record](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md).
+- The host publishes the Workshop map identity and joining players use it automatically. Missing subscriptions show a notice and stop loading. Injection can be disabled while running and the official map flow is restored. See [Workshop and game state](docs/WORKSHOP.md), the [missing-map loading record](issues/archive/ISSUES-2026-09-04-Workshop缺图仍进入加载动画.md), and the [injection disablement record](issues/archive/ISSUES-2026-08-28-关闭Workshop注入后恢复官方地图.md).
+- Workshop loading first reuses the Steam-installed directory or an older local UGC cache. It falls back to a Steam download only when the cache cannot be read, and suppresses duplicate requests while the same map is loading. See [Workshop and game state](docs/WORKSHOP.md).
+- The Workshop entry banner, returning to the lobby with Esc, and the main-menu animation; deterministic standard ammunition crates, remote scanning suppression, and duplicate pickup protection are verified on both FRP sides, while the official Steam lobby and more maps still require retesting. See [networking and rooms](docs/NETWORKING.md) and [Workshop and game state](docs/WORKSHOP.md).
 - In a long high-density combat test, Host frame drops were noticeably reduced. This is currently an observed improvement; unified graphics settings, reversed Host/Client roles, and p50/p95/p99 comparisons are still required for formal acceptance.
-- The `Enter AFK now` button in the in-game Esc menu; when the Host and joining player use it separately, it affects only that client's local character. Manual AFK does not trigger automatic re-entry; returning through the normal flow restores the original slot's lives, hero type, and character, while ordinary network dropout recovery remains automatic. See the [manual AFK issue record](issues/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md).
+- The `Enter AFK now` button in the in-game Esc menu; when the Host and joining player use it separately, it affects only that client's local character. Manual AFK does not trigger automatic re-entry; returning through the normal flow restores the original slot's lives, hero type, and character, while ordinary network dropout recovery remains automatic. See the [manual AFK issue record](issues/archive/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md).
 - Online chat now supports Chinese IME input, Chinese symbols, digits, and native editing, with a 500 UTF-16 character limit, long-message viewport, visual-line Up/Down navigation, an input-box character counter, and control suppression for the active keyboard chat player. These features passed the narrow real-keyboard checks; the Esc-reopen/Enter-send issue is fixed, while the full input matrix and chat-history acceptance still require completion. See the [chat input guide](docs/CHAT.md).
-- Swap Bros 2.1.5 `Always spawn as chosen bro` compatibility passed offline and Steam multiplayer testing. Runtime selection uses `Swap_Bros_Mod.Main.GetSelectedBroHeroType(Int32)`, and both first spawn and respawn ended with the locked hero; see the [Swap Bros issue record](issues/ISSUES-2026-09-07-Swap Bros Always spawn as chosen bro与联机角色生成冲突.md).
+- Swap Bros 2.1.5 `Always spawn as chosen bro` compatibility passed offline and Steam multiplayer testing. Runtime selection uses `Swap_Bros_Mod.Main.GetSelectedBroHeroType(Int32)`, and both first spawn and respawn ended with the locked hero; see the [Swap Bros issue record](<issues/ISSUES-2026-09-07-Swap Bros Always spawn as chosen bro与联机角色生成冲突.md>).
+- Host and joining-player acid deaths have been verified independently: the player who contacts the acid dies normally, while the player at the spawn area remains alive. Thrown-acid hits were also accepted in user in-game testing; see the [acid-pool issue](issues/archive/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md) and the [thrown-acid issue](issues/ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md).
 
-Workshop acid failure samples confirmed that player slots and hero NIDs did not cross. The old patch covered only `CheckForTraps`, while reachable direct `CoverInAcid` calls in `CalculateMovement` and `Damage` bypassed it. The implementation now keeps a scene-level `DoodadAcidPool` list, predicts local death for the joining player, and enforces Host authority at the common `CoverInAcid` entry while rate-limiting the Host scan. Host and joining-player acid deaths have been verified independently without killing the player left at the spawn area. See the [dedicated issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md).
+### Pending verification
 
-In the logs, `NullReferenceException` means code tried to use an object that was not initialized or was no longer valid. `DoodadCrate` is the game's native crate-handling class. Repeated crate effects and related errors on the joining side are tracked separately and are not direct evidence of Host combat frame drops.
+#### Death and entity final states
 
-Open issues: ordinary Mook death final states, level-end re-entry protection, official Steam items, high latency, and long-term re-entry still need expanded acceptance testing. Residual entities after McBrover's turkey self-detonation can still be reproduced, although the probability is significantly lower; see the [separate issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md). Four-player FRP Direct, the `2` to `4` player capacity boundaries, dynamic capacity reduction followed by re-entry, and host migration have not been verified.
+- **Ordinary Mook final states:** Authoritative death events and corpse final-state submission are implemented, but low-probability state divergence remains; late-join death snapshot replay is not implemented. See the [Mook final-state issue](issues/ISSUES-2026-08-28-全联机死亡实体与尸体终态同步.md).
+- **McBrover turkey self-detonation:** Residual entities can still be reproduced, although the probability is significantly lower; the root cause and remote lifecycle chain are not closed. See the [McBrover issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md).
+
+#### Workshop level transitions
+
+- **`3715087178` level-end re-entry protection:** The protection patch has been built and deployed, but still needs in-game completion testing. Confirm that repeated `LevelEndSuccess` no longer advances the level number every frame and that Host and Client reach the same next level or outcome scene. See the [level-end re-entry issue](issues/ISSUES-2026-08-26-3715087178联机通关黑屏与关卡结束重入.md).
+- **`3781818421` fourth-level black screen:** The black screen may still occur when entering level four after completing level three; investigate it separately from the `3715087178` re-entry protection issue. See the [re-entry and fourth-level black-screen issue](issues/ISSUES-2026-08-22-重复退出重入加入方失败与3781818421进入第4关黑屏.md).
+
+#### Multiplayer coverage
+
+- **Official Steam lobby and more maps for item synchronization:** The standard ammunition-crate behavior verified on both FRP sides has not yet been retested in the official Steam lobby and on more Workshop maps.
+- **High latency and long-term re-entry:** There is still no evidence from controlled latency conditions and repeated leave/re-entry rounds.
+- **FRP Direct extended scenarios:** Four-player play, total-capacity boundaries from `2` to `4`, and re-entry after dynamic capacity reduction remain unverified; FRP Direct does not support Host migration, so it is not listed as a pending capability.
+
+#### Runtime errors and performance
+
+- **Joining-side crate anomaly (separate issue):** In historical Steam sessions, the joining player's logs recorded `NullReferenceException` at `DoodadCrate.SetupBlockAtStart` and `DestroyBlockInternal`, together with repeated crate-collapse effects. The latest two-sided short regression on 2026-08-31 did not reproduce them. Because that run did not directly trigger the crate-protection branches, acceptance still requires a targeted test that opens or collapses a crate. The current evidence confirms a joining-side crate-handling anomaly, but does not show that it caused Host combat frame drops. See the [joining-side crate issue](issues/ISSUES-2026-08-30-加入方箱子坍塌特效持续重复.md).
+- **Host combat frame rate (separate issue):** The high-density combat test showed only an observed improvement. Unified graphics settings, reversed Host roles, and p50/p95/p99 comparisons are still incomplete, so formal acceptance remains pending. The crate anomaly has no matching Host call stack or direct causal evidence and is excluded from this assessment. See the [Host performance issue](issues/ISSUES-2026-08-30-联机房主低帧率与Host专属扫描性能问题.md).
 
 The current scope does not include continuous synchronization of active AI, enemy projectiles, coins, golden rewards, terrain damage from ordinary `Grenade`, or historical dynamic-world experiments. See the [development documentation index](docs/DEVELOPMENT.md) and the [issue index](issues/README.md) for implementation details and evidence.
 
@@ -42,17 +60,17 @@ The current scope does not include continuous synchronization of active AI, enem
 
 1. Have every player install `r2modman`, create or select the default profile for Broforce, and install UMM in that profile. Start the game once to confirm that UMM loads successfully.
 2. Import `Release\CustomMapMultiplayer.zip` into the Broforce profile in r2modman. The ZIP already contains the DLL and `Info.json` under `UMM\Mods\CustomMapMultiplayer`.
-3. Restart r2modman and confirm that `Custom Map Multiplayer 0.5.0` is loaded in UMM.
-4. Every player must subscribe to and download the same Workshop map, then enable Workshop map injection in `Multiplayer Options`.
-Only the host needs to enter the map's Workshop ID in UMM. The campaign name can be left blank, the default scene name is `Test Evan2`, and the scene name can be changed when another map scene is used. The joining player's Workshop ID can be left blank; the Mod automatically uses the map configuration published by the host.
-If a joining player has not subscribed to the host's map, a missing-subscription notice appears at the top of the screen. Follow the notice to subscribe to the map.
-When both Workshop map injection and FRP Direct are disabled, the official Arcade online map creation flow is restored.
+3. Configure the Workshop map and injection options:
+   - Both players should subscribe to and download the same Workshop map, then enable Workshop map injection in `Multiplayer Options`.
+   - Only the host needs to enter the map's Workshop ID in UMM. The campaign name can be left blank, the default scene name is `Test Evan2`, and the scene name can be changed when another map scene is used.
+   - The joining player does not need to enter a Workshop ID. Even if a saved local ID is incorrect, the client adopts the host's published Workshop ID after joining the room.
+   - If a joining player has not subscribed to the host's map, a missing-subscription notice appears at the top of the screen. Follow the notice to subscribe to the map.
+   - When Workshop map injection and FRP Direct are disabled, leave the current room and create an official Arcade online lobby again to restore the official map flow.
+   - Configuration image:
 
-Configuration image:
+     ![UMM settings interface](https://github.com/user-attachments/assets/a39d9e2c-c5e0-48fd-a3a4-67731b9a61c8)
 
-<img width="781" height="417" alt="configuration image" src="https://github.com/user-attachments/assets/48ad31e3-9103-44cd-ba2d-763c3801294f" />
-
-6. Have either player create an online lobby in Arcade mode. The joining player can find the room and join it directly.
+4. Have either player create an online lobby in Arcade mode. The joining player can find the room and join it directly.
 
 ### UMM Settings Panel
 
@@ -73,7 +91,11 @@ The actual UMM settings page uses a vertical feature list on the left and displa
 - The in-game Esc menu's `Enter AFK now` button immediately puts the local player owned by the current client into the native AFK spectator flow, independently of the automatic AFK toggle. The target is selected using local ownership and the active input controller; if multiple local slots cannot be uniquely resolved, the request is ignored to avoid affecting another character. Manual AFK does not schedule `RequestJoinGame`; the user must return through the normal rejoin flow, which restores the original slot's lives, hero type, and character. Ordinary network dropout still uses automatic re-entry.
 - The diagnostic log presets (`Basic`, `Join / Rejoin`, `AFK / Failure`, `Workshop`, and `Full`) and the nine diagnostic categories only filter log output; they do not change multiplayer behavior. Use matching categories on both sides when investigating the same problem.
 
+### Testing and Logs
+
 After each test round, collect diagnostic logs for the same session from every participant, and preserve UMM and game logs when possible. Use UMM's `Open diagnostic log directory` action to locate Mod logs; do not publish user directories, shared paths, or usernames. With logs from only one side, state the evidence gap clearly and do not determine the network root cause from that side alone.
+
+### Acid Troubleshooting
 
 For abnormal deaths caused by acid, align the `PLAYER_ACID` events from both sides for the same session. They record the before/after state around `CoverInAcid`, `CoverInAcidRPC`, and `PlayerHasDiedRPC`, including the player slot, requested RPC slot, character NID, `IsMine`, position, `acidMeltTimer`, and `hasBeenCoverInAcid`. The deduplicated `authority-gate` event also identifies the `host-check`, `client-request`, `authority-wait`, or `native-fallback` decision.
 
@@ -83,7 +105,7 @@ FRP Direct is disabled by default.
 
 The `Host`/`Client` role is still selected explicitly. Changing the role saves immediately and switches the connection automatically: Host uses only the local UDP listen port and completely ignores the saved Client public address; Client uses only the FRP public `host:port` and completely ignores the Host local listen port. The two configurations are kept separately, so switching back to the original role does not require entering its values again. The settings page has no manual Apply button. The global toggle and role take effect immediately; the port, address, and password are saved and reconnected automatically after input stops. Heartbeats, timeout detection, and ordinary disconnect retries are handled by the transport layer.
 
-Host:
+### Host
 
 ```text
 FRP Direct role: Host
@@ -96,7 +118,7 @@ The player-limit buttons set the total room capacity: `1` allows only the host, 
 
 After normal startup, the status should show `Listening on UDP 27045`. `frpc` forwards the public UDP port to `127.0.0.1:27045`. Changing connection parameters for the active role automatically restarts the connection, so adjust them before starting or after finishing a multiplayer session.
 
-Client:
+### Client
 
 ```text
 FRP Direct role: Client
@@ -126,27 +148,27 @@ This file contains machine-specific paths and is only used for building or deplo
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
-The standard script creates `Release\CustomMapMultiplayer.zip` and deploys it to the local UMM directory while calculating and embedding the SHA-256 `buildHash`. Deployment overwrites the DLL and `Info.json` so that the name, version, and entry point match the current build; the DLL assembly version is generated from the version in `modinfo.json`. An optional test deployment directory is read only from the uncommitted `LocalBroforcePath.props`; do not write test-machine addresses, shared paths, or usernames to the repository. If a configured deployment path cannot be accessed, directory creation fails, or the DLL cannot be copied, the build is considered failed and two-sided testing must not continue. Do not replace a standard-script-verified build with an unverified IDE or manual build; such a build is recorded as `UNBUILT`.
+The standard script reads and keeps `Release\UMM\Mods\CustomMapMultiplayer\Info.json`, creates `Release\CustomMapMultiplayer.zip`, and deploys it to the local UMM directory while calculating and embedding the SHA-256 `buildHash`. Deployment overwrites the DLL and `Info.json` so that the name, version, and entry point match the current build; the DLL assembly version is generated from the version in that `Info.json`. An optional test deployment directory is read only from the uncommitted `LocalBroforcePath.props`; do not write test-machine addresses, shared paths, or usernames to the repository. If a configured deployment path cannot be accessed, directory creation fails, or the DLL cannot be copied, the build is considered failed and two-sided testing must not continue. Do not replace a standard-script-verified build with an unverified IDE or manual build; such a build is recorded as `UNBUILT`.
 
 ## Project Structure and Documentation
 
-```text
-src/                              Mod source code
-src/SettingsUiText.cs             UMM settings text in English and Chinese
-CustomMapMultiplayer.csproj       C# project file
-BuildAndDeploy.ps1                .NET 3.5 build and deployment script
-Release/                           r2modman package and UMM plugin files
-README.md                         Default Chinese documentation
-README.en.md                      English documentation
-modinfo.json                      UMM manifest template
-LocalBroforcePath.props.example   Local path configuration example
-docs/                             Development documentation index and topic guides
-docs/CHAT.md                      Online chat input, viewport, and history display
-issues/                           Historical issues, test evidence, and acceptance records
-umm-settings-preview.html         UMM settings interface preview
-```
+| Path | Description |
+| --- | --- |
+| `src/` | Mod source code directory; source code responsibilities and module relationships are described in Architecture and Code Responsibilities |
+| `src/SettingsUiText.cs` | UMM settings text in English and Chinese |
+| `CustomMapMultiplayer.csproj` | C# project file |
+| `BuildAndDeploy.ps1` | .NET 3.5 build and deployment script |
+| `Release/` | r2modman package and UMM plugin files |
+| `README.md` | Default Chinese documentation |
+| `README.en.md` | English documentation |
+| `Release/UMM/Mods/CustomMapMultiplayer/Info.json` | UMM manifest and build metadata source |
+| `LocalBroforcePath.props.example` | Local path configuration example |
+| `docs/DEVELOPMENT.md` | [Development documentation index](docs/DEVELOPMENT.md) |
+| `docs/CHAT.md` | Online chat input, viewport, and history display |
+| `issues/` | [Historical issues, test evidence, and acceptance records](issues/README.md) |
+| `umm-settings-preview.html` | UMM settings interface preview |
 
-- [Development documentation index](docs/DEVELOPMENT.md)
-- [Issue index](issues/README.md)
+### Other Documentation
+
 - [BroforceMods Wiki](https://github.com/alexneargarder/BroforceMods/wiki)
 - [Viewing Broforce's Code](https://github.com/alexneargarder/BroforceMods/wiki/Viewing-Broforce's-Code)

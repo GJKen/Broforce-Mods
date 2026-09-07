@@ -98,6 +98,6 @@
   <Target Name="DeployCustomMapMultiplayer" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
     <MakeDir Directories="$(PackageModPath);$(PackageUmmModPath);$(LocalBroforceModPath)\CustomMapMultiplayer" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LocalBroforceModPath)\CustomMapMultiplayer" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\modinfo.json" DestinationFiles="$(LocalBroforceModPath)\CustomMapMultiplayer\Info.json" Condition="Exists('$(MSBuildProjectDirectory)\modinfo.json')" />
+    <Copy SourceFiles="$(PackageUmmModPath)\Info.json" DestinationFiles="$(LocalBroforceModPath)\CustomMapMultiplayer\Info.json" Condition="Exists('$(PackageUmmModPath)\Info.json')" />
   </Target>
 </Project>

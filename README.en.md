@@ -11,10 +11,11 @@ Installation, build, and usage instructions for each project are available in th
 ## Credits
 
 - [BroforceMods Wiki](https://github.com/alexneargarder/BroforceMods)
+- [Gorzontrok](https://github.com/Gorzontrok)
 
 ## Projects
 
 - [`CustomMapMultiplayer`](CustomMapMultiplayer/README.en.md): Multiplayer support for third-party Workshop maps and FRP Direct.
 - [`BroforceBugFix`](BroforceBugFix/README.en.md): An independent original-game bug-fix plugin; its first fix handles recursive `DoodadCrate` explosion collapse.
 - [`UnityInspectorMod`](UnityInspectorMod/README.en.md): Provides TCP inspection and runtime debugging interfaces for Broforce, used by `unity-inspector-mcp`.
-- `Broforce_src`: Broforce source reference and Unity Inspector MCP tools. Installation, configuration, and usage are documented in [`unity-inspector-mcp/README.en.md`](Broforce_src/unity-inspector-mcp/README.en.md).
+- [`Broforce_src`](Broforce_src/unity-inspector-mcp/README.en.md): Unity Inspector MCP tools; installation, configuration, and usage are documented in [`unity-inspector-mcp/README.en.md`](Broforce_src/unity-inspector-mcp/README.en.md).

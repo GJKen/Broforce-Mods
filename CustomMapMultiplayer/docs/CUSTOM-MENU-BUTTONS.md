@@ -149,4 +149,4 @@ PauseMenu 的 RocketLib 注入存在两个需要单独验证的数组：
 - `src/SettingsUiText.cs`：English、中文和 system 的本地化文本。
 - `src/HarmonyDiagnostics.Afk.cs`：PauseMenu 注入后的数组同步、路由定位、文字和字体材质更新。
 - `docs/AFK.md`：主动 AFK 的业务行为和生命周期。
-- `issues/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md`：PauseMenu 语言切换错位问题和主动 AFK 生命周期的完整修复记录。
+- `issues/archive/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md`：PauseMenu 语言切换错位问题和主动 AFK 生命周期的完整修复记录。

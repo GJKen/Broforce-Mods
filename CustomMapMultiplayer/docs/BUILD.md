@@ -31,7 +31,7 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Rel
 <本机 UMM_PROFILE_DIR>\Mods\GJKen-CustomMapMultiplayer\CustomMapMultiplayer\CustomMapMultiplayer.dll
 ```
 
-脚本输出 `Release\CustomMapMultiplayer.zip` 并嵌入 `Build hash`，覆盖 `Release\UMM\Mods\CustomMapMultiplayer` 下的 DLL；项目安装包固定包含顶层 `manifest.json`、`README.md`、`icon.png`，以及 UMM 子目录中的 `Info.json`。部署目标的 `Info.json` 每次均从 `modinfo.json` 同步，DLL 程序集版本也从该文件的版本生成。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
+脚本读取并保留 `Release\UMM\Mods\CustomMapMultiplayer\Info.json`，输出 `Release\CustomMapMultiplayer.zip` 并嵌入 `Build hash`，覆盖同一目录下的 DLL；项目安装包固定包含顶层 `manifest.json`、`README.md`、`icon.png`，以及 UMM 子目录中的 `Info.json`。部署目标的 `Info.json` 每次均从该构建元数据文件同步，DLL 程序集版本也从该文件的版本生成。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
 
 `CustomMapMultiplayer.csproj` 的 `OutputPath` 也指向 `Release\UMM\Mods\CustomMapMultiplayer`；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
 
@@ -49,7 +49,7 @@ Release\
     Info.json
 ```
 
-ZIP 导入到 r2modman 后，插件 DLL 位于 `UMM\Mods\CustomMapMultiplayer`，安装后的外层目录名由包标识决定。程序集名保持 `CustomMapMultiplayer.dll`，程序集版本与 `modinfo.json` 的版本同步（例如 `0.5.0.0`）。
+ZIP 导入到 r2modman 后，插件 DLL 位于 `UMM\Mods\CustomMapMultiplayer`，安装后的外层目录名由包标识决定。程序集名保持 `CustomMapMultiplayer.dll`，程序集版本与 `Release\UMM\Mods\CustomMapMultiplayer\Info.json` 的版本同步（例如 `0.5.0.0`）。
 
 ## 逆向参考
 
@@ -66,4 +66,4 @@ ZIP 导入到 r2modman 后，插件 DLL 位于 `UMM\Mods\CustomMapMultiplayer`�
 ## 相关约定
 
 - `LocalBroforcePath.props` 包含机器专用路径，不应提交。
-- 标准构建完成后只做基本结果确认；未通过脚本构建的 DLL 不用于正式双端验收。
+- 标准构建完成后只做基本结果确认。

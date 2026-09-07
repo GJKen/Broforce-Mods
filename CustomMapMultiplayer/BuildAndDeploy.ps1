@@ -21,19 +21,21 @@ $broforceManagedPath = [string]$propertyGroup.BroforceManagedPath
 $unityModManagerPath = [string]$propertyGroup.UnityModManagerPath
 $rocketLibPath = [string]$propertyGroup.RocketLibPath
 $testDeployModPath = [string]$propertyGroup.TestDeployModPath
-$infoSourcePath = Join-Path $repoRoot 'modinfo.json'
+$releasePath = Join-Path $repoRoot 'Release'
+$packageModPath = Join-Path $releasePath 'UMM\Mods\CustomMapMultiplayer'
+$packageInfoPath = Join-Path $packageModPath 'Info.json'
 if ([string]::IsNullOrWhiteSpace($broforceManagedPath) -or
     [string]::IsNullOrWhiteSpace($unityModManagerPath) -or
     [string]::IsNullOrWhiteSpace($rocketLibPath)) {
     throw 'LocalBroforcePath.props must define BroforceManagedPath, UnityModManagerPath and RocketLibPath.'
 }
-if (-not (Test-Path -LiteralPath $infoSourcePath)) {
-    throw "Missing UMM metadata template: $infoSourcePath"
+if (-not (Test-Path -LiteralPath $packageInfoPath)) {
+    throw "Missing UMM metadata: $packageInfoPath"
 }
-$infoMetadata = Get-Content -Encoding UTF8 -Raw -LiteralPath $infoSourcePath | ConvertFrom-Json
+$infoMetadata = Get-Content -Encoding UTF8 -Raw -LiteralPath $packageInfoPath | ConvertFrom-Json
 $modVersion = [string]$infoMetadata.Version
 if ($modVersion -notmatch '^\d+\.\d+\.\d+$') {
-    throw "modinfo.json Version must use major.minor.patch format: $modVersion"
+    throw "Info.json Version must use major.minor.patch format: $modVersion"
 }
 $assemblyVersion = $modVersion + '.0'
 
@@ -70,12 +72,7 @@ foreach ($requiredPath in $requiredPaths) {
     }
 }
 
-$releasePath = Join-Path $repoRoot 'Release'
-$packageModPath = Join-Path $releasePath 'UMM\Mods\CustomMapMultiplayer'
-$packageInfoPath = Join-Path $packageModPath 'Info.json'
 New-Item -ItemType Directory -Force -Path $packageModPath | Out-Null
-Copy-Item -LiteralPath $infoSourcePath -Destination $packageInfoPath -Force
-Write-Host "Updated package metadata $packageInfoPath from modinfo.json"
 
 $outputPath = Join-Path $packageModPath 'CustomMapMultiplayer.dll'
 $packageZipPath = Join-Path $releasePath 'CustomMapMultiplayer.zip'
@@ -208,8 +205,8 @@ else {
         Write-Host "Deployed $destinationPath"
 
         $infoDestinationPath = Join-Path $deploymentPath 'Info.json'
-        Copy-Item -LiteralPath $infoSourcePath -Destination $infoDestinationPath -Force
-        Write-Host "Updated $infoDestinationPath from modinfo.json"
+        Copy-Item -LiteralPath $packageInfoPath -Destination $infoDestinationPath -Force
+        Write-Host "Updated $infoDestinationPath from package Info.json"
     }
 }
 

@@ -49,5 +49,5 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 - 聊天完整输入保留在 `MessageController.message`；viewport 只修改 `Caret.text.text`、显示用光标位置和 Unity UI 文本显示设置，不使用固定字符数裁剪显示内容，也不改写网络协议。
 - 聊天 viewport 使用输入框 `RectTransform` 的实际宽度、字体设置和 Unity `TextGenerator` 行表按光标行推进；可视行数使用相同生成设置下 `VerticalOverflow.Truncate` 的实际行数。完整消息更新后同步 `Caret.message`、主文本和显示光标位置，并在聊天文本进入 `OnPopulateMesh` 前再次校正，避免把 Canvas 网格刷新误认为输入状态同步。多行 Up/Down 使用 `UILineInfo.startCharIdx` 找视觉行、使用 `UICharInfo.cursorPos/charWidth` 保留 preferred X，并保存导航行号处理短行和换行边界；单行 Up 仍放行原生上一条消息编辑行为。
 - Workshop 专用补丁不得因遗留场景名、Lobby phase 或本地旧配置误作用于普通官方联机。
-- 本项目不引用 RocketLib，不调用换人 API，也不因为可选 Mod 指纹不同拒绝会话。
+- 不因为可选 Mod 指纹不同拒绝会话。
 - 活动 AI、敌方弹体、钱币、金色奖励、载具和普通 `Grenade` 地形伤害不在持续同步范围内。
