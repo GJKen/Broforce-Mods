@@ -20,6 +20,24 @@ namespace CustomMapMultiplayer
         private static Type _connectionLayerTypeCache;
         private static MethodInfo _connectionLayerRoomGetterCache;
 
+        private struct ConnectionOnlineState
+        {
+            internal bool IsOnline;
+            internal bool ConnectIsOffline;
+            internal bool LayerIsOffline;
+            internal bool HasLayer;
+            internal bool HasRoom;
+            internal bool IsHost;
+            internal bool IsOnlineRoomReady;
+            internal bool MyIdHasBeenSet;
+            internal bool ServerHasBeenSet;
+            internal string ConnectType;
+            internal string ConnectIsOfflineGetter;
+            internal string LayerType;
+            internal string RoomGetter;
+            internal string Error;
+        }
+
         private static Type GetConnectTypeCached()
         {
             if (_connectTypeCache == null)
@@ -294,14 +312,90 @@ namespace CustomMapMultiplayer
 
         private static bool IsOnline()
         {
-            var connectType = GetConnectTypeCached();
-            if (connectType == null)
+            return ReadConnectionOnlineState().IsOnline;
+        }
+
+        private static ConnectionOnlineState ReadConnectionOnlineState()
+        {
+            return ReadConnectionOnlineState(false);
+        }
+
+        private static ConnectionOnlineState ReadConnectionOnlineState(bool includeReflectionMetadata)
+        {
+            var state = new ConnectionOnlineState
             {
-                return false;
+                ConnectType = includeReflectionMetadata ? typeof(Connect).FullName : "<omitted>",
+                ConnectIsOfflineGetter = includeReflectionMetadata
+                    ? DescribeGetter(typeof(Connect), "IsOffline")
+                    : "<omitted>"
+            };
+
+            try
+            {
+                var layer = Connect.Layer;
+                state.HasLayer = layer != null;
+                state.LayerType = layer == null ? "<null>" : layer.GetType().FullName;
+                state.RoomGetter = !includeReflectionMetadata || layer == null
+                    ? "<unavailable>"
+                    : DescribeGetter(layer.GetType(), "Room");
+                state.ConnectIsOffline = Connect.IsOffline;
+                state.LayerIsOffline = layer == null || layer.IsOffline;
+                state.HasRoom = layer != null && layer.Room != null;
+                state.IsHost = layer != null && layer.IsHost;
+                state.IsOnlineRoomReady = layer != null && layer.IsOnlineRoomReady;
+                state.MyIdHasBeenSet = PID.MyIdHasBeenSet;
+                state.ServerHasBeenSet = PID.ServerHasBeenSet;
+                state.IsOnline = state.HasLayer && state.HasRoom &&
+                    !state.ConnectIsOffline && !state.LayerIsOffline;
+            }
+            catch (Exception exception)
+            {
+                state.Error = exception.GetType().Name + ":" + exception.Message;
+                state.IsOnline = false;
             }
 
-            var offlineGetter = GetConnectIsOfflineGetterCached(connectType);
-            return offlineGetter == null || !Convert.ToBoolean(offlineGetter.Invoke(null, null));
+            return state;
+        }
+
+        private static string DescribeGetter(Type type, string propertyName)
+        {
+            if (type == null)
+            {
+                return "<null-type>";
+            }
+
+            try
+            {
+                var property = type.GetProperty(
+                    propertyName,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                var getter = property == null ? null : property.GetGetMethod(true);
+                return getter == null
+                    ? "<unavailable>"
+                    : getter.DeclaringType.FullName + "." + getter.Name + "()->" +
+                        getter.ReturnType.FullName;
+            }
+            catch (Exception exception)
+            {
+                return "<error:" + exception.GetType().Name + ">";
+            }
+        }
+
+        private static string FormatConnectionOnlineState(ConnectionOnlineState state)
+        {
+            return "connectType=" + state.ConnectType +
+                ";connectIsOffline=" + state.ConnectIsOffline +
+                ";connectIsOfflineGetter=" + state.ConnectIsOfflineGetter +
+                ";layerType=" + state.LayerType +
+                ";layerIsOffline=" + state.LayerIsOffline +
+                ";roomPresent=" + state.HasRoom +
+                ";roomGetter=" + state.RoomGetter +
+                ";isHost=" + state.IsHost +
+                ";roomReady=" + state.IsOnlineRoomReady +
+                ";myIdSet=" + state.MyIdHasBeenSet +
+                ";serverIdSet=" + state.ServerHasBeenSet +
+                ";networkSessionActive=" + _networkSessionActive +
+                ";error=" + (string.IsNullOrEmpty(state.Error) ? "none" : state.Error);
         }
 
         private static void SetFieldOrProperty(object instance, string name, object value)

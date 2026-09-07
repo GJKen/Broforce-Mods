@@ -708,6 +708,12 @@ namespace CustomMapMultiplayer
             var spawnPrefix = typeof(HarmonyDiagnostics).GetMethod(
                 "PreserveWorkshopHeroTypePrefix",
                 BindingFlags.NonPublic | BindingFlags.Static);
+            var swapBrosSpawnPrefix = typeof(HarmonyDiagnostics).GetMethod(
+                "ApplySwapBrosAlwaysChosenSelectionPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var swapBrosSpawnHarmonyMethod = new HarmonyMethod(swapBrosSpawnPrefix);
+            swapBrosSpawnHarmonyMethod.priority = Priority.Last;
+            swapBrosSpawnHarmonyMethod.after = new[] { "Swap Bros Mod" };
             var matched = false;
             foreach (var method in playerType.GetMethods(
                          BindingFlags.Public | BindingFlags.NonPublic |
@@ -722,6 +728,8 @@ namespace CustomMapMultiplayer
                 try
                 {
                     _harmony.Patch(method, new HarmonyMethod(spawnPrefix), null, null, null);
+                    _harmony.Patch(method, swapBrosSpawnHarmonyMethod, null, null, null);
+                    LogPlayerSpawnHeroPatchInfo(method);
                 }
                 catch (Exception exception)
                 {
@@ -734,6 +742,71 @@ namespace CustomMapMultiplayer
             if (!matched)
             {
                 DiagnosticLog.Warning("Workshop dropout hero-type preservation target not found: Player.SpawnHero.");
+            }
+        }
+
+        private static void LogPlayerSpawnHeroPatchInfo(MethodBase method)
+        {
+            try
+            {
+                var patchInfo = Harmony.GetPatchInfo(method);
+                if (patchInfo == null)
+                {
+                    DiagnosticLog.Warning(
+                        "HARMONY_SPAWN_HERO_PATCHINFO target=" + DescribeMethod(method) +
+                        "; patchInfo=null.");
+                    return;
+                }
+
+                var cmmFound = false;
+                var swapBrosFound = false;
+                var executionOrder = new List<string>();
+                for (var index = 0; index < patchInfo.Prefixes.Count; index++)
+                {
+                    var patch = patchInfo.Prefixes[index];
+                    var patchMethod = patch.PatchMethod;
+                    var patchMethodName = patchMethod == null
+                        ? "<unknown>"
+                        : DescribeMethod(patchMethod);
+                    var before = patch.before == null
+                        ? string.Empty
+                        : string.Join(",", patch.before);
+                    var after = patch.after == null
+                        ? string.Empty
+                        : string.Join(",", patch.after);
+                    executionOrder.Add(index + ":" + patch.owner + ":" + patchMethodName);
+                    cmmFound = cmmFound || string.Equals(
+                        patch.owner,
+                        HarmonyId,
+                        StringComparison.Ordinal);
+                    swapBrosFound = swapBrosFound || string.Equals(
+                        patch.owner,
+                        "Swap Bros Mod",
+                        StringComparison.Ordinal) || string.Equals(
+                        patch.owner,
+                        "Swap_Bros_Mod",
+                        StringComparison.Ordinal);
+                    DiagnosticLog.Info(
+                        "HARMONY_SPAWN_HERO_PREFIX target=" + DescribeMethod(method) +
+                        "; executionIndex=" + index +
+                        "; owner=" + patch.owner +
+                        "; priority=" + patch.priority +
+                        "; before=" + before +
+                        "; after=" + after +
+                        "; method=" + patchMethodName + ".");
+                }
+
+                DiagnosticLog.Info(
+                    "HARMONY_SPAWN_HERO_PATCHINFO target=" + DescribeMethod(method) +
+                    "; cmmPrefix=" + cmmFound +
+                    "; swapBrosPrefix=" + swapBrosFound +
+                    "; prefixExecutionOrder=" + string.Join("|", executionOrder.ToArray()) + ".");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Warning(
+                    "HARMONY_SPAWN_HERO_PATCHINFO_FAILED target=" + DescribeMethod(method) +
+                    "; error=" + exception.ToString() + ".");
             }
         }
 

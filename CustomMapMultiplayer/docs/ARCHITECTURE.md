@@ -34,7 +34,8 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 - `src/HarmonyDiagnostics.LevelOutcome.cs`：`LevelFinish`/`RemoveLife` 前后快照。
 - `src/HarmonyDiagnostics.Reflection.cs`：连接层状态读取及反射元数据缓存。
 - `src/HarmonyDiagnostics.Trace.cs`：Harmony 方法追踪消息格式化及追踪反射缓存。
-- `src/OptionalBroModDiagnostics.cs`：Swap Bros 公开 API、版本和角色指纹的只读弱依赖诊断。
+- `src/OptionalBroModDiagnostics.cs`：保留旧诊断调用点，将可选 Swap Bros 查询转发到兼容适配器。
+- `src/SwapBrosCompatibility.cs`：按 Swap Bros 2.1.5 的真实运行时声明解析 `Swap_Bros_Mod.Main.GetSelectedBroHeroType(Int32)`、`Main.settings`、`Settings.alwaysChosen` 和 `Settings.ignoreForcedBros`，并在失败时记录阶段、异常和返回值。
 - `src/ReflectionProbe.cs`：只读扫描 `Assembly-CSharp` 中的相关类型。
 - `src/OnlinePlayerListFormatter.cs`：Steam/FRP 在线名单的延迟颜色、房主渐变、Rich Text 转义和秒到毫秒换算。
 - `src/FrpDirectTransport.cs`：Lidgren UDP、多连接握手、认证、心跳、重连和可靠字节路由。

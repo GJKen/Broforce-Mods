@@ -28,6 +28,7 @@
 - 高密集战斗长测中，Host 掉帧已明显减轻；当前结论为观察到改善，仍需统一图形设置、交换 Host 并完成 p50/p95/p99 对照后再正式验收，详见 [Host 性能问题记录](issues/ISSUES-2026-08-30-联机房主低帧率与Host专属扫描性能问题.md)。
 - Esc 菜单中的“立即进入 AFK”按钮；房主和加入方分别操作时只影响各自本地角色。主动 AFK 不会自动重新加入，用户通过正常流程回来后会恢复原槽位的生命、英雄类型和角色；普通网络掉线仍按原有流程自动恢复，详见[主动 AFK 按钮问题记录](issues/ISSUES-2026-09-01-新增ESC菜单主动AFK按钮.md)。
 - 联机聊天已接入中文输入法、中文符号、数字和原生编辑操作，并提供 500 个 UTF-16 字符上限、长消息 viewport、视觉行 Up/Down、输入框右下角字数显示和输入框激活时的当前键盘角色操作拦截；上述功能均已通过窄范围真实键盘测试，Esc 后再次呼出和 Enter 发送问题已修复，完整输入矩阵与聊天历史专项仍待补充，详见[聊天输入专题](docs/CHAT.md)。
+- Swap Bros 2.1.5 的 `Always spawn as chosen bro` 兼容已通过离线和 Steam 联机测试；运行时选角查询使用 `Swap_Bros_Mod.Main.GetSelectedBroHeroType(Int32)`，首次生成和重生最终均使用锁定角色，详见 [Swap Bros 问题记录](issues/ISSUES-2026-09-07-Swap Bros Always spawn as chosen bro与联机角色生成冲突.md)。
 
 Workshop 酸液失败样本已确认不是槽位或 NID 串号，而是旧补丁只覆盖 `CheckForTraps`，遗漏了 `CalculateMovement` 和 `Damage` 对 `CoverInAcid` 的直达调用。当前实现维护场景级 `DoodadAcidPool` 列表，在统一 `CoverInAcid` 基入口执行加入方本地预测和房主权威校验；投掷酸液通过 `DamageType.Acid` 命中时也会进入同一酸液死亡流程。双方已实机验证房主、加入方分别进入酸液时均能正确死亡，且不会连带出生区玩家；投掷酸液命中死亡已通过用户实机验收，详见 [酸液池 issue](issues/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md) 和 [投掷酸液 issue](issues/ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md)。普通 Mook 死亡终态、关卡结束防重入、官方 Steam 道具、高延迟和长期重入仍需扩展验收；McBrover 火鸡主动引爆残留仍可复现但概率显著降低，详见 [独立 issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。FRP 的四机、`2` 至 `4` 人容量边界、动态降额重入和主机迁移尚未验证。
 

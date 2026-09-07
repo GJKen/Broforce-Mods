@@ -83,6 +83,7 @@
     <Compile Include="src\HarmonyDiagnostics.McBrover.cs" />
     <Compile Include="src\HarmonyDiagnostics.NativeMapSafety.cs" />
     <Compile Include="src\OptionalBroModDiagnostics.cs" />
+    <Compile Include="src\SwapBrosCompatibility.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
     <Compile Include="src\PerformanceTelemetry.cs" />
     <Compile Include="src\SettingsUiText.cs" />

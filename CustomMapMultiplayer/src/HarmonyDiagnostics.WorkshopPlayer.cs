@@ -915,6 +915,130 @@ namespace CustomMapMultiplayer
             }
         }
 
+        private static void ApplySwapBrosAlwaysChosenSelectionPrefix(
+            Player __instance,
+            object[] __args)
+        {
+            var playerNum = __instance == null ? -1 : __instance.playerNum;
+            var online = false;
+            var onlineError = string.Empty;
+            var onlineState = ReadConnectionOnlineState(true);
+            online = onlineState.IsOnline;
+            onlineError = onlineState.Error;
+
+            var savedHeroType = HeroType.None;
+            var hasSavedHeroType = __instance != null &&
+                TryGetWorkshopRejoinHeroType(playerNum, out savedHeroType);
+            DiagnosticLog.Trace(
+                "SWAP_BROS_PREFIX_ENTRY player=" + playerNum +
+                "; online=" + online +
+                "; onlineError=" + (string.IsNullOrEmpty(onlineError) ? "none" : onlineError) +
+                "; connectState=" + FormatConnectionOnlineState(onlineState) +
+                "; argsBefore=" + FormatSwapBrosSpawnArguments(__args) +
+                "; savedRejoinHero=" + (hasSavedHeroType ? savedHeroType.ToString() : "none") + ".");
+
+            if (__instance == null || __args == null || hasSavedHeroType)
+            {
+                DiagnosticLog.Trace(
+                    "SWAP_BROS_PREFIX_EXIT player=" + playerNum +
+                    "; reason=" + (__instance == null
+                        ? "null-player"
+                        : __args == null
+                            ? "null-args"
+                            : "saved-rejoin-hero") +
+                    "; queryAttempted=false; querySucceeded=false; selected=none; argsAfter=" +
+                    FormatSwapBrosSpawnArguments(__args) + ".");
+                return;
+            }
+
+            HeroType selectedHeroType;
+            var querySucceeded = OptionalBroModDiagnostics.TryGetAlwaysChosenHeroType(
+                    __instance.playerNum,
+                    out selectedHeroType);
+            DiagnosticLog.Trace(
+                "SWAP_BROS_PREFIX_QUERY player=" + playerNum +
+                "; querySucceeded=" + querySucceeded +
+                "; selected=" + selectedHeroType +
+                "; argsCurrent=" + FormatSwapBrosSpawnArguments(__args) + ".");
+            if (!querySucceeded)
+            {
+                DiagnosticLog.Trace(
+                    "SWAP_BROS_PREFIX_EXIT player=" + playerNum +
+                    "; reason=selection-unavailable; queryAttempted=true; querySucceeded=false; " +
+                    "selected=" + selectedHeroType +
+                    "; argsAfter=" + FormatSwapBrosSpawnArguments(__args) + ".");
+                return;
+            }
+
+            var modified = false;
+            for (var index = 0; index < __args.Length; index++)
+            {
+                HeroType requestedHeroType;
+                if (!TryConvertHeroType(__args[index], out requestedHeroType))
+                {
+                    continue;
+                }
+
+                if (requestedHeroType != selectedHeroType)
+                {
+                    __args[index] = selectedHeroType;
+                    modified = true;
+                    DiagnosticLog.Trace(
+                        "Applied Swap Bros selected hero after spawn conflict: player=" +
+                        __instance.playerNum + "; requested=" + requestedHeroType +
+                        "; selected=" + selectedHeroType + ".");
+                }
+                DiagnosticLog.Trace(
+                    "SWAP_BROS_PREFIX_EXIT player=" + playerNum +
+                    "; reason=hero-argument-processed; queryAttempted=true; querySucceeded=true; " +
+                    "selected=" + selectedHeroType +
+                    "; modified=" + modified +
+                    "; argsAfter=" + FormatSwapBrosSpawnArguments(__args) + ".");
+                return;
+            }
+
+            DiagnosticLog.Trace(
+                "SWAP_BROS_PREFIX_EXIT player=" + playerNum +
+                "; reason=no-hero-argument; queryAttempted=true; querySucceeded=true; " +
+                "selected=" + selectedHeroType +
+                "; modified=false; argsAfter=" + FormatSwapBrosSpawnArguments(__args) + ".");
+        }
+
+        private static string FormatSwapBrosSpawnArguments(object[] arguments)
+        {
+            if (arguments == null)
+            {
+                return "<null>";
+            }
+
+            var builder = new StringBuilder();
+            for (var index = 0; index < arguments.Length; index++)
+            {
+                if (index > 0)
+                {
+                    builder.Append("|");
+                }
+
+                var argument = arguments[index];
+                builder.Append(index);
+                builder.Append(":type=");
+                builder.Append(argument == null ? "<null>" : argument.GetType().FullName);
+                builder.Append(",value=");
+                try
+                {
+                    builder.Append(argument == null ? "<null>" : Convert.ToString(argument));
+                }
+                catch (Exception exception)
+                {
+                    builder.Append("<error:");
+                    builder.Append(exception.GetType().Name);
+                    builder.Append(">");
+                }
+            }
+
+            return builder.ToString();
+        }
+
         private static void HideActiveWorkshopJoinPrompt()
         {
             try
