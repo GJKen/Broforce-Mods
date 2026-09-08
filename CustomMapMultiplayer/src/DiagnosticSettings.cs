@@ -6,6 +6,7 @@ namespace CustomMapMultiplayer
 
         public bool EnableOnlineWorkshopInjection;
         public bool DisableOnlineAfkSpectatorMode;
+        public bool DisablePlayerOverlapHighFive;
         public string WorkshopId;
         public string WorkshopCampaignName;
         public string WorkshopSceneName;
@@ -48,6 +49,7 @@ namespace CustomMapMultiplayer
         {
             EnableOnlineWorkshopInjection = false;
             DisableOnlineAfkSpectatorMode = false;
+            DisablePlayerOverlapHighFive = true;
             WorkshopId = string.Empty;
             WorkshopCampaignName = string.Empty;
             WorkshopSceneName = DefaultWorkshopSceneName;

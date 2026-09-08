@@ -346,6 +346,7 @@ namespace CustomMapMultiplayer
             PatchWorkshopJoinPromptSuppression();
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
+            PatchPlayerOverlapHighFiveBehavior();
             PatchChatPauseBoundary();
             PatchChatMessageLengthLimit();
             PatchChatMessageViewport();

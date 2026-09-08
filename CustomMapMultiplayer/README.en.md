@@ -76,7 +76,7 @@ The current scope does not include continuous synchronization of active AI, enem
 
 The actual UMM settings page uses a vertical feature list on the left and displays the selected feature's content on the right:
 
-- `Multiplayer Options`: Workshop map injection and automatic AFK spectator mode; the manual AFK button is in the in-game Esc menu.
+- `Multiplayer Options`: Workshop map injection, automatic AFK spectator mode, and the player-overlap melee toggle; the manual AFK button is in the in-game Esc menu.
 - `FRP Direct`: Direct-transport toggle, Host/Client role, ports, player limit, and connection parameters.
 - `Language`: Click the Follow system, English, or Chinese button to change the interface language.
 - `Diagnostic Logs`: Diagnostic session identity, log presets, and diagnostic categories.
@@ -88,6 +88,7 @@ The actual UMM settings page uses a vertical feature list on the left and displa
 - When Workshop map injection is disabled in `Multiplayer Options`, the setting is saved immediately and injection state is cleared. The current scene is not forcibly interrupted or changed. Leave the current room and create an official room again from the menu to return to the native map-selection flow; the saved Workshop ID does not need to be deleted.
 - `Diagnostic session ID` associates logs from the same test round; use the same value on both sides. `Diagnostic label` only affects log file names and does not participate in multiplayer behavior.
 - The `Multiplayer Options` AFK toggle is controlled independently on each client. When it is unchecked, the label says `Enabled: automatic AFK spectator mode`; when it is checked, the label says `Disabled: automatic AFK spectator mode`. To protect both characters, both players must check the option. It does not intercept manual exit, disconnects, or normal deaths.
+- `Multiplayer Options` enables `melee overrides player-overlap high-five` by default. When enabled, pressing melee while players overlap starts the selected bro's melee; when disabled, Broforce's automatic high-five behavior is restored.
 - The in-game Esc menu's `Enter AFK now` button immediately puts the local player owned by the current client into the native AFK spectator flow, independently of the automatic AFK toggle. The target is selected using local ownership and the active input controller; if multiple local slots cannot be uniquely resolved, the request is ignored to avoid affecting another character. Manual AFK does not schedule `RequestJoinGame`; the user must return through the normal rejoin flow, which restores the original slot's lives, hero type, and character. Ordinary network dropout still uses automatic re-entry.
 - The diagnostic log presets (`Basic`, `Join / Rejoin`, `AFK / Failure`, `Workshop`, and `Full`) and the nine diagnostic categories only filter log output; they do not change multiplayer behavior. Use matching categories on both sides when investigating the same problem.
 

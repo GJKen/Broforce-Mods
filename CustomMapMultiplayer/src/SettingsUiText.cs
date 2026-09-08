@@ -16,6 +16,10 @@ namespace CustomMapMultiplayer
         internal string WorkshopDisabledHelp;
         internal string AfkEnabled;
         internal string AfkDisabled;
+        internal string OverlapMeleeEnabled;
+        internal string OverlapMeleeDisabled;
+        internal string OverlapMeleeHelpEnabled;
+        internal string OverlapMeleeHelpDisabled;
         internal string ManualAfkButton;
         internal string ManualAfkSinglePlayerNotice;
         internal string WorkshopNotice;
@@ -63,13 +67,17 @@ namespace CustomMapMultiplayer
             FrpDirect = "FRP Direct",
             Language = "Language",
             DiagnosticLogs = "Diagnostic Logs",
-            WorkshopIntro = "Configure Workshop map injection and AFK behavior for online games.",
-            WorkshopEnabled = "Enabled: Workshop map injection",
-            WorkshopDisabled = "Disabled: Workshop map injection",
+            WorkshopIntro = "Configure Workshop map injection, AFK behavior, and player-overlap melee behavior for online games.",
+            WorkshopEnabled = "Enabled Workshop map injection",
+            WorkshopDisabled = "Disabled Workshop map injection",
             WorkshopEnabledHelp = "Arcade online games use the configured Workshop map.",
             WorkshopDisabledHelp = "Official online map selection remains unchanged.",
-            AfkEnabled = "Enabled: automatic AFK spectator mode",
-            AfkDisabled = "Disabled: automatic AFK spectator mode",
+            AfkEnabled = "Enabled automatic AFK spectator mode",
+            AfkDisabled = "Disabled automatic AFK spectator mode",
+            OverlapMeleeEnabled = "Enabled melee overrides player-overlap high-five",
+            OverlapMeleeDisabled = "Disabled player-overlap high-five",
+            OverlapMeleeHelpEnabled = "Pressing melee while players overlap starts the selected bro's melee instead of an automatic high-five.",
+            OverlapMeleeHelpDisabled = "Pressing melee while players overlap keeps Broforce's automatic high-five behavior.",
             ManualAfkButton = "Enter AFK now",
             ManualAfkSinglePlayerNotice = "AFK is unavailable while you are the only player in the room.",
             WorkshopNotice = "For a third-party Workshop map, all players must use the same Mod build, subscribe to and finish downloading the same map. The host enters the numeric Workshop ID below; joining players leave their local ID blank and follow the host's published map.",
@@ -126,13 +134,17 @@ namespace CustomMapMultiplayer
             FrpDirect = "FRP 直连",
             Language = "语言",
             DiagnosticLogs = "诊断日志",
-            WorkshopIntro = "配置 Workshop 地图注入和联机时的 AFK 行为。",
+            WorkshopIntro = "配置 Workshop 地图注入、联机时的 AFK 行为和玩家重叠近战行为。",
             WorkshopEnabled = "已启用 Workshop 地图注入",
             WorkshopDisabled = "已禁用 Workshop 地图注入",
             WorkshopEnabledHelp = "使用街机模式创建线上游戏自动使用配置的 Workshop 地图。",
             WorkshopDisabledHelp = "官方联机选图流程保持不变。",
-            AfkEnabled = "已启用自动 AFK 旁观模式",
-            AfkDisabled = "已禁用自动 AFK 旁观模式",
+            AfkEnabled = "已启用 自动 AFK 旁观模式",
+            AfkDisabled = "已禁用 自动 AFK 旁观模式",
+            OverlapMeleeEnabled = "已启用 玩家重叠时优先执行近战",
+            OverlapMeleeDisabled = "已禁用 玩家重叠时仍会击掌",
+            OverlapMeleeHelpEnabled = "玩家重叠时按近战会执行当前角色的近战动作，不再自动变成击掌。",
+            OverlapMeleeHelpDisabled = "玩家重叠时按近战会保留 Broforce 原生的自动击掌行为。",
             ManualAfkButton = "立即进入 AFK",
             ManualAfkSinglePlayerNotice = "房间只有你一人时无法进入 AFK。",
             WorkshopNotice = "使用第三方 Workshop 地图时，所有玩家必须使用相同的 Mod 构建，订阅并完成下载同一张地图。房主在下面填写数字 Workshop ID；加入方将本地 ID 留空，并跟随房主发布的地图。",

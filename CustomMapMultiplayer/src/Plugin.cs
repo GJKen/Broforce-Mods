@@ -7,7 +7,7 @@ namespace CustomMapMultiplayer
 {
     public static class Plugin
     {
-        private const int CurrentDiagnosticSettingsVersion = 9;
+        private const int CurrentDiagnosticSettingsVersion = 10;
         private const float FrpSettingsApplyDelaySeconds = 0.75f;
         private const float SettingsNavigationWidth = 190f;
         private const float SettingsContentWidth = 590f;
@@ -281,6 +281,22 @@ namespace CustomMapMultiplayer
 
             DrawIndentedHelp(
                 Settings.EnableOnlineWorkshopInjection ? text.WorkshopEnabledHelp : text.WorkshopDisabledHelp);
+
+            var overlapMeleeEnabled = DrawSettingsToggle(
+                Settings.DisablePlayerOverlapHighFive,
+                Settings.DisablePlayerOverlapHighFive
+                    ? text.OverlapMeleeEnabled
+                    : text.OverlapMeleeDisabled,
+                GetSettingsToggleStyle());
+            if (overlapMeleeEnabled != Settings.DisablePlayerOverlapHighFive)
+            {
+                Settings.DisablePlayerOverlapHighFive = overlapMeleeEnabled;
+                SaveSettings(modEntry);
+            }
+            DrawIndentedHelp(
+                Settings.DisablePlayerOverlapHighFive
+                    ? text.OverlapMeleeHelpEnabled
+                    : text.OverlapMeleeHelpDisabled);
 
             var disableAfkSpectator = DrawSettingsToggle(
                 Settings.DisableOnlineAfkSpectatorMode,
@@ -878,6 +894,11 @@ namespace CustomMapMultiplayer
             {
                 NormalizeSettingsPresentation(settings);
                 return;
+            }
+
+            if (settings.DiagnosticSettingsVersion < 10)
+            {
+                settings.DisablePlayerOverlapHighFive = true;
             }
 
             if (settings.DiagnosticSettingsVersion < 7)
