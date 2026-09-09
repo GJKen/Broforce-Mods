@@ -123,7 +123,7 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static object GetFieldOrPropertyValue(object instance, string name)
+        internal static object GetFieldOrPropertyValue(object instance, string name)
         {
             if (instance == null)
             {

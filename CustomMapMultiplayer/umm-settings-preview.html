@@ -7,18 +7,22 @@
   <style>
     :root {
       color-scheme: dark;
-      --page: #17191d;
-      --surface: #24272c;
-      --surface-raised: #2d3137;
-      --surface-deep: #1b1d21;
-      --control: #363b42;
-      --control-hover: #41474f;
-      --control-active: #2f718a;
-      --border: #505761;
-      --border-soft: #3d4249;
-      --text: #e8ebee;
-      --muted: #aeb5bd;
-      --focus: #9edff9;
+      --page: #0b0f18;
+      --surface: #141c2b;
+      --surface-raised: #1f293b;
+      --surface-deep: #0a0f1c;
+      --control: #522911;
+      --control-hover: #804014;
+      --control-active: #b35c17;
+      --control-selected: #b8440f;
+      --control-selected-hover: #e66b14;
+      --control-selected-active: #ff9424;
+      --border: #6c513c;
+      --border-soft: #39465b;
+      --text: #fff8eb;
+      --muted: #f5c791;
+      --accent: #ffad3d;
+      --focus: #ffd08c;
     }
 
     * { box-sizing: border-box; }
@@ -28,37 +32,37 @@
       min-height: 100vh;
       background: var(--page);
       color: var(--text);
-      font: 14px/1.45 "Segoe UI", "Microsoft YaHei", sans-serif;
+      font: 14px/1.45 Arial, "Microsoft YaHei", sans-serif;
       letter-spacing: 0;
     }
 
     button, input, select { font: inherit; }
 
     main {
-      width: min(820px, calc(100% - 24px));
+      width: min(826px, calc(100% - 24px));
       margin: 24px auto;
       padding: 18px;
-      border: 1px solid #3c4148;
-      border-radius: 4px;
+      border: 1px solid #28364d;
+      border-radius: 7px;
       background: var(--surface);
       box-shadow: 0 10px 28px rgb(0 0 0 / 25%);
     }
 
-    h1 { margin: 0 0 16px; font-size: 16px; font-weight: 650; }
+    h1 { margin: 0 0 16px; color: var(--text); font-size: 16px; font-weight: 700; }
     .version { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
 
     .settings-layout {
       display: grid;
-      grid-template-columns: 190px minmax(0, 1fr);
+      grid-template-columns: 190px minmax(0, 590px);
+      gap: 8px;
       min-height: 500px;
-      border: 1px solid var(--border);
-      background: var(--surface-raised);
     }
 
     .sidebar {
-      padding: 14px 10px;
-      border-right: 1px solid var(--border);
-      background: var(--surface-deep);
+      padding: 10px 8px;
+      border: 1px solid #6a4c36;
+      border-radius: 7px;
+      background: #0d121f;
     }
 
     .nav-list { display: grid; gap: 3px; }
@@ -68,80 +72,165 @@
       align-items: center;
       width: 100%;
       min-height: 38px;
-      padding: 7px 9px;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      background: transparent;
-      color: var(--muted);
-      text-align: left;
+      padding: 5px 0;
+      border: 0;
+      border-radius: 7px;
+      background: var(--control);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 400;
+      justify-content: center;
+      text-align: center;
       cursor: pointer;
     }
 
-    .nav-item:hover { background: #292e34; color: var(--text); }
+    .nav-item:hover { background: var(--control-hover); color: var(--text); }
     .nav-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
     .nav-item[aria-current="page"] {
-      border-color: #64a9bb;
-      background: var(--control-active);
+      background: linear-gradient(to bottom, #9e400f 0%, #d16617 100%);
       color: #fff;
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 24%);
+      font-weight: 700;
     }
 
-    .nav-item[aria-current="page"]:hover { background: #43a6bd; }
+    .nav-item[aria-current="page"]:hover { background: linear-gradient(to bottom, #c75612 0%, #f58921 100%); }
 
-    .content { min-width: 0; padding: 20px 22px 18px; }
+    .content {
+      min-width: 0;
+      padding: 12px 14px 14px;
+      border: 1px solid #6a4c36;
+      border-radius: 7px;
+      background: var(--surface);
+    }
     .view[hidden] { display: none; }
 
-    .view-heading { padding-bottom: 10px; border-bottom: 1px solid var(--border-soft); }
-    .view-title { margin: 0; font-size: 15px; font-weight: 650; }
-    .view-intro { margin: 5px 0 0; color: var(--muted); }
+    .view-heading { margin-bottom: 10px; }
+    .view-title { margin: 0; color: var(--text); font-size: 18px; line-height: 24px; font-weight: 700; }
+    .view-intro { margin: 0; color: var(--muted); font-size: 13px; }
 
-    .settings-block { margin-top: 15px; }
-    .check-row { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0; cursor: pointer; }
-    .check-row input[type="checkbox"] { width: 15px; height: 15px; flex: 0 0 auto; margin: 3px 0 0; accent-color: #6ec9d9; }
+    .settings-block { margin-top: 10px; }
+    .check-row { display: flex; align-items: flex-start; gap: 6px; min-height: 30px; margin: 0; cursor: pointer; }
+    .check-row input[type="checkbox"] { width: 15px; height: 15px; flex: 0 0 auto; margin: 7px 0 0; accent-color: var(--accent); }
     .check-copy { min-width: 0; }
     .check-title { display: block; }
-    .help { margin: 1px 0 0; color: var(--muted); font-size: 12px; line-height: 1.3; }
+    .help { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
 
-    .plain-help { margin: 10px 0 13px; color: var(--muted); font-size: 12px; }
+    .plain-help { margin: 6px 0 0; color: var(--muted); font-size: 13px; white-space: pre-line; }
 
-    .field { display: block; margin: 9px 0 0; }
-    .field-label { display: block; margin-bottom: 4px; color: #cbd0d5; }
+    .field { display: block; margin: 6px 0 0; }
+    .field-label { display: block; margin-bottom: 4px; color: var(--text); font-size: 14px; line-height: 1.35; }
+    .field-help { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.35; white-space: pre-line; }
+    .workshop-columns { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 12px; margin-top: 10px; }
+    .workshop-panel { min-width: 0; padding: 10px 12px 12px; border: 1px solid #6a4c36; border-radius: 7px; background: var(--surface-raised); }
+    .workshop-role-help { display: grid; gap: 0; margin: 8px 0 0; }
+    .workshop-role-help p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+    .workshop-role-label { color: var(--text); font-size: 12px; font-weight: 700; }
+    .workshop-directory-status { display: grid; gap: 0; margin-top: 8px; }
+    .workshop-directory-status[hidden] { display: none; }
+    .status-kicker { color: var(--text); font-size: 12px; font-weight: 700; line-height: 1.35; }
+    .status-line, .status-detail { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+    .status-detail:empty { display: none; }
+    .workshop-map-open { display: grid; width: 100%; height: 46px; margin-top: 9px; padding: 4px 8px; place-content: center; border: 0; border-radius: 7px; background: var(--control); color: var(--text); text-align: center; cursor: pointer; }
+    .workshop-map-open:hover { background: var(--control-hover); }
+    .workshop-map-open:disabled, button:disabled { cursor: default; opacity: .6; }
+    .workshop-map-open.empty { height: 30px; }
+    .map-trigger-title, .map-trigger-id { display: block; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+    .map-trigger-title { font-size: 13px; font-weight: 700; }
+    .map-trigger-id { margin-top: 1px; color: var(--muted); font-size: 10px; }
+    .workshop-map-open:focus-visible, .workshop-selection-close:focus-visible, .workshop-selection-clear:focus-visible, .workshop-selection-clear-favorites:focus-visible, .workshop-selection-refresh:focus-visible, .settings-details summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+    .workshop-notice { margin-top: 6px; padding: 7px 8px; border: 1px solid #6a4c36; border-radius: 7px; background: var(--surface-raised); color: var(--text); font-size: 13px; line-height: 1.35; white-space: pre-line; }
+    .workshop-manual-help { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+    .workshop-map-panel .field input { width: 100%; }
+    .workshop-selection-view[hidden] { display: none; }
+    .workshop-selection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .workshop-selection-close { display: inline-grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; padding: 0; border: 0; border-radius: 16px; background: var(--control); color: var(--accent); font-size: 20px; line-height: 1; cursor: pointer; }
+    .workshop-selection-intro { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+    .workshop-selection-search { display: grid; grid-template-columns: 48px minmax(0, 1fr) 30px; gap: 0; align-items: center; }
+    .selection-search-label { color: var(--text); font-size: 14px; }
+    .workshop-selection-search input { width: 100%; }
+    .workshop-selection-clear, .workshop-selection-refresh { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: var(--control); color: var(--text); cursor: pointer; }
+    .workshop-selection-clear:hover, .workshop-selection-refresh:hover { background: var(--control-hover); }
+    .workshop-selection-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 4px; margin-top: 7px; }
+    .workshop-selection-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .workshop-selection-favorite-filter { display: grid; grid-template-columns: minmax(0, 1fr) 30px; min-width: 0; }
+    .workshop-selection-filters button { min-width: 0; height: 30px; padding: 4px 5px; border: 0; border-radius: 0; background: var(--control); color: var(--text); cursor: pointer; }
+    .workshop-selection-filters button:first-child { border-radius: 7px 0 0 7px; }
+    .workshop-selection-filters button:last-child { border-radius: 0 7px 7px 0; }
+    .workshop-selection-favorite-filter > button:first-child { border-radius: 0; }
+    .workshop-selection-clear-favorites { padding: 0; border-left: 1px solid var(--surface-raised) !important; border-radius: 0 7px 7px 0 !important; font-size: 18px; line-height: 1; }
+    .workshop-selection-filters button:hover { background: var(--control-hover); }
+    .workshop-selection-filters button[aria-pressed="true"] { background: var(--control-selected); color: #fff; font-weight: 700; }
+    .workshop-selection-status { margin-top: 7px; }
+    .workshop-selection-current { margin: 0; color: var(--text); font-size: 12px; font-weight: 700; line-height: 1.35; }
+    .workshop-map-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-height: 320px; margin-top: 7px; overflow-y: auto; }
+    .workshop-map-card { display: grid; grid-template-columns: minmax(0, 1fr) 40px; min-width: 0; min-height: 46px; }
+    .map-card-button { min-width: 0; height: 46px; padding: 4px 7px; border: 0; border-radius: 7px; background: var(--control); color: var(--text); text-align: center; cursor: pointer; }
+    .map-card-button:hover { background: var(--control-hover); }
+    .workshop-map-card[aria-selected="true"] .map-card-button { background: var(--control-selected); font-weight: 700; }
+    .map-card-title { display: block; overflow: hidden; color: var(--text); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .map-card-id { display: block; margin-top: 1px; color: #c2d4e8; font-size: 10px; }
+    .map-card-favorite { place-self: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 16px; background: var(--control); color: var(--accent); font-size: 18px; line-height: 1; cursor: pointer; }
+    .map-card-favorite:hover { background: var(--control-hover); }
+    .workshop-selection-empty { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .workshop-lower-settings { margin-top: 10px; }
+    .settings-details { margin-top: 10px; }
+    .settings-details summary { display: grid; height: 30px; place-items: center; position: relative; padding: 0 8px; border-radius: 7px; background: var(--control); color: var(--text); cursor: pointer; list-style: none; font-size: 13px; font-weight: 700; }
+    .settings-details summary::-webkit-details-marker { display: none; }
+    .settings-details summary::before { content: ''; position: absolute; left: 8px; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid var(--accent); }
+    .settings-details[open] summary::before { transform: rotate(90deg); }
+    .settings-details summary:hover { background: var(--control-hover); }
+    .settings-details[open] { padding-bottom: 3px; }
 
     input[type="text"], input[type="password"], input[type="number"], select {
-      height: 29px;
+      height: 24px;
       padding: 4px 7px;
-      border: 1px solid #59616b;
-      border-radius: 2px;
+      border: 0;
+      border-radius: 7px;
       background: var(--surface-deep);
       color: var(--text);
     }
 
     input[type="text"], input[type="password"], input[type="number"] { width: 220px; max-width: 100%; }
     input:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-    input::placeholder { color: #7f8992; }
+    input:focus { background: #40210f; }
+    input::placeholder { color: #8c7760; }
 
     .segments { display: grid; grid-template-columns: repeat(2, minmax(0, 130px)); width: 260px; max-width: 100%; }
     .segments.player-limit { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .segments button, .language-buttons button, .preset-grid button { min-height: 29px; border: 1px solid #59616b; background: var(--control); color: var(--text); cursor: pointer; }
+    .segments button, .language-buttons button, .preset-grid button { min-height: 30px; border: 0; background: var(--control); color: var(--text); cursor: pointer; }
     .segments button:hover, .language-buttons button:hover, .preset-grid button:hover { background: var(--control-hover); }
-    .segments button[aria-pressed="true"], .language-buttons button[aria-pressed="true"], .preset-grid button[aria-pressed="true"] { border-color: #7e8a96; background: var(--control-active); color: #fff; }
+    .segments button[aria-pressed="true"], .language-buttons button[aria-pressed="true"], .preset-grid button[aria-pressed="true"] { background: var(--control-selected); color: #fff; font-weight: 700; }
     .segments button:focus-visible, .language-buttons button:focus-visible, .preset-grid button:focus-visible { position: relative; z-index: 1; outline: 2px solid var(--focus); outline-offset: 1px; }
+    .segments button:first-child, .language-buttons button:first-child { border-radius: 7px 0 0 7px; }
+    .segments button:last-child, .language-buttons button:last-child { border-radius: 0 7px 7px 0; }
 
-    .role-help { margin: 7px 0 4px; }
+    .role-help { margin: 0 0 4px; }
     .language-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 130px)); width: 390px; max-width: 100%; }
     .role-settings[hidden] { display: none; }
-    .preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; width: 540px; max-width: 100%; }
+    .preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 560px; max-width: 100%; }
     .preset-grid button { padding: 4px 6px; }
-    .categories { margin-top: 5px; }
-    .categories .check-row { margin: 4px 0; }
-    .status-line { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+    .categories { margin-top: 7px; }
+    .categories .check-row { margin: 0; }
+    .open-log-directory { width: 280px; }
+    .behavior-grid { display: block; }
+    .behavior-grid .check-row:not(:first-child) { margin-top: 10px; }
+    .behavior-help { margin: 0 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.35; }
+    .diagnostic-performance { margin-top: 7px; }
+    .performance-help { margin-left: 18px; }
+    .frp-role-settings input[type="text"], .frp-role-settings input[type="password"] { width: 260px; }
+    #frp-runtime-status { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
     .footer { margin: 13px 0 0; color: var(--muted); font-size: 11px; }
 
     @media (max-width: 680px) {
       main { margin: 10px auto; padding: 12px; }
       .settings-layout { grid-template-columns: 150px minmax(0, 1fr); }
-      .content { padding: 17px 15px; }
+      .content { padding: 12px; }
+      .workshop-columns { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px; }
+      .workshop-panel { padding: 10px; }
+    }
+
+    @media (max-width: 850px) and (min-width: 521px) {
+      .settings-layout { grid-template-columns: 150px minmax(0, 1fr); }
     }
 
     @media (max-width: 520px) {
@@ -150,6 +239,9 @@
       .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .view-heading { display: block; }
       .preset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .workshop-columns { display: block; }
+      .workshop-map-panel { margin-top: 10px; }
+      .selection-search-label { width: 42px; }
     }
   </style>
 </head>
@@ -160,7 +252,8 @@
     <div class="settings-layout">
       <aside class="sidebar" aria-label="Multiplayer Options">
         <nav class="nav-list" aria-label="Settings features">
-          <button class="nav-item" type="button" data-view="workshop" aria-current="page"><span data-i18n="workshopNav">Multiplayer Options</span></button>
+          <button class="nav-item" type="button" data-view="workshop" aria-current="page"><span data-i18n="workshopNav">Workshop Map Settings</span></button>
+          <button class="nav-item" type="button" data-view="behavior"><span data-i18n="behaviorNav">Multiplayer Options</span></button>
           <button class="nav-item" type="button" data-view="frp"><span data-i18n="frpNav">FRP Direct</span></button>
           <button class="nav-item" type="button" data-view="language"><span data-i18n="languageNav">Language</span></button>
           <button class="nav-item" type="button" data-view="logs"><span data-i18n="logsNav">Diagnostic Logs</span></button>
@@ -169,43 +262,155 @@
 
       <section class="content" aria-live="polite">
         <section class="view" data-view-content="workshop">
+          <div id="workshop-config-view">
+          <div class="view-heading">
+            <h2 class="view-title" data-i18n="workshopTitle">Workshop Map Settings</h2>
+            <p class="view-intro" data-i18n="workshopIntro">Configure Workshop maps for online games.</p>
+          </div>
+
+          <div class="workshop-columns">
+            <section class="workshop-panel workshop-info-panel">
+              <label class="check-row">
+                <input id="workshop-toggle" type="checkbox">
+                  <span class="check-copy">
+                    <span class="check-title" id="workshop-toggle-title" data-i18n="workshopToggleOff">Disabled Workshop map injection</span>
+                    <span class="help" id="workshop-toggle-help" data-i18n="workshopToggleHelpOff">Official online map selection remains unchanged.</span>
+                </span>
+              </label>
+              <div class="workshop-role-help">
+                <p class="workshop-role-label" data-i18n="workshopHostLabel">Host:</p>
+                <p data-i18n="workshopHostHelp">Use the selected Workshop map when creating the room.</p>
+                <p class="workshop-role-label" data-i18n="workshopJoinLabel">Joining player:</p>
+                <p data-i18n="workshopJoinHelp">Use the host's published map when joining; the local ID does not override it.</p>
+              </div>
+              <div class="workshop-directory-status" id="workshop-status" data-state="ready" hidden>
+                <span class="status-kicker" id="workshop-status-kicker"></span>
+                <p class="status-line" id="workshop-status-line"></p>
+                <p class="status-detail" id="workshop-status-detail"></p>
+              </div>
+
+              <details class="settings-details" open>
+                <summary><span data-i18n="workshopAdvancedTitle">Other map settings</span></summary>
+                <label class="field">
+                  <span class="field-label" data-i18n="campaignLabel">Workshop campaign name (optional)</span>
+                  <input id="workshop-campaign" type="text">
+                  <p class="field-help" data-i18n="campaignHelp">Optional override for the campaign name sent with the Workshop map. Usually leave it empty.</p>
+                </label>
+                <label class="field">
+                  <span class="field-label" data-i18n="sceneLabel">Custom level scene</span>
+                  <input id="workshop-scene" type="text" value="Test Evan2">
+                  <p class="field-help" data-i18n="sceneHelp">Usually leave Test Evan2 unchanged.
+Change it only when the map author provides a different Unity scene name.</p>
+                </label>
+              </details>
+            </section>
+
+            <section class="workshop-panel workshop-map-panel">
+              <label class="field">
+                <span class="field-label" data-i18n="workshopManualIdLabel">Workshop ID</span>
+                <input id="workshop-manual-id" type="text" inputmode="numeric" value="3715087178" placeholder="Numeric Workshop ID" data-i18n-placeholder="workshopIdPlaceholder">
+              </label>
+              <div class="workshop-notice" data-i18n="workshopNotice">When using a Workshop map, all players must use the same Mod build and subscribe to the same map.
+The host enters the numeric Workshop ID.
+After joining, the joining player uses the host's Workshop ID; this setting can be ignored.</div>
+                <p class="workshop-manual-help" id="workshop-manual-help" data-i18n="workshopManualHelpReady">Enter a numeric ID directly, or choose a subscribed map.</p>
+              <div class="workshop-local-picker">
+                <span class="field-label" data-i18n="workshopMapSelectLabel">Choose a subscribed map</span>
+                <button class="workshop-map-open" id="workshop-map-open" type="button">
+                  <span class="map-trigger-title"></span>
+                  <span class="map-trigger-id"></span>
+                </button>
+              </div>
+            </section>
+          </div>
+          </div>
+
+          <div class="workshop-selection-view" id="workshop-selection-view" hidden>
+            <div class="workshop-selection-heading">
+              <div>
+                <h2 class="view-title" data-i18n="workshopMapSelectLabel">Choose a subscribed map</h2>
+                <p class="workshop-selection-intro" data-i18n="workshopSelectionIntro">Choose a subscribed Workshop map. Selecting a map only changes the Workshop ID.</p>
+              </div>
+              <button class="workshop-selection-close" id="workshop-selection-close" type="button" title="Back to map settings" data-i18n-title="workshopMapCloseTooltip">×</button>
+            </div>
+            <div class="workshop-selection-search">
+              <span class="selection-search-label" data-i18n="workshopMapSearch">Search</span>
+              <input id="workshop-selection-search" type="text" placeholder="Search" data-i18n-placeholder="workshopMapSearch">
+              <button class="workshop-selection-clear" id="workshop-selection-clear" type="button" title="Clear search" data-i18n-title="workshopMapSearchClearTooltip">×</button>
+            </div>
+            <div class="workshop-selection-toolbar">
+              <div class="workshop-selection-filters">
+                <button type="button" data-workshop-filter="all" aria-pressed="true"></button>
+                <button type="button" data-workshop-filter="recent" aria-pressed="false"></button>
+                <div class="workshop-selection-favorite-filter">
+                  <button type="button" data-workshop-filter="favorites" aria-pressed="false"></button>
+                  <button class="workshop-selection-clear-favorites" id="workshop-selection-clear-favorites" type="button" title="Clear all starred maps" data-i18n-title="workshopMapClearFavoritesTooltip" aria-label="Clear all starred maps" data-i18n-aria-label="workshopMapClearFavoritesTooltip" hidden>×</button>
+                </div>
+              </div>
+              <button class="workshop-selection-refresh" id="workshop-selection-refresh" type="button" title="Refresh subscribed Workshop maps" data-i18n-title="workshopRefreshTooltip">↻</button>
+            </div>
+            <div class="workshop-directory-status" id="workshop-selection-directory-status" data-state="ready" hidden>
+              <span class="status-kicker"></span>
+              <p class="status-line"></p>
+              <p class="status-detail"></p>
+            </div>
+            <div class="workshop-selection-status">
+              <p class="workshop-selection-current" id="workshop-selection-current"></p>
+            </div>
+            <div class="workshop-map-grid" id="workshop-map-grid">
+              <div class="workshop-map-card" data-map-title-en="Test Workshop Arena" data-map-title-zh="Test Workshop 测试场" data-map-id="3715087178" data-recent="true" data-favorite="true" data-map-state="installed" aria-selected="true">
+                <button class="map-card-button" type="button">
+                  <span class="map-card-title">Test Workshop Arena</span><span class="map-card-id">3715087178</span>
+                </button>
+                <button class="map-card-favorite" type="button" aria-label="Remove star" title="Remove star" aria-pressed="true">★</button>
+              </div>
+              <div class="workshop-map-card" data-map-title-en="Bromandy_Ptr1 Practice" data-map-title-zh="Bromandy_Ptr1 测试场" data-map-id="3781818421" data-recent="true" data-favorite="false" data-map-state="installed" aria-selected="false">
+                <button class="map-card-button" type="button">
+                  <span class="map-card-title">Bromandy_Ptr1 Practice</span><span class="map-card-id">3781818421</span>
+                </button>
+                <button class="map-card-favorite" type="button" aria-label="Star this map" title="Star this map" aria-pressed="false">☆</button>
+              </div>
+              <div class="workshop-map-card" data-map-title-en="Desert Relay" data-map-title-zh="Desert Relay 沙漠接力" data-map-id="456121589" data-recent="false" data-favorite="false" data-map-state="not-installed" aria-selected="false">
+                <button class="map-card-button" type="button">
+                  <span class="map-card-title">Desert Relay</span><span class="map-card-id">456121589</span>
+                </button>
+                <button class="map-card-favorite" type="button" aria-label="Star this map" title="Star this map" aria-pressed="false">☆</button>
+              </div>
+              <div class="workshop-map-card" data-map-title-en="Factory Escape" data-map-title-zh="Factory Escape 工厂逃脱" data-map-id="558282841" data-recent="false" data-favorite="true" data-map-state="unreadable" aria-selected="false">
+                <button class="map-card-button" type="button">
+                  <span class="map-card-title">Factory Escape</span><span class="map-card-id">558282841</span>
+                </button>
+                <button class="map-card-favorite" type="button" aria-label="Remove star" title="Remove star" aria-pressed="true">★</button>
+              </div>
+            </div>
+            <p class="workshop-selection-empty" id="workshop-selection-empty" hidden data-i18n="workshopSelectionEmpty">No matching Workshop maps.</p>
+          </div>
+        </section>
+
+        <section class="view" data-view-content="behavior" hidden>
           <div class="view-heading">
             <div>
-              <h2 class="view-title" data-i18n="workshopTitle">Multiplayer Options</h2>
-              <p class="view-intro" data-i18n="workshopIntro">Configure Workshop map injection and AFK behavior for online games.</p>
+              <h2 class="view-title" data-i18n="behaviorTitle">Multiplayer Options</h2>
+              <p class="view-intro" data-i18n="behaviorIntro">Configure player behavior in online games.</p>
             </div>
           </div>
 
-          <div class="settings-block">
+          <div class="behavior-grid settings-block">
             <label class="check-row">
-              <input id="workshop-toggle" type="checkbox">
+              <input id="overlap-melee-toggle" type="checkbox" checked>
               <span class="check-copy">
-                <span class="check-title" id="workshop-toggle-title" data-i18n="workshopToggleOff">Disabled: Workshop map injection</span>
-                <span class="help" id="workshop-toggle-help" data-i18n="workshopToggleHelpOff">Official online map selection remains unchanged.</span>
+                <span class="check-title" id="overlap-melee-toggle-title" data-i18n="overlapMeleeToggleOn">Enabled melee overrides player-overlap high-five</span>
               </span>
             </label>
+            <p class="behavior-help" id="overlap-melee-help" data-i18n="overlapMeleeHelpEnabled">Pressing melee while players overlap starts the selected bro's melee instead of an automatic high-five.</p>
             <label class="check-row">
               <input id="afk-toggle" type="checkbox">
               <span class="check-copy">
-                <span class="check-title" id="afk-toggle-title" data-i18n="afkToggleOff">Enabled: automatic AFK spectator mode</span>
+                <span class="check-title" id="afk-toggle-title" data-i18n="afkToggleOff">Enabled automatic AFK spectator mode</span>
               </span>
             </label>
+            <p class="behavior-help" id="afk-help" data-i18n="afkHelp">When disabled, online players are not sent to spectator mode by inactivity; manual AFK remains available.</p>
           </div>
-
-          <p class="plain-help" data-i18n="workshopNotice">For a third-party Workshop map, all players must use the same Mod build, subscribe to and finish downloading the same map. The host enters the numeric Workshop ID below; joining players leave their local ID blank and follow the host's published map.</p>
-
-          <label class="field">
-            <span class="field-label" data-i18n="workshopIdLabel">Workshop ID (host only; joining players leave this blank and follow the host's map)</span>
-            <input type="text" inputmode="numeric" placeholder="Numeric Workshop ID" data-i18n-placeholder="workshopIdPlaceholder">
-          </label>
-          <label class="field">
-            <span class="field-label" data-i18n="campaignLabel">Workshop campaign name (optional)</span>
-            <input type="text">
-          </label>
-          <label class="field">
-            <span class="field-label" data-i18n="sceneLabel">Custom level scene</span>
-            <input type="text" value="Test Evan2">
-          </label>
         </section>
 
         <section class="view" data-view-content="frp" hidden>
@@ -220,20 +425,20 @@
             <label class="check-row">
               <input id="frp-toggle" type="checkbox">
               <span class="check-copy">
-                <span class="check-title" id="frp-toggle-title" data-i18n="frpToggleOff">Disabled: FRP Direct networking</span>
+                <span class="check-title" id="frp-toggle-title" data-i18n="frpToggleOff">Disabled FRP Direct networking</span>
                 <span class="help" id="frp-toggle-help" data-i18n="frpToggleHelpOff">Native Steam networking is active.</span>
               </span>
             </label>
           </div>
 
           <div class="field-label" data-i18n="frpRoleLabel">FRP Direct role</div>
-          <p class="help role-help" data-i18n="frpRoleHelp">在下面按钮中选择你的FRP Direct角色</p>
+          <p class="help role-help" data-i18n="frpRoleHelp">Select your FRP Direct role using the buttons below.</p>
           <div class="segments frp-role" role="group" aria-label="FRP Direct role">
             <button type="button" data-frp-role="host" aria-pressed="true"><span data-i18n="roleHost">Host</span></button>
             <button type="button" data-frp-role="client" aria-pressed="false"><span data-i18n="roleClient">Client</span></button>
           </div>
 
-          <div class="role-settings" data-role-settings="host">
+          <div class="role-settings frp-role-settings" data-role-settings="host">
             <label class="field">
               <span class="field-label" data-i18n="localPortLabel">Local UDP listen port</span>
               <input type="number" value="27045">
@@ -249,14 +454,14 @@
             </div>
           </div>
 
-          <div class="role-settings" data-role-settings="client" hidden>
+          <div class="role-settings frp-role-settings" data-role-settings="client" hidden>
             <label class="field">
               <span class="field-label" data-i18n="endpointLabel">FRP server endpoint (host:port)</span>
               <input type="text" placeholder="frp.example.com:27045" data-i18n-placeholder="endpointPlaceholder">
             </label>
           </div>
 
-          <label class="field">
+          <label class="field frp-role-settings">
             <span class="field-label" data-i18n="passwordLabel">FRP room password (optional)</span>
             <input type="password" placeholder="Temporary room password" data-i18n-placeholder="passwordPlaceholder">
           </label>
@@ -271,8 +476,7 @@
             </div>
           </div>
 
-          <div class="field settings-block">
-            <span class="field-label" data-i18n="languageLabel">Language</span>
+          <div class="settings-block">
             <div class="language-buttons" role="group" aria-label="Language">
               <button type="button" data-language-choice="system" aria-pressed="true"><span data-i18n="languageSystem">Follow system</span></button>
               <button type="button" data-language-choice="en" aria-pressed="false"><span data-i18n="languageEnglish">English</span></button>
@@ -291,12 +495,22 @@
 
           <label class="field settings-block">
             <span class="field-label" data-i18n="sessionLabel">Diagnostic session ID (use the same value on both clients; optional)</span>
-            <input type="text" value="test001">
+            <input type="text">
           </label>
           <label class="field">
             <span class="field-label" data-i18n="diagnosticLabel">Diagnostic label (optional; only used in log names)</span>
-            <input type="text" value="host">
+            <input type="text">
           </label>
+          <button class="open-log-directory" type="button" data-i18n="openLogDirectory">Open diagnostic log directory</button>
+          <div class="diagnostic-performance">
+            <label class="check-row">
+              <input id="performance-toggle" type="checkbox">
+              <span class="check-copy">
+                <span class="check-title" id="performance-toggle-title" data-i18n="performanceTelemetryDisabled">Disabled performance telemetry</span>
+              </span>
+            </label>
+            <p class="help performance-help" data-i18n="performanceTelemetryHelp">When enabled, writes a two-second aggregate summary of frame time and Mod hot paths to the diagnostic file. It does not change online behavior.</p>
+          </div>
           <div class="field">
             <span class="field-label" data-i18n="presetLabel">Diagnostic log preset</span>
             <div class="preset-grid" role="group" aria-label="Diagnostic log preset">
@@ -308,7 +522,7 @@
             </div>
           </div>
           <div class="field categories">
-              <span class="field-label" data-i18n="categoriesLabel">Diagnostic categories (log output only; online behavior is unchanged.)</span>
+            <span class="field-label" data-i18n="categoriesLabel">Diagnostic categories (log output only; online behavior is unchanged.)</span>
             <label class="check-row"><input type="checkbox" checked><span data-i18n="catLobby">Lobby and network session</span></label>
             <label class="check-row"><input type="checkbox" checked><span data-i18n="catWorkshop">Workshop download/load/scenes</span></label>
             <label class="check-row"><input type="checkbox" checked><span data-i18n="catPlayer">Player join/spawn/dropout</span></label>
@@ -329,33 +543,68 @@
   <script>
     const translations = {
       en: {
-        title: 'Custom Map Multiplayer', workshopNav: 'Multiplayer Options', frpNav: 'FRP Direct', languageNav: 'Language', logsNav: 'Diagnostic Logs',
-        workshopTitle: 'Multiplayer Options', workshopIntro: 'Configure Workshop map injection and AFK behavior for online games.', workshopTip: 'When disabled, official Broforce online map flow remains active.', workshopToggleOff: 'Disabled: Workshop map injection', workshopToggleOn: 'Enabled: Workshop map injection', workshopToggleHelpOff: 'Official online map selection remains unchanged.', workshopToggleHelpOn: 'Arcade online games use the configured Workshop map.',
-        workshopNotice: "For a third-party Workshop map, all players must use the same Mod build, subscribe to and finish downloading the same map. The host enters the numeric Workshop ID below; joining players leave their local ID blank and follow the host's published map.", workshopIdLabel: "Workshop ID (host only; joining players leave this blank and follow the host's map)", workshopIdPlaceholder: 'Numeric Workshop ID', campaignLabel: 'Workshop campaign name (optional)', sceneLabel: 'Custom level scene',
-        frpTitle: 'FRP Direct', frpIntro: 'Configure the optional direct transport and its connection role.', frpTip: 'When disabled, the native Steam networking path is used.', frpToggleOff: 'Disabled: FRP Direct networking', frpToggleOn: 'Enabled: FRP Direct networking', frpToggleHelpOff: 'Native Steam networking is active.', frpToggleHelpOn: 'FRP Direct transport is active.', frpRoleLabel: 'FRP Direct role', frpRoleHelp: 'Select your FRP Direct role using the buttons below.', roleHost: 'Host', roleClient: 'Client', localPortLabel: 'Local UDP listen port', playerLimitLabel: 'FRP room player limit (applies immediately)', endpointLabel: 'FRP server endpoint (host:port)', endpointPlaceholder: 'frp.example.com:27045', passwordLabel: 'FRP room password (optional)', passwordPlaceholder: 'Temporary room password', frpRuntimeOff: 'FRP Direct status: disabled', frpRuntimeHost: 'FRP Direct status: Listening on UDP 27045', frpRuntimeClient: 'FRP Direct status: Waiting to connect',
-        afkTitle: 'AFK', afkIntro: 'Control automatic spectator mode for your local player in online games.', afkTip: 'This does not change manual exit, disconnect, or normal death handling.', afkToggleOff: 'Enabled: automatic AFK spectator mode', afkToggleOn: 'Disabled: automatic AFK spectator mode',
+        campaignHelp: 'Optional override for the campaign name sent with the Workshop map. Usually leave it empty.',
+        title: 'Custom Map Multiplayer', workshopNav: 'Workshop Map Settings', behaviorNav: 'Multiplayer Options', frpNav: 'FRP Direct', languageNav: 'Language', logsNav: 'Diagnostic Logs',
+        workshopTitle: 'Workshop Map Settings', workshopIntro: 'Configure Workshop maps for online games.', behaviorTitle: 'Multiplayer Options', behaviorIntro: 'Configure player behavior in online games.', workshopToggleOff: 'Disabled Workshop map injection', workshopToggleOn: 'Enabled Workshop map injection', workshopToggleHelpOff: 'Official online map selection remains unchanged.', workshopToggleHelpOn: 'Arcade online games use the configured Workshop map.', workshopHostLabel: 'Host:', workshopHostHelp: 'Use the selected Workshop map when creating the room.', workshopJoinLabel: 'Joining player:', workshopJoinHelp: "Use the host's published map when joining; the local ID does not override it.",
+          workshopStatusRefreshingKicker: 'Refreshing subscribed items', workshopStatusRefreshing: 'Checking subscribed items and local campaign files...', workshopStatusRefreshingDetail: 'Workshop titles can be filled in after Steam details finish loading.', workshopStatusEmptyKicker: 'No subscribed Workshop items', workshopStatusEmpty: '{subscribed} subscribed items returned.', workshopStatusEmptyDetail: '', workshopStatusUnavailableKicker: 'Workshop data unavailable', workshopStatusUnavailable: 'The local Workshop list could not be read.', workshopStatusUnavailableDetail: 'Manual Workshop ID input remains available.', workshopTitleReadFailed: 'Some Workshop titles could not be read; their full IDs remain available.',
+         workshopMapTitle: 'Local Workshop maps', workshopMapCopy: 'Enter an ID directly, or choose a subscribed local map.', workshopRefreshTooltip: 'Refresh local Workshop maps', workshopMapSelectLabel: 'Choose a subscribed map', workshopMapManualSelection: 'Manual Workshop ID', workshopMapNoSelection: 'No Workshop ID selected', workshopMapEnterId: 'Enter an ID above', workshopMapEmpty: 'No subscribed Workshop maps are available. Enter a Workshop ID in the field above.', workshopManualIdLabel: 'Workshop ID', workshopManualHelpReady: 'Enter the numeric ID directly, or choose a subscribed map.', workshopManualHelpRefreshing: 'The local list is refreshing. Manual ID input remains available.', workshopManualHelpEmpty: 'No subscribed map is selectable. Enter a numeric ID for a special test or a map configured by the host.', workshopIdPrefix: 'Workshop ID:', workshopIdPlaceholder: 'Numeric Workshop ID', workshopSelectionTitle: 'Choose a subscribed map', workshopSelectionIntro: 'Choose a subscribed Workshop map. Selecting a map only changes the Workshop ID.', workshopSelectionClose: 'Back to map settings', workshopSelectionClear: 'Clear search', workshopSelectionSearch: 'Search', workshopSelectionRefresh: 'Refresh subscribed Workshop maps', workshopSelectionAll: 'All', workshopSelectionRecent: 'Recent online maps', workshopSelectionStarred: 'Starred', workshopSelectionResults: '{count} results', workshopSelectionEmpty: 'No matching Workshop maps.', workshopMapSelected: 'Selected map: {title} ({id})', workshopMapFavorite: 'Star this map', workshopMapUnfavorite: 'Remove star', workshopAdvancedTitle: 'Advanced map settings', workshopAdvancedHelp: 'Optional campaign and scene values', campaignLabel: 'Workshop campaign name (optional)', sceneLabel: 'Workshop host scene (usually Test Evan2)', sceneHelp: 'Usually leave Test Evan2 unchanged. Change it only when the map author provides a different Unity scene name.',
+        frpTitle: 'FRP Direct', frpIntro: 'Configure the optional direct transport and its connection role.', frpTip: 'When disabled, the native Steam networking path is used.', frpToggleOff: 'Disabled FRP Direct networking', frpToggleOn: 'Enabled FRP Direct networking', frpToggleHelpOff: 'Native Steam networking is active.', frpToggleHelpOn: 'FRP Direct transport is active.', frpRoleLabel: 'FRP Direct role', frpRoleHelp: 'Select your FRP Direct role using the buttons below.', roleHost: 'Host', roleClient: 'Client', localPortLabel: 'Local UDP listen port', playerLimitLabel: 'FRP room player limit (applies immediately)', endpointLabel: 'FRP server endpoint (host:port)', endpointPlaceholder: 'frp.example.com:27045', passwordLabel: 'FRP room password (optional)', passwordPlaceholder: 'Temporary room password', frpRuntimeOff: 'FRP Direct status: disabled', frpRuntimeHost: 'FRP Direct status: Listening on UDP 27045', frpRuntimeClient: 'FRP Direct status: Waiting to connect',
+        afkTitle: 'AFK', afkIntro: 'Control automatic spectator mode for your local player in online games.', afkTip: 'This does not change manual exit, disconnect, or normal death handling.', afkToggleOff: 'Enabled automatic AFK spectator mode', afkToggleOn: 'Disabled automatic AFK spectator mode', overlapMeleeToggleOn: 'Enabled melee overrides player-overlap high-five', overlapMeleeToggleOff: 'Disabled player-overlap high-five', overlapMeleeToggleHelpOn: "Pressing melee while players overlap starts the selected bro's melee instead of an automatic high-five.", overlapMeleeToggleHelpOff: "Pressing melee while players overlap keeps Broforce's automatic high-five behavior.",
         languageTitle: 'Language', languageIntro: 'Choose how the UMM settings text is displayed.', languageTip: 'Follow system uses the operating system language when available.', languageLabel: 'Language', languageSystem: 'Follow system', languageEnglish: 'English', languageChinese: '中文',
         logsTitle: 'Diagnostic Logs', logsIntro: 'Choose the session identity and diagnostic output categories.', logsTip: 'These filters only affect log output and never change online behavior.', sessionLabel: 'Diagnostic session ID (use the same value on both clients; optional)', diagnosticLabel: 'Diagnostic label (optional; only used in log names)', presetLabel: 'Diagnostic log preset', presetBasic: 'Basic', presetJoin: 'Join / Rejoin', presetAfk: 'AFK / Failure', presetWorkshop: 'Workshop', presetFull: 'Full', categoriesLabel: 'Diagnostic categories (log output only; online behavior is unchanged.)', catLobby: 'Lobby and network session', catWorkshop: 'Workshop download/load/scenes', catPlayer: 'Player join/spawn/dropout', catAfk: 'AFK and Dropout', catOutcome: 'Lives/failure/level outcome', catObjects: 'Workshop items and object sync', catFrp: 'FRP Direct transport', catOptional: 'Optional Mod compatibility', catHarmony: 'Harmony detailed tracing', footer: 'Changes are saved when UMM settings are saved, the Mod is toggled, or the game exits normally.'
+        , workshopMapCloseTooltip: 'Back to map settings', workshopMapSearch: 'Search', workshopMapFilterAll: 'All', workshopMapFilterRecent: 'Recent online maps', workshopMapFilterFavorites: 'Starred', workshopMapSelectionCount: '{count} results', workshopMapSelectionEmpty: 'No matching Workshop maps.', workshopMapFavoriteTooltip: 'Star this map', workshopMapUnfavoriteTooltip: 'Remove star', workshopMapSearchClearTooltip: 'Clear search', workshopMapSelectionCurrent: 'Selected map: {title} (Workshop ID: {id})', workshopMapSelectionManual: 'Current Workshop ID: {id} (not in the subscribed list)', workshopMapSelectionNone: 'No Workshop map selected yet.', workshopMapNoSelection: 'Workshop ID is empty', workshopAdvancedTitle: 'Other map settings', sceneLabel: 'Custom level scene', workshopManualIdHelpReady: 'Enter a numeric ID directly, or choose a subscribed map.', workshopManualIdHelpRefreshing: 'The subscribed list is refreshing; manual ID input remains available.', workshopManualIdHelpEmpty: 'The list is empty; manual numeric ID input remains available.', workshopMapStatusInstalled: 'Installed and readable.', workshopMapStatusNotInstalled: 'Subscribed, but the map has not finished downloading locally.', workshopMapStatusUnreadable: 'Downloaded, but no readable campaign file was found locally.', workshopNotice: 'When using a Workshop map, all players must use the same Mod build and subscribe to the same map.\nThe host enters the numeric Workshop ID.\nAfter joining, the joining player uses the host\'s Workshop ID; this setting can be ignored.', openLogDirectory: 'Open diagnostic log directory', performanceTelemetryDisabled: 'Disabled performance telemetry', performanceTelemetryEnabled: 'Enabled performance telemetry', performanceTelemetryHelp: 'When enabled, writes a two-second aggregate summary of frame time and Mod hot paths to the diagnostic file. It does not change online behavior.', afkHelp: 'When disabled, online players are not sent to spectator mode by inactivity; manual AFK remains available.', overlapMeleeHelpEnabled: "Pressing melee while players overlap starts the selected bro's melee instead of an automatic high-five.", overlapMeleeHelpDisabled: "Pressing melee while players overlap keeps Broforce's automatic high-five behavior.",
       },
       zh: {
-        title: 'Custom Map Multiplayer', workshopNav: '多人游戏选项', frpNav: 'FRP 直连', languageNav: '语言', logsNav: '诊断日志',
-        workshopTitle: '多人游戏选项', workshopIntro: '配置 Workshop 地图注入和联机时的 AFK 行为。', workshopTip: '关闭后使用 Broforce 官方原生联机选图流程。', workshopToggleOff: '已禁用 Workshop 地图注入', workshopToggleOn: '已启用 Workshop 地图注入', workshopToggleHelpOff: '官方联机选图流程保持不变。', workshopToggleHelpOn: '使用街机模式创建线上游戏自动使用配置的 Workshop 地图。',
-        workshopNotice: '使用第三方 Workshop 地图时，所有玩家必须使用相同的 Mod 构建，订阅并完成下载同一张地图。房主在下面填写数字 Workshop ID；加入方将本地 ID 留空，并跟随房主发布的地图。', workshopIdLabel: 'Workshop ID（仅房主填写；加入方将本地 ID 留空并跟随房主发布的地图）', workshopIdPlaceholder: '数字 Workshop ID', campaignLabel: 'Workshop 战役名称（可选）', sceneLabel: '自定义关卡场景',
+        campaignHelp: '可选的战役名覆盖设置，通常留空即可。只有地图需要指定战役名时才填写。',
+        title: 'Custom Map Multiplayer', workshopNav: 'Workshop 地图配置', behaviorNav: '多人游戏选项', frpNav: 'FRP 直连', languageNav: '语言', logsNav: '诊断日志',
+        workshopTitle: 'Workshop 地图配置', workshopIntro: '配置联机时使用的 Workshop 地图。', behaviorTitle: '多人游戏选项', behaviorIntro: '配置联机时的玩家行为。', workshopToggleOff: '已禁用 Workshop 地图注入', workshopToggleOn: '已启用 Workshop 地图注入', workshopToggleHelpOff: '官方联机选图流程保持不变。', workshopToggleHelpOn: '使用街机模式创建线上游戏自动使用配置的 Workshop 地图。', workshopHostLabel: '房主：', workshopHostHelp: '创建房间时使用选中的 Workshop 地图。', workshopJoinLabel: '加入方：', workshopJoinHelp: '加入房间时使用房主发布的地图，本地 ID 不会覆盖房主配置。',
+         workshopStatusReadyKicker: '本地地图列表已就绪', workshopStatusReady: '可读取 2 张已安装 Workshop 地图。', workshopStatusReadyDetail: '已订阅但未安装或无法读取的项目仍会保留在选择列表，并显示本地状态。', workshopStatusRefreshingKicker: '正在刷新本地地图列表', workshopStatusRefreshing: '正在检查订阅项目和本地战役文件……', workshopStatusRefreshingDetail: 'Steam 详情加载完成后可以补充 Workshop 标题。', workshopStatusEmptyKicker: '没有可选择的本地地图', workshopStatusEmpty: '当前有 0 张已订阅 Workshop 地图可用。', workshopStatusEmptyDetail: '可以使用手工 ID 输入作为兜底；列表不会自动订阅或下载地图。',
+         workshopMapTitle: '本地 Workshop 地图', workshopMapCopy: '可以直接输入 ID，也可以从本机已订阅的地图中选择。', workshopRefreshTooltip: '刷新本地 Workshop 地图', workshopMapSelectLabel: '选择已订阅地图', workshopMapManualSelection: '手工 Workshop ID', workshopMapNoSelection: '未选择 Workshop ID', workshopMapEnterId: '请在上方输入 ID', workshopMapEmpty: '没有可用的已订阅 Workshop 地图。请在上方手工输入 Workshop ID。', workshopManualIdLabel: 'Workshop ID', workshopManualHelpReady: '可以直接输入数字 ID，也可以选择已订阅地图。', workshopManualHelpRefreshing: '本地列表正在刷新，仍可使用手工输入 ID。', workshopManualHelpEmpty: '当前没有可选择的已订阅地图。特殊测试或房主配置地图可以手工输入数字 ID。', workshopIdPrefix: 'Workshop ID：', workshopIdPlaceholder: '数字 Workshop ID', workshopSelectionTitle: '选择已订阅地图', workshopSelectionIntro: '选择一张已订阅的 Workshop 地图。选择地图只会修改 Workshop ID。', workshopSelectionClose: '返回地图配置', workshopSelectionClear: '清除搜索', workshopSelectionSearch: '搜索', workshopSelectionRefresh: '刷新已订阅 Workshop 地图', workshopSelectionAll: '全部', workshopSelectionRecent: '最近联机地图', workshopSelectionStarred: '已标星', workshopSelectionResults: '{count} 个结果', workshopSelectionEmpty: '没有匹配的 Workshop 地图。', workshopMapSelected: '已选择：{title}（{id}）', workshopMapFavorite: '收藏地图', workshopMapUnfavorite: '取消收藏', workshopAdvancedTitle: '高级地图设置', workshopAdvancedHelp: '可选的战役名和场景设置', campaignLabel: 'Workshop 战役名称（可选）', sceneLabel: 'Workshop 承载场景（通常为 Test Evan2）', sceneHelp: '通常保持 Test Evan2。只有地图作者明确提供其他 Unity 场景名时才修改。',
         frpTitle: 'FRP 直连', frpIntro: '配置可选的直连传输方式和连接角色。', frpTip: '关闭后使用官方 Steam 原生联机。', frpToggleOff: '已禁用 FRP 直连网络', frpToggleOn: '已启用 FRP 直连网络', frpToggleHelpOff: '当前使用原生 Steam 联机。', frpToggleHelpOn: '当前使用 FRP 直连传输。', frpRoleLabel: 'FRP 直连角色', frpRoleHelp: '使用下面的按钮选择 FRP 直连角色。', roleHost: '房主', roleClient: '加入方', localPortLabel: '本地 UDP 监听端口', playerLimitLabel: 'FRP 房间人数上限（立即生效）', endpointLabel: 'FRP 服务器地址（host:port）', endpointPlaceholder: 'frp.example.com:27045', passwordLabel: 'FRP 房间密码（可选）', passwordPlaceholder: '临时房间密码', frpRuntimeOff: 'FRP 直连状态：已关闭', frpRuntimeHost: 'FRP 直连状态：正在监听 UDP 27045', frpRuntimeClient: 'FRP 直连状态：等待连接',
-        afkTitle: 'AFK', afkIntro: '控制联机时本地玩家是否自动进入旁观模式。', afkTip: '不影响手动退出、断线或正常死亡处理。', afkToggleOff: '已启用自动 AFK 旁观模式', afkToggleOn: '已禁用自动 AFK 旁观模式',
+        afkTitle: 'AFK', afkIntro: '控制联机时本地玩家是否自动进入旁观模式。', afkTip: '不影响手动退出、断线或正常死亡处理。', afkToggleOff: '已启用 自动 AFK 旁观模式', afkToggleOn: '已禁用 自动 AFK 旁观模式', overlapMeleeToggleOn: '已启用 玩家重叠时优先执行近战', overlapMeleeToggleOff: '已禁用 玩家重叠时仍会击掌', overlapMeleeToggleHelpOn: '玩家重叠时按近战会执行当前角色的近战动作，不再自动变成击掌。', overlapMeleeToggleHelpOff: '玩家重叠时按近战会保留 Broforce 原生的自动击掌行为。',
         languageTitle: '语言', languageIntro: '选择 UMM 设置界面的显示语言。', languageTip: '跟随系统会在有对应翻译时使用操作系统语言。', languageLabel: '语言', languageSystem: '跟随系统', languageEnglish: 'English', languageChinese: '中文',
         logsTitle: '诊断日志', logsIntro: '设置会话标识和诊断日志输出分类。', logsTip: '这些选项只影响日志输出，不改变联机行为。', sessionLabel: '诊断会话 ID（双方使用相同值；可选）', diagnosticLabel: '诊断标签（可选；仅用于日志文件名）', presetLabel: '诊断日志预设', presetBasic: '基础', presetJoin: '加入/重新加入', presetAfk: 'AFK/失败', presetWorkshop: 'Workshop', presetFull: '完整', categoriesLabel: '诊断分类（只筛选日志输出，不改变联机行为。）', catLobby: '大厅和联机会话', catWorkshop: 'Workshop 下载/加载/场景', catPlayer: '玩家加入/生成/掉线', catAfk: 'AFK 和掉线', catOutcome: '生命/失败/关卡结果', catObjects: 'Workshop 道具和物件同步', catFrp: 'FRP 直连传输', catOptional: '可选 Mod 兼容性', catHarmony: 'Harmony 详细跟踪', footer: 'UMM 保存设置、切换 Mod 或正常退出游戏时会保存这些设置。'
+        , workshopMapCloseTooltip: '返回配置', workshopMapSearch: '搜索', workshopMapFilterAll: '全部', workshopMapFilterRecent: '最近联机地图', workshopMapFilterFavorites: '已标星', workshopMapSelectionCount: '{count} 个结果', workshopMapSelectionEmpty: '没有匹配的 Workshop 地图。', workshopMapFavoriteTooltip: '标星此地图', workshopMapUnfavoriteTooltip: '取消标星', workshopMapSearchClearTooltip: '清除搜索', workshopMapSelectionCurrent: '当前已选择：{title}（Workshop ID：{id}）', workshopMapSelectionManual: '当前 Workshop ID：{id}（不在已订阅列表中）', workshopMapSelectionNone: '尚未选择 Workshop 地图。', workshopMapNoSelection: 'Workshop ID 当前为空', workshopAdvancedTitle: '其它地图设置', sceneLabel: '自定义关卡场景', workshopManualIdHelpReady: '直接输入数字 ID，或从已订阅地图中选择。', workshopManualIdHelpRefreshing: '已订阅项目正在刷新，仍可手工输入 ID。', workshopManualIdHelpEmpty: '列表为空，仍可手工输入数字 ID。', workshopMapStatusInstalled: '已安装，可以读取地图文件。', workshopMapStatusNotInstalled: '已订阅，但地图尚未完整下载到本机。', workshopMapStatusUnreadable: '已下载，但本机找不到或无法读取有效战役文件。', workshopNotice: '使用 Workshop 地图时，所有玩家必须使用相同的 Mod 构建，并订阅同一张地图。\\n房主填写数字 Workshop ID；\\n进入房间后，加入方则会使用房主的 Workshop ID，此项无需留意。', workshopStatusUnavailableKicker: 'Workshop 数据不可用', workshopStatusUnavailable: '无法读取本机 Workshop 列表。', workshopStatusUnavailableDetail: '仍可手工输入 Workshop ID。', workshopTitleReadFailed: '部分 Workshop 标题读取失败，仍可使用完整 ID。', openLogDirectory: '打开诊断日志目录', performanceTelemetryDisabled: '已禁用性能观测', performanceTelemetryEnabled: '已启用性能观测', performanceTelemetryHelp: '启用后每两秒向诊断文件写入一次帧时间和 Mod 热路径聚合摘要，不改变联机行为。', afkHelp: '关闭后，联机玩家不会因长时间无操作自动进入观 望；仍可手动进入 AFK。', overlapMeleeHelpEnabled: '玩家重叠时按近战会执行当前角色的近战动作，不再自动变成击掌。', overlapMeleeHelpDisabled: '玩家重叠时按近战会保留 Broforce 原生的自动击掌行为。'
+        , workshopStatusRefreshingKicker: '正在刷新已订阅项目', workshopStatusRefreshing: '正在检查订阅项目和本地战役文件……', workshopStatusRefreshingDetail: 'Steam 详情加载完成后可以补充 Workshop 标题。', workshopStatusEmptyKicker: '没有已订阅 Workshop 项目', workshopStatusEmpty: '已订阅 {subscribed} 项。', workshopStatusEmptyDetail: '', afkHelp: '关闭后，联机玩家不会因长时间无操作自动进入观战；仍可手动进入 AFK。'
       }
     };
+    translations.en.workshopMapClearFavoritesTooltip = 'Clear all starred maps';
+    translations.zh.workshopMapClearFavoritesTooltip = '取消全部星标';
+    translations.en.sceneHelp = translations.en.sceneHelp.replace('unchanged. Change', 'unchanged.\nChange');
+    translations.zh.sceneHelp = translations.zh.sceneHelp.replace('Test Evan2。只有', 'Test Evan2。\n只有');
 
     const navItems = document.querySelectorAll('.nav-item');
     const views = document.querySelectorAll('[data-view-content]');
     const languageButtons = document.querySelectorAll('[data-language-choice]');
     const workshopToggle = document.getElementById('workshop-toggle');
+    const workshopStatus = document.getElementById('workshop-status');
+    const workshopSelectionDirectoryStatus = document.getElementById('workshop-selection-directory-status');
+    const workshopConfigView = document.getElementById('workshop-config-view');
+    const workshopSelectionView = document.getElementById('workshop-selection-view');
+    const workshopMapOpen = document.getElementById('workshop-map-open');
+    const workshopSelectionClose = document.getElementById('workshop-selection-close');
+    const workshopSelectionSearch = document.getElementById('workshop-selection-search');
+    const workshopSelectionClear = document.getElementById('workshop-selection-clear');
+    const workshopSelectionClearFavorites = document.getElementById('workshop-selection-clear-favorites');
+    const workshopSelectionRefresh = document.getElementById('workshop-selection-refresh');
+    const workshopFilterButtons = document.querySelectorAll('[data-workshop-filter]');
+    const workshopMapCards = Array.from(document.querySelectorAll('.workshop-map-card'));
+    const workshopManualId = document.getElementById('workshop-manual-id');
+    const workshopManualHelp = document.getElementById('workshop-manual-help');
+    const workshopSelectionCurrent = document.getElementById('workshop-selection-current');
+    const workshopMapGrid = document.getElementById('workshop-map-grid');
+    const workshopSelectionEmpty = document.getElementById('workshop-selection-empty');
     const frpToggle = document.getElementById('frp-toggle');
     const afkToggle = document.getElementById('afk-toggle');
+    const overlapMeleeToggle = document.getElementById('overlap-melee-toggle');
+    const performanceToggle = document.getElementById('performance-toggle');
     let languagePreference = 'system';
     let activeLocale = 'en';
+    let workshopPreviewState = ['#refreshing', '#empty', '#unavailable', '#title-failure'].includes(window.location.hash)
+      ? window.location.hash.slice(1)
+      : 'ready';
+    let workshopSelectionFilter = 'all';
+    let workshopSelectionSearchText = '';
 
     function systemLocale() {
       return (navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en';
@@ -367,6 +616,10 @@
         else item.removeAttribute('aria-current');
       });
       views.forEach((view) => { view.hidden = view.dataset.viewContent !== viewName; });
+      if (viewName !== 'workshop') {
+        workshopSelectionView.hidden = true;
+        workshopConfigView.hidden = false;
+      }
     }
 
     function applyLanguage() {
@@ -375,9 +628,15 @@
       document.documentElement.lang = activeLocale === 'zh' ? 'zh-CN' : 'en';
       document.querySelectorAll('[data-i18n]').forEach((element) => { element.textContent = copy[element.dataset.i18n]; });
       document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => { element.placeholder = copy[element.dataset.i18nPlaceholder]; });
+      document.querySelectorAll('[data-i18n-title]').forEach((element) => { element.title = copy[element.dataset.i18nTitle]; element.setAttribute('aria-label', copy[element.dataset.i18nTitle]); });
       updateWorkshopToggleCopy();
+      updateWorkshopMapCards();
+      updateWorkshopSelection();
+      updateWorkshopPreviewState();
       updateFrpRuntimeStatus();
       updateAfkStatus();
+      updateOverlapMeleeStatus();
+      updatePerformanceStatus();
     }
 
     function updateWorkshopToggleCopy() {
@@ -387,6 +646,155 @@
       help.dataset.i18n = workshopToggle.checked ? 'workshopToggleHelpOn' : 'workshopToggleHelpOff';
       title.textContent = translations[activeLocale][title.dataset.i18n];
       help.textContent = translations[activeLocale][help.dataset.i18n];
+    }
+
+    function updateWorkshopMapCards() {
+      const copy = translations[activeLocale];
+      workshopMapCards.forEach((card) => {
+        const title = activeLocale === 'zh' ? card.dataset.mapTitleZh : card.dataset.mapTitleEn;
+        card.querySelector('.map-card-title').textContent = title;
+        card.querySelector('.map-card-id').textContent = card.dataset.mapId;
+        const statusKey = card.dataset.mapState === 'installed'
+          ? 'workshopMapStatusInstalled'
+          : card.dataset.mapState === 'unreadable'
+            ? 'workshopMapStatusUnreadable'
+            : 'workshopMapStatusNotInstalled';
+        card.querySelector('.map-card-button').title = copy[statusKey];
+        const favorite = card.dataset.favorite === 'true';
+        const favoriteButton = card.querySelector('.map-card-favorite');
+        favoriteButton.textContent = favorite ? '★' : '☆';
+        favoriteButton.setAttribute('aria-pressed', String(favorite));
+        favoriteButton.title = copy[favorite ? 'workshopMapUnfavoriteTooltip' : 'workshopMapFavoriteTooltip'];
+        favoriteButton.setAttribute('aria-label', favoriteButton.title);
+      });
+      updateWorkshopSelectedState();
+    }
+
+    function updateWorkshopSelectedState() {
+      const selectedId = workshopManualId.value.trim();
+      const selectedCard = workshopMapCards.find((card) => card.dataset.mapId === selectedId);
+      const copy = translations[activeLocale];
+      workshopMapCards.forEach((card) => card.setAttribute('aria-selected', String(card === selectedCard)));
+      const selectedText = selectedCard
+        ? copy.workshopMapSelectionCurrent.replace('{title}', activeLocale === 'zh' ? selectedCard.dataset.mapTitleZh : selectedCard.dataset.mapTitleEn).replace('{id}', selectedId)
+        : selectedId
+          ? copy.workshopMapSelectionManual.replace('{id}', selectedId)
+          : copy.workshopMapSelectionNone;
+      const triggerTitle = selectedCard
+        ? activeLocale === 'zh' ? selectedCard.dataset.mapTitleZh : selectedCard.dataset.mapTitleEn
+        : selectedId ? copy.workshopMapManualSelection : copy.workshopMapNoSelection;
+      const triggerId = selectedCard
+        ? selectedId
+        : selectedId ? copy.workshopIdPrefix + ' ' + selectedId : '';
+      workshopMapOpen.querySelector('.map-trigger-title').textContent = triggerTitle;
+      workshopMapOpen.querySelector('.map-trigger-id').textContent = triggerId;
+      workshopMapOpen.classList.toggle('empty', !selectedCard && !selectedId);
+      workshopSelectionCurrent.textContent = selectedText;
+    }
+
+    function updateWorkshopSelection() {
+      const search = workshopSelectionSearchText.trim().toLowerCase();
+      const copy = translations[activeLocale];
+      const directoryHasItems = workshopPreviewState !== 'empty' && workshopPreviewState !== 'unavailable';
+      let visibleCount = 0;
+      workshopMapCards.forEach((card) => {
+        const title = (activeLocale === 'zh' ? card.dataset.mapTitleZh : card.dataset.mapTitleEn).toLowerCase();
+        const matchesSearch = !search || title.includes(search) || card.dataset.mapId.includes(search);
+        const matchesFilter = workshopSelectionFilter === 'all' ||
+          (workshopSelectionFilter === 'recent' && card.dataset.recent === 'true') ||
+          (workshopSelectionFilter === 'favorites' && card.dataset.favorite === 'true');
+        const visible = directoryHasItems && matchesSearch && matchesFilter;
+        card.hidden = !visible;
+        if (visible) visibleCount += 1;
+      });
+      const allCount = workshopMapCards.filter((card) => {
+        const title = (activeLocale === 'zh' ? card.dataset.mapTitleZh : card.dataset.mapTitleEn).toLowerCase();
+        return directoryHasItems && (!search || title.includes(search) || card.dataset.mapId.includes(search));
+      }).length;
+      const recentCount = workshopMapCards.filter((card) => {
+        const title = (activeLocale === 'zh' ? card.dataset.mapTitleZh : card.dataset.mapTitleEn).toLowerCase();
+        return directoryHasItems && card.dataset.recent === 'true' && (!search || title.includes(search) || card.dataset.mapId.includes(search));
+      }).length;
+      const favoriteCount = workshopMapCards.filter((card) => {
+        const title = (activeLocale === 'zh' ? card.dataset.mapTitleZh : card.dataset.mapTitleEn).toLowerCase();
+        return directoryHasItems && card.dataset.favorite === 'true' && (!search || title.includes(search) || card.dataset.mapId.includes(search));
+      }).length;
+      const hasFavorites = directoryHasItems && workshopMapCards.some((card) => card.dataset.favorite === 'true');
+      workshopSelectionClearFavorites.hidden = workshopSelectionFilter !== 'favorites' || !hasFavorites;
+      workshopFilterButtons.forEach((button) => {
+        const filter = button.dataset.workshopFilter;
+        const count = filter === 'all' ? allCount : filter === 'recent' ? recentCount : favoriteCount;
+        const base = filter === 'all' ? copy.workshopMapFilterAll :
+          filter === 'recent' ? copy.workshopMapFilterRecent : copy.workshopMapFilterFavorites;
+        const label = filter === 'recent'
+          ? base
+          : base + ' (' + copy.workshopMapSelectionCount.replace('{count}', String(count)) + ')';
+        button.textContent = label;
+        button.setAttribute('aria-pressed', String(filter === workshopSelectionFilter));
+      });
+      workshopSelectionEmpty.hidden = visibleCount !== 0;
+      updateWorkshopSelectedState();
+    }
+
+    function openWorkshopMapSelection() {
+      workshopConfigView.hidden = true;
+      workshopSelectionView.hidden = false;
+      updateWorkshopSelection();
+    }
+
+    function closeWorkshopMapSelection() {
+      workshopSelectionView.hidden = true;
+      workshopConfigView.hidden = false;
+    }
+
+    function updateWorkshopPreviewState() {
+      const copy = translations[activeLocale];
+      const state = workshopPreviewState;
+      const status = state === 'refreshing'
+        ? ['workshopStatusRefreshingKicker', 'workshopStatusRefreshing', 'workshopStatusRefreshingDetail']
+        : state === 'empty'
+          ? ['workshopStatusEmptyKicker', 'workshopStatusEmpty', 'workshopStatusEmptyDetail']
+          : state === 'unavailable'
+            ? ['workshopStatusUnavailableKicker', 'workshopStatusUnavailable', 'workshopStatusUnavailableDetail']
+            : state === 'title-failure'
+              ? ['', 'workshopTitleReadFailed', '']
+              : ['', '', ''];
+      [workshopStatus, workshopSelectionDirectoryStatus].forEach((container) => {
+        const kicker = container.querySelector('.status-kicker');
+        const line = container.querySelector('.status-line');
+        const detail = container.querySelector('.status-detail');
+        container.dataset.state = state;
+        container.hidden = state === 'ready';
+        kicker.hidden = !status[0];
+        line.hidden = !status[1];
+        detail.hidden = !status[2];
+        kicker.textContent = status[0] ? copy[status[0]] : '';
+        line.textContent = status[1] ? copy[status[1]].replace('{subscribed}', '4') : '';
+        detail.textContent = status[2] ? copy[status[2]] : '';
+      });
+      const helpKey = state === 'refreshing' ? 'workshopManualHelpRefreshing' :
+        state === 'empty' || state === 'unavailable' ? 'workshopManualHelpEmpty' : 'workshopManualHelpReady';
+      workshopManualHelp.textContent = copy[helpKey];
+      const mapSelectionDisabled = state === 'refreshing' || state === 'empty' || state === 'unavailable';
+      workshopMapOpen.disabled = mapSelectionDisabled;
+      workshopMapOpen.hidden = state === 'empty' || state === 'unavailable';
+      workshopSelectionRefresh.disabled = state === 'refreshing';
+      workshopMapGrid.hidden = state === 'empty' || state === 'unavailable';
+      updateWorkshopSelection();
+    }
+
+    function selectWorkshopMap(card) {
+      workshopManualId.value = card.dataset.mapId;
+      updateWorkshopSelection();
+    }
+
+    function updateWorkshopMapSelectionFromManualId() {
+      updateWorkshopSelection();
+    }
+
+    function setWorkshopPreviewState(state) {
+      workshopPreviewState = state;
+      updateWorkshopPreviewState();
     }
 
     function updateFrpRuntimeStatus() {
@@ -406,6 +814,21 @@
     function updateAfkStatus() {
       const title = document.getElementById('afk-toggle-title');
       title.dataset.i18n = afkToggle.checked ? 'afkToggleOn' : 'afkToggleOff';
+      title.textContent = translations[activeLocale][title.dataset.i18n];
+    }
+
+    function updateOverlapMeleeStatus() {
+      const title = document.getElementById('overlap-melee-toggle-title');
+      const help = document.getElementById('overlap-melee-help');
+      title.dataset.i18n = overlapMeleeToggle.checked ? 'overlapMeleeToggleOn' : 'overlapMeleeToggleOff';
+      help.dataset.i18n = overlapMeleeToggle.checked ? 'overlapMeleeHelpEnabled' : 'overlapMeleeHelpDisabled';
+      title.textContent = translations[activeLocale][title.dataset.i18n];
+      help.textContent = translations[activeLocale][help.dataset.i18n];
+    }
+
+    function updatePerformanceStatus() {
+      const title = document.getElementById('performance-toggle-title');
+      title.dataset.i18n = performanceToggle.checked ? 'performanceTelemetryEnabled' : 'performanceTelemetryDisabled';
       title.textContent = translations[activeLocale][title.dataset.i18n];
     }
 
@@ -431,8 +854,53 @@
       });
     });
     workshopToggle.addEventListener('change', updateWorkshopToggleCopy);
+    workshopMapOpen.addEventListener('click', openWorkshopMapSelection);
+    workshopSelectionClose.addEventListener('click', closeWorkshopMapSelection);
+    workshopSelectionSearch.addEventListener('input', () => {
+      workshopSelectionSearchText = workshopSelectionSearch.value;
+      updateWorkshopSelection();
+    });
+    workshopSelectionClear.addEventListener('click', () => {
+      workshopSelectionSearch.value = '';
+      workshopSelectionSearchText = '';
+      updateWorkshopSelection();
+    });
+    workshopFilterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        workshopSelectionFilter = button.dataset.workshopFilter;
+        updateWorkshopSelection();
+      });
+    });
+    workshopSelectionClearFavorites.addEventListener('click', () => {
+      workshopMapCards.forEach((card) => { card.dataset.favorite = 'false'; });
+      updateWorkshopSelection();
+    });
+    document.querySelectorAll('.preset-grid').forEach((group) => {
+      group.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        group.querySelectorAll('button').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      });
+    });
+    workshopMapCards.forEach((card) => {
+      card.querySelector('.map-card-button').addEventListener('click', () => selectWorkshopMap(card));
+      card.querySelector('.map-card-favorite').addEventListener('click', () => {
+        card.dataset.favorite = String(card.dataset.favorite !== 'true');
+        updateWorkshopSelection();
+      });
+    });
+    workshopManualId.addEventListener('input', updateWorkshopMapSelectionFromManualId);
+    workshopSelectionRefresh.addEventListener('click', () => {
+      setWorkshopPreviewState('refreshing');
+      window.setTimeout(() => setWorkshopPreviewState('ready'), 900);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !workshopSelectionView.hidden) closeWorkshopMapSelection();
+    });
     frpToggle.addEventListener('change', updateFrpRuntimeStatus);
     afkToggle.addEventListener('change', updateAfkStatus);
+    overlapMeleeToggle.addEventListener('change', updateOverlapMeleeStatus);
+    performanceToggle.addEventListener('change', updatePerformanceStatus);
     applyLanguage();
     selectView('workshop');
   </script>

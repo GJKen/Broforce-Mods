@@ -21,6 +21,14 @@
 
 关闭注入时必须清理 `_injectedForSession`、`GameState.loadCustomCampaign`、`customLevelID`、`sceneToLoad`、Workshop Lobby 元数据及暂停/切关状态。统一入口为 `ClearInjectedWorkshopRuntimeState`，覆盖 UMM 关闭开关、停用/卸载 Mod 和 Steam `LeaveMatch`。热关闭不会主动切换当前场景；退出并重新创建官方房间后恢复原生选图。
 
+## Workshop 地图目录与选择页
+
+UMM 左侧的 `Workshop 地图配置` 页面同时支持手工 ID 和已订阅地图选择。点击“选择已订阅地图”后，Workshop 配置内容区切换为地图选择页，不使用 `GUI.Window` 或屏幕坐标浮层；右上角 `X` 或 `Esc` 返回配置页。选择地图后只保存 `Settings.WorkshopId`，不会自动返回，也不会覆盖战役名或场景名。
+
+地图目录来自 Steam 本机已订阅项目。选择页支持标题或 Workshop ID 搜索、`全部`、`最近联机地图`、`已标星`筛选、手动刷新和收藏。当前处于`已标星`且存在星标地图时，标签旁显示 `×`，点击会清空全部本地星标，但不会取消 Steam 订阅；`全部`和`最近联机地图`标签不显示该按钮。地图以两列网格显示，标题保持单行；已选地图使用高亮边框和状态提示。目录会保留未安装、未完整下载和战役文件不可读的项目，手工输入不在目录中的数字 ID 仍然有效。
+
+Mod 不会替用户订阅、搜索社区或主动下载地图。实际地图下载仍由 Broforce/Steam 原生流程处理。`最近联机地图`只在 Workshop 地图完成加载后记录，不限制数量；旧版本按点击选择保存的历史会在设置迁移时清空一次。
+
 ## Workshop 加载缓存
 
 `SteamController.LoadLevel` 在有效 Workshop 线上会话中会先检查 Steam 已安装的 Workshop 目录，并尝试读取目录内的本地战役文件；读取失败或内容不可用时，才继续原生 Steam UGC 下载流程。旧版 UGC 回调中的可读缓存也可以直接完成当前地图加载。

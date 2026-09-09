@@ -8,6 +8,8 @@ namespace CustomMapMultiplayer
         public bool DisableOnlineAfkSpectatorMode;
         public bool DisablePlayerOverlapHighFive;
         public string WorkshopId;
+        public string WorkshopFavoriteIds;
+        public string WorkshopRecentIds;
         public string WorkshopCampaignName;
         public string WorkshopSceneName;
         public string DiagnosticSessionId;
@@ -51,6 +53,8 @@ namespace CustomMapMultiplayer
             DisableOnlineAfkSpectatorMode = false;
             DisablePlayerOverlapHighFive = true;
             WorkshopId = string.Empty;
+            WorkshopFavoriteIds = string.Empty;
+            WorkshopRecentIds = string.Empty;
             WorkshopCampaignName = string.Empty;
             WorkshopSceneName = DefaultWorkshopSceneName;
             DiagnosticSessionId = string.Empty;

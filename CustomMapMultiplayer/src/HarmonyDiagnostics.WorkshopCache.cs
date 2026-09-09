@@ -220,7 +220,14 @@ namespace CustomMapMultiplayer
 
         private static void WorkshopLevelLoadCompletePostfix()
         {
+            var workshopId = _workshopLoadRequestPending
+                ? _workshopLoadRequestId
+                : 0;
             ClearWorkshopLoadRequest();
+            if (workshopId != 0)
+            {
+                Plugin.RecordWorkshopMapUsage(workshopId);
+            }
         }
 
         private static void QueueCachedWorkshopCompletion(
@@ -272,13 +279,48 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static bool TryLoadInstalledWorkshopCampaign(
+        internal static bool TryLoadInstalledWorkshopCampaign(
             object publishedFileId,
             out Campaign campaign,
             out string cacheSource)
         {
             campaign = null;
             cacheSource = string.Empty;
+            string folder;
+            if (!TryGetInstalledWorkshopFolder(publishedFileId, out folder))
+            {
+                return false;
+            }
+
+            if (!TryLoadCampaignFromFolder(folder, out campaign))
+            {
+                DiagnosticLog.Trace(
+                    "Steam reported an installed Workshop folder without a readable campaign: " +
+                    folder + ".");
+                return false;
+            }
+
+            cacheSource = "installed-folder";
+            return true;
+        }
+
+        internal static WorkshopMapLocalState GetWorkshopMapLocalState(object publishedFileId)
+        {
+            string folder;
+            if (!TryGetInstalledWorkshopFolder(publishedFileId, out folder))
+            {
+                return WorkshopMapLocalState.NotInstalled;
+            }
+
+            Campaign campaign;
+            return TryLoadCampaignFromFolder(folder, out campaign)
+                ? WorkshopMapLocalState.InstalledReadable
+                : WorkshopMapLocalState.CampaignUnreadable;
+        }
+
+        private static bool TryGetInstalledWorkshopFolder(object publishedFileId, out string folder)
+        {
+            folder = string.Empty;
             var steamUgcType = AccessTools.TypeByName("Steamworks.SteamUGC");
             var getInstallInfo = steamUgcType == null
                 ? null
@@ -303,22 +345,8 @@ namespace CustomMapMultiplayer
                     return false;
                 }
 
-                var folder = arguments[2] as string;
-                if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
-                {
-                    return false;
-                }
-
-                if (!TryLoadCampaignFromFolder(folder, out campaign))
-                {
-                    DiagnosticLog.Trace(
-                        "Steam reported an installed Workshop folder without a readable campaign: " +
-                        folder + ".");
-                    return false;
-                }
-
-                cacheSource = "installed-folder";
-                return true;
+                folder = arguments[2] as string;
+                return !string.IsNullOrEmpty(folder) && Directory.Exists(folder);
             }
             catch (Exception exception)
             {
@@ -431,7 +459,7 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static bool TryGetPublishedFileId(object value, out ulong workshopId)
+        internal static bool TryGetPublishedFileId(object value, out ulong workshopId)
         {
             workshopId = 0;
             if (value == null)
@@ -439,20 +467,17 @@ namespace CustomMapMultiplayer
                 return false;
             }
 
-            var id = GetFieldOrPropertyValue(value, "m_PublishedFileId");
-            if (id == null)
+            var id = GetFieldOrPropertyValue(value, "m_PublishedFileId") ?? value;
+            var numericId = GetFieldOrPropertyValue(id, "m_PublishedFileId") ?? id;
+            try
+            {
+                workshopId = Convert.ToUInt64(numericId);
+                return true;
+            }
+            catch
             {
                 return false;
             }
-
-            var numericId = GetFieldOrPropertyValue(id, "m_PublishedFileId");
-            if (numericId == null)
-            {
-                return false;
-            }
-
-            workshopId = Convert.ToUInt64(numericId);
-            return true;
         }
 
         private static void ClearWorkshopLoadRequest()

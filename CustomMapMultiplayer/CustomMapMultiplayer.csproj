@@ -72,6 +72,7 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopLobby.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopIdentity.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopCache.cs" />
+    <Compile Include="src\WorkshopMapDirectory.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopPickup.cs" />
     <Compile Include="src\HarmonyDiagnostics.Afk.cs" />
     <Compile Include="src\HarmonyDiagnostics.Chat.cs" />

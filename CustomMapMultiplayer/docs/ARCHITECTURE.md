@@ -23,6 +23,7 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 - `src/DiagnosticLog.cs`：普通会话日志、Harmony 追踪、分类过滤和刷新。
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：大厅、关卡切换、Workshop 加载、玩家和英雄流程。
+- `src/WorkshopMapDirectory.cs`：枚举 Steam 已订阅项目、读取本地地图状态、查询 Workshop 标题并维护选择页目录。
 - `src/HarmonyDiagnostics.WorkshopIdentity.cs`：房主地图身份发布、加入方会话配置采用、Steam 订阅检测和缺图加载保护。
 - `src/HarmonyDiagnostics.WorkshopPlayer.cs`：Workshop 本地玩家请求、控制器所有权、掉线重入和英雄类型恢复。
 - `src/HarmonyDiagnostics.WorkshopPickup.cs`：道具确定性、拾取所有权、幂等和满弹药退避。

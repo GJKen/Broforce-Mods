@@ -1,5 +1,6 @@
 using HarmonyLib;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 
 namespace CustomMapMultiplayer
@@ -218,6 +219,41 @@ namespace CustomMapMultiplayer
         {
             try
             {
+                List<object> subscribedItems;
+                string failure;
+                if (!TryGetSubscribedWorkshopItems(out subscribedItems, out failure))
+                {
+                    return WorkshopSubscriptionStatus.Unknown;
+                }
+
+                for (var index = 0; index < subscribedItems.Count; index++)
+                {
+                    ulong subscribedWorkshopId;
+                    if (TryGetPublishedFileId(subscribedItems[index], out subscribedWorkshopId) &&
+                        subscribedWorkshopId == workshopId)
+                    {
+                        return WorkshopSubscriptionStatus.Subscribed;
+                    }
+                }
+
+                return WorkshopSubscriptionStatus.Missing;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Trace(
+                    "Steam Workshop subscription check was unavailable: " + exception.Message);
+                return WorkshopSubscriptionStatus.Unknown;
+            }
+        }
+
+        internal static bool TryGetSubscribedWorkshopItems(
+            out List<object> subscribedItems,
+            out string failure)
+        {
+            subscribedItems = new List<object>();
+            failure = string.Empty;
+            try
+            {
                 var steamControllerType = AccessTools.TypeByName("SteamController");
                 var isSteamEnabled = steamControllerType == null
                     ? null
@@ -227,7 +263,8 @@ namespace CustomMapMultiplayer
                 if (isSteamEnabled != null &&
                     !Convert.ToBoolean(isSteamEnabled.Invoke(null, null)))
                 {
-                    return WorkshopSubscriptionStatus.Unknown;
+                    failure = "Steam Workshop is unavailable.";
+                    return false;
                 }
 
                 var steamUgcType = AccessTools.TypeByName("Steamworks.SteamUGC");
@@ -244,51 +281,41 @@ namespace CustomMapMultiplayer
                         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                 if (publishedFileIdType == null || getCount == null || getItems == null)
                 {
-                    return WorkshopSubscriptionStatus.Unknown;
+                    failure = "Steam Workshop API is unavailable.";
+                    return false;
                 }
 
                 var count = Convert.ToUInt32(getCount.Invoke(null, null));
-                if (count == 0)
-                {
-                    return WorkshopSubscriptionStatus.Missing;
-                }
                 if (count > 100000)
                 {
                     DiagnosticLog.Warning(
                         "Steam Workshop subscription count was unexpectedly large; subscription check skipped: " +
                         count + ".");
-                    return WorkshopSubscriptionStatus.Unknown;
+                    failure = "Steam Workshop returned an invalid subscription list.";
+                    return false;
                 }
 
-                var subscribedItems = Array.CreateInstance(publishedFileIdType, (int)count);
+                var items = Array.CreateInstance(publishedFileIdType, (int)count);
                 var returnedCount = Convert.ToUInt32(getItems.Invoke(
                     null,
-                    new object[] { subscribedItems, count }));
-                var idField = publishedFileIdType.GetField(
-                    "m_PublishedFileId",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                if (idField == null)
-                {
-                    return WorkshopSubscriptionStatus.Unknown;
-                }
-
-                var safeReturnedCount = global::System.Math.Min((int)returnedCount, subscribedItems.Length);
+                    new object[] { items, count }));
+                var safeReturnedCount = global::System.Math.Min((int)returnedCount, items.Length);
                 for (var index = 0; index < safeReturnedCount; index++)
                 {
-                    var item = subscribedItems.GetValue(index);
-                    if (item != null && Convert.ToUInt64(idField.GetValue(item)) == workshopId)
+                    var item = items.GetValue(index);
+                    if (item != null)
                     {
-                        return WorkshopSubscriptionStatus.Subscribed;
+                        subscribedItems.Add(item);
                     }
                 }
-
-                return WorkshopSubscriptionStatus.Missing;
+                return true;
             }
             catch (Exception exception)
             {
+                failure = "Steam Workshop data could not be read.";
                 DiagnosticLog.Trace(
-                    "Steam Workshop subscription check was unavailable: " + exception.Message);
-                return WorkshopSubscriptionStatus.Unknown;
+                    "Steam Workshop subscription enumeration was unavailable: " + exception.Message);
+                return false;
             }
         }
 

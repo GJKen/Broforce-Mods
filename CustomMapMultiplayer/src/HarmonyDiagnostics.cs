@@ -340,6 +340,7 @@ namespace CustomMapMultiplayer
             PatchSwitchLevelTranspiler();
             PatchWorldMapEnterMissionTranspiler();
             PatchGameStateLoadLevelPrefix();
+            WorkshopMapDirectory.PatchNativeWorkshopCampaignEntries(_harmony);
             PatchWorkshopLoadCache();
             PatchLateHeroResponseGuard();
             PatchWorkshopHeroTypePreservation();

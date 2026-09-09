@@ -12,8 +12,8 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=e305f8e8b4b55cc49c29dc469a005ce1c5bcd481f6025e49c01f7dfa4976b924` |
-| DLL SHA-256 | `0B6B74BD28D7B8AB06A1E9E8AC94772E156E9B761A0CB4DB4B737AF60C08188D` |
+| Current distributed build | `buildHash=698d416afe619519a1926a7928922add782198dfc507852570bc12202a487ee2` |
+| DLL SHA-256 | `92A9045FA4A646C9EA3D0FC436B39262B131A49B133B53C000BBAAAC9C04F79E` |
 | DLL assembly version | `0.5.0.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
@@ -61,11 +61,12 @@ The current scope does not include continuous synchronization of active AI, enem
 1. Have every player install `r2modman`, create or select the default profile for Broforce, and install UMM in that profile. Start the game once to confirm that UMM loads successfully.
 2. Import `Release\CustomMapMultiplayer.zip` into the Broforce profile in r2modman. The ZIP already contains the DLL and `Info.json` under `UMM\Mods\CustomMapMultiplayer`.
 3. Configure the Workshop map and injection options:
-   - Both players should subscribe to and download the same Workshop map, then enable Workshop map injection in `Multiplayer Options`.
-   - Only the host needs to enter the map's Workshop ID in UMM. The campaign name can be left blank, the default scene name is `Test Evan2`, and the scene name can be changed when another map scene is used.
+   - Both players should subscribe to and download the same Workshop map, then enable Workshop map injection in the separate `Workshop Map Settings` page.
+   - The host can enter a numeric Workshop ID manually or open `Choose a subscribed map`. The campaign name can be left blank, the default scene name is `Test Evan2`, and the scene name can be changed when another map scene is used.
+   - The map page supports title/ID search, All, Recent online maps, Starred, refresh, and favorites. When the Starred tab is active and contains maps, `×` appears beside it and clears all starred maps at once; it does not unsubscribe from Steam Workshop, and it is hidden on the other tabs. Selecting a map changes only the Workshop ID, does not change the campaign or scene name, and keeps the user on the selection page until the top-right `X` is used.
    - The joining player does not need to enter a Workshop ID. Even if a saved local ID is incorrect, the client adopts the host's published Workshop ID after joining the room.
    - If a joining player has not subscribed to the host's map, a missing-subscription notice appears at the top of the screen. Follow the notice to subscribe to the map.
-   - When Workshop map injection and FRP Direct are disabled, leave the current room and create an official Arcade online lobby again to restore the official map flow.
+   - The Mod does not subscribe, search the community, or actively download maps; Broforce/Steam handles map downloads. When Workshop map injection and FRP Direct are disabled, leave the current room and create an official Arcade online lobby again to restore the official map flow.
    - Configuration image:
 
      ![UMM settings interface](https://github.com/user-attachments/assets/a39d9e2c-c5e0-48fd-a3a4-67731b9a61c8)
@@ -76,7 +77,8 @@ The current scope does not include continuous synchronization of active AI, enem
 
 The actual UMM settings page uses a vertical feature list on the left and displays the selected feature's content on the right:
 
-- `Multiplayer Options`: Workshop map injection, automatic AFK spectator mode, and the player-overlap melee toggle; the manual AFK button is in the in-game Esc menu.
+- `Workshop Map Settings`: Workshop map injection, manual Workshop ID, subscribed-map selection, search, filters, favorites, and recent online maps; advanced campaign and scene settings remain in this page.
+- `Multiplayer Options`: Automatic AFK spectator mode and the player-overlap melee toggle; the manual AFK button is in the in-game Esc menu.
 - `FRP Direct`: Direct-transport toggle, Host/Client role, ports, player limit, and connection parameters.
 - `Language`: Click the Follow system, English, or Chinese button to change the interface language.
 - `Diagnostic Logs`: Diagnostic session identity, log presets, and diagnostic categories.
@@ -85,7 +87,7 @@ The actual UMM settings page uses a vertical feature list on the left and displa
 
 ### Common Settings
 
-- When Workshop map injection is disabled in `Multiplayer Options`, the setting is saved immediately and injection state is cleared. The current scene is not forcibly interrupted or changed. Leave the current room and create an official room again from the menu to return to the native map-selection flow; the saved Workshop ID does not need to be deleted.
+- When Workshop map injection is disabled in `Workshop Map Settings`, the setting is saved immediately and injection state is cleared. The current scene is not forcibly interrupted or changed. Leave the current room and create an official room again from the menu to return to the native map-selection flow; the saved Workshop ID does not need to be deleted.
 - `Diagnostic session ID` associates logs from the same test round; use the same value on both sides. `Diagnostic label` only affects log file names and does not participate in multiplayer behavior.
 - The `Multiplayer Options` AFK toggle is controlled independently on each client. When it is unchecked, the label says `Enabled: automatic AFK spectator mode`; when it is checked, the label says `Disabled: automatic AFK spectator mode`. To protect both characters, both players must check the option. It does not intercept manual exit, disconnects, or normal deaths.
 - `Multiplayer Options` enables `melee overrides player-overlap high-five` by default. When enabled, pressing melee while players overlap starts the selected bro's melee; when disabled, Broforce's automatic high-five behavior is restored.
