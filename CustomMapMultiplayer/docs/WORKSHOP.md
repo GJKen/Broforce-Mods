@@ -65,6 +65,12 @@ Host 只在晚加入 Workshop 会话中放宽 `RequestJoinGame` 的关卡完成�
 
 Workshop 玩家发生 `Dropout` 后，按槽位保存英雄类型和本地 `playerControllerIDs`。重新请求英雄、备用生成和 `AddLocalPlayer` 优先恢复这些值；`Player.Start`/`登记` 阶段修正原生写回的错误控制器。角色存在但无法操作时，优先比较掉线前后的控制器绑定，而不是只检查 `character`。
 
+## Workshop 出生点与复活位置
+
+`多人游戏选项` 中的 `Workshop 复活位置修复` 默认启用。有效的 Workshop 联机注入场景中，Mod 只在角色首次部署时记录一个稳定的直接地图出生点：`CustomSpawnPoint`、非空投且坐标有效。后续 `DropInDuringGame` 复活如果得到负 X 或明显高于屏幕上限的异常位置，则使用该首次出生点备份，并继续通过原生 `Player.SetSpawnPositon` 应用。
+
+该开关不改动运输、降落伞、检查点、救援或笼子出生，也不覆盖正常的后续复活位置。关闭后不记录或应用这项备份；开关会在运行中读取，设置保存后即可影响后续出生处理。出生点跟踪会在 Workshop 场景加载、离开房间和会话清理时重置，避免旧地图的位置泄漏到新会话。
+
 ## Workshop 道具
 
 当前补丁只在有效 Workshop 线上会话启用：

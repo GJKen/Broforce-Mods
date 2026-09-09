@@ -7,6 +7,7 @@ namespace CustomMapMultiplayer
         public bool EnableOnlineWorkshopInjection;
         public bool DisableOnlineAfkSpectatorMode;
         public bool DisablePlayerOverlapHighFive;
+        public bool EnableWorkshopDropInRespawnFix;
         public string WorkshopId;
         public string WorkshopFavoriteIds;
         public string WorkshopRecentIds;
@@ -52,6 +53,7 @@ namespace CustomMapMultiplayer
             EnableOnlineWorkshopInjection = false;
             DisableOnlineAfkSpectatorMode = false;
             DisablePlayerOverlapHighFive = true;
+            EnableWorkshopDropInRespawnFix = true;
             WorkshopId = string.Empty;
             WorkshopFavoriteIds = string.Empty;
             WorkshopRecentIds = string.Empty;

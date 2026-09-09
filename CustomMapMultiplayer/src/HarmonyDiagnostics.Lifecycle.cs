@@ -71,7 +71,15 @@ namespace CustomMapMultiplayer
 
             if (method.DeclaringType.Name == "Player" && method.Name == "Start")
             {
-                PrepareLocalWorkshopRejoin(instance as Player);
+                var player = instance as Player;
+                PrepareLocalWorkshopRejoin(player);
+                ArmWorkshopInitialSpawnCapture(player);
+                return;
+            }
+
+            if (method.DeclaringType.Name == "Player" && method.Name == "WorkOutSpawnPosition")
+            {
+                ArmWorkshopInitialSpawnCapture(instance as Player);
                 return;
             }
 
@@ -132,9 +140,7 @@ namespace CustomMapMultiplayer
             ClearEntityFinalStateSynchronizationState();
             ClearDemolitionBroBombDetonationState();
             ClearMcBroverTurkeyDetonationState();
-            PendingSpawnPositions.Clear();
-            LocalWorkshopSpawnPositions.Clear();
-            SnappedRemoteWorkshopCharacters.Clear();
+            ResetWorkshopSpawnTracking("lifecycle state reset");
             PendingLocalWorkshopRejoins.Clear();
             PreparedLocalWorkshopRejoins.Clear();
             WorkshopKnownHeroTypes.Clear();
@@ -787,6 +793,7 @@ namespace CustomMapMultiplayer
                     StringComparison.OrdinalIgnoreCase);
                 if (isConfiguredWorkshopScene)
                 {
+                    ResetWorkshopSpawnTracking("Workshop scene loaded");
                     ResetStalePauseStateForWorkshopSession("Workshop scene loaded");
                     NormalizeLocalWorkshopPlayerControlState("Workshop scene loaded");
                 }

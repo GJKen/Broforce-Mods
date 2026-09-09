@@ -26,6 +26,7 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 - `src/WorkshopMapDirectory.cs`：枚举 Steam 已订阅项目、读取本地地图状态、查询 Workshop 标题并维护选择页目录。
 - `src/HarmonyDiagnostics.WorkshopIdentity.cs`：房主地图身份发布、加入方会话配置采用、Steam 订阅检测和缺图加载保护。
 - `src/HarmonyDiagnostics.WorkshopPlayer.cs`：Workshop 本地玩家请求、控制器所有权、掉线重入和英雄类型恢复。
+- `src/HarmonyDiagnostics.WorkshopSpawn.cs`：Workshop 首次稳定出生点记录、异常 DropInDuringGame 复活位置修复、远端角色初次位置校正和出生点重广播。
 - `src/HarmonyDiagnostics.WorkshopPickup.cs`：道具确定性、拾取所有权、幂等和满弹药退避。
 - `src/HarmonyDiagnostics.WorkshopLevelEnd.cs`：Workshop 关卡结束动作防重入保护。
 - `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、主动 AFK、超时和槽位移除观测。

@@ -12,8 +12,8 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=cc364ae4180a8e861aaf9cdf9741069a7ae207b104a502046f3d95efe77489a9` |
-| DLL SHA-256 | `6950B137789CE3C1F78E1A65DE928BA11C6FDD60FAB140FEBC5F5B46F9958F9A` |
+| Current distributed build | `buildHash=aee114e5232701cc14182fd03466f9b6f2a9ef897fcaeaaea33b183dbad66ad7` |
+| DLL SHA-256 | `86AF8070BB1E6A38E49DAED8AD8019CCD2D15F7C1B00F929A50A3A21FD3B10E7` |
 | DLL assembly version | `0.5.0.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
@@ -78,7 +78,7 @@ The current scope does not include continuous synchronization of active AI, enem
 The actual UMM settings page uses a vertical feature list on the left and displays the selected feature's content on the right:
 
 - `Workshop Map Settings`: Workshop map injection, manual Workshop ID, subscribed-map selection, search, filters, favorites, and recent online maps; advanced campaign and scene settings remain in this page.
-- `Multiplayer Options`: Automatic AFK spectator mode and the player-overlap melee toggle; the manual AFK button is in the in-game Esc menu.
+- `Multiplayer Options`: player-overlap melee, Workshop drop-in respawn-position repair, and automatic AFK spectator mode toggles; the manual AFK button is in the in-game Esc menu.
 - `FRP Direct`: Direct-transport toggle, Host/Client role, ports, player limit, and connection parameters.
 - `Language`: Click the Follow system, English, or Chinese button to change the interface language.
 - `Diagnostic Logs`: Diagnostic session identity, log presets, and diagnostic categories.
@@ -91,6 +91,7 @@ The actual UMM settings page uses a vertical feature list on the left and displa
 - `Diagnostic session ID` associates logs from the same test round; use the same value on both sides. `Diagnostic label` only affects log file names and does not participate in multiplayer behavior.
 - The `Multiplayer Options` AFK toggle is controlled independently on each client. When it is unchecked, the label says `Enabled: automatic AFK spectator mode`; when it is checked, the label says `Disabled: automatic AFK spectator mode`. To protect both characters, both players must check the option. It does not intercept manual exit, disconnects, or normal deaths.
 - `Multiplayer Options` enables `melee overrides player-overlap high-five` by default. When enabled, pressing melee while players overlap starts the selected bro's melee; when disabled, Broforce's automatic high-five behavior is restored.
+- `Multiplayer Options` enables the `Workshop drop-in respawn position fix` by default. In an active Workshop injection session, it records the first stable direct map spawn and uses that backup only when a later `DropInDuringGame` respawn position is abnormal; transport, parachute, checkpoint, rescue, and cage spawns remain native. Disabling the toggle leaves those positions untouched, and the setting can be changed while the game is running.
 - The in-game Esc menu's `Enter AFK now` button immediately puts the local player owned by the current client into the native AFK spectator flow, independently of the automatic AFK toggle. The target is selected using local ownership and the active input controller; if multiple local slots cannot be uniquely resolved, the request is ignored to avoid affecting another character. Manual AFK does not schedule `RequestJoinGame`; the user must return through the normal rejoin flow, which restores the original slot's lives, hero type, and character. Ordinary network dropout still uses automatic re-entry.
 - The diagnostic log presets (`Basic`, `Join / Rejoin`, `AFK / Failure`, `Workshop`, and `Full`) and the nine diagnostic categories only filter log output; they do not change multiplayer behavior. Use matching categories on both sides when investigating the same problem.
 

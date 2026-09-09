@@ -13,6 +13,20 @@ namespace CustomMapMultiplayer
     // 角色生成与出生点同步：延迟出生点捕获、应用与重广播。
     internal static partial class HarmonyDiagnostics
     {
+        private static void ResetWorkshopSpawnTracking(string reason)
+        {
+            PendingSpawnPositions.Clear();
+            InitialWorkshopSpawnPositions.Clear();
+            InitialWorkshopSpawnCaptureArmed.Clear();
+            InitialWorkshopSpawnCaptureClosed.Clear();
+            LocalWorkshopSpawnPositions.Clear();
+            SnappedRemoteWorkshopCharacters.Clear();
+            _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
+            _workshopSpawnRebroadcastPending = false;
+            _workshopSpawnRebroadcastUseCurrentPositions = false;
+            DiagnosticLog.Trace("Workshop spawn tracking reset: reason=" + reason + ".");
+        }
+
         private static void PrepareWorkshopSpawnJoinedPlayers()
         {
             if (_lateJoinStarted && !_sessionIsHost)
@@ -112,6 +126,25 @@ namespace CustomMapMultiplayer
             }
         }
 
+        private static void ArmWorkshopInitialSpawnCapture(Player player)
+        {
+            if (!IsWorkshopOnlineSession() || !IsWorkshopInitialSpawnRespawnFixEnabled() ||
+                player == null || !player.firstDeployment ||
+                InitialWorkshopSpawnPositions.ContainsKey(player.playerNum) ||
+                InitialWorkshopSpawnCaptureClosed.Contains(player.playerNum))
+            {
+                return;
+            }
+
+            if (InitialWorkshopSpawnCaptureArmed.Add(player.playerNum))
+            {
+                DiagnosticLog.Trace(
+                    "Armed Workshop initial spawn capture: player=" + player.playerNum +
+                    "; owner=" + (player.IsMine ? "local" : "remote") +
+                    "; firstDeployment=true.");
+            }
+        }
+
         private static void CaptureDeferredSpawnPosition(Player player, object[] arguments)
         {
             if (!IsWorkshopOnlineSession() || player == null || arguments == null || arguments.Length < 4 ||
@@ -126,6 +159,73 @@ namespace CustomMapMultiplayer
                 ? (Player.SpawnType)arguments[1]
                 : Player.SpawnType.CustomSpawnPoint;
             var spawnViaAirDrop = arguments[2] is bool && (bool)arguments[2];
+            var initialSpawnRespawnFixEnabled = IsWorkshopInitialSpawnRespawnFixEnabled();
+            if (!initialSpawnRespawnFixEnabled)
+            {
+                InitialWorkshopSpawnCaptureArmed.Remove(player.playerNum);
+            }
+
+            var hasInitialSpawn = initialSpawnRespawnFixEnabled &&
+                InitialWorkshopSpawnPositions.ContainsKey(player.playerNum);
+            var initialCaptureArmed = initialSpawnRespawnFixEnabled &&
+                InitialWorkshopSpawnCaptureArmed.Contains(player.playerNum);
+            var initialCaptureClosed = InitialWorkshopSpawnCaptureClosed.Contains(player.playerNum);
+            var isFirstDeployment = initialSpawnRespawnFixEnabled && !initialCaptureClosed &&
+                (player.firstDeployment || initialCaptureArmed);
+
+            if (isFirstDeployment)
+            {
+                InitialWorkshopSpawnCaptureArmed.Remove(player.playerNum);
+            }
+
+            if (!hasInitialSpawn && isFirstDeployment)
+            {
+                if (bro != null && IsStableDirectInitialSpawn(spawnType, spawnViaAirDrop, position))
+                {
+                    InitialWorkshopSpawnPositions[player.playerNum] = new DeferredSpawnPosition(
+                        spawnType,
+                        spawnViaAirDrop,
+                        position);
+                    hasInitialSpawn = true;
+                    InitialWorkshopSpawnCaptureClosed.Add(player.playerNum);
+                    DiagnosticLog.Info(
+                        "Recorded immutable Workshop initial spawn backup: player=" +
+                        player.playerNum + "; spawnType=" + spawnType +
+                        "; spawnViaAirDrop=" + spawnViaAirDrop +
+                        "; position=" + FormatVector3(position) +
+                        "; owner=" + (player.IsMine ? "local" : "remote") +
+                        "; firstDeployment=true.");
+                }
+                else if (spawnType != Player.SpawnType.CustomSpawnPoint ||
+                         spawnViaAirDrop || position.x < 0f)
+                {
+                    InitialWorkshopSpawnCaptureClosed.Add(player.playerNum);
+                    DiagnosticLog.Trace(
+                        "Skipped Workshop initial spawn backup: player=" + player.playerNum +
+                        "; spawnType=" + spawnType +
+                        "; spawnViaAirDrop=" + spawnViaAirDrop +
+                        "; position=" + FormatVector3(position) +
+                        "; reason=not-a-stable-direct-map-spawn.");
+                }
+            }
+
+            var nativePosition = position;
+            DeferredSpawnPosition initialSpawn;
+            if (initialSpawnRespawnFixEnabled && !isFirstDeployment &&
+                spawnType == Player.SpawnType.DropInDuringGame &&
+                !spawnViaAirDrop &&
+                InitialWorkshopSpawnPositions.TryGetValue(player.playerNum, out initialSpawn) &&
+                IsAbnormalDropInRespawnPosition(nativePosition))
+            {
+                position = initialSpawn.Position;
+                arguments[3] = position;
+                DiagnosticLog.Warning(
+                    "Used immutable Workshop initial spawn backup for native drop-in respawn: " +
+                    "player=" + player.playerNum + "; nativeSpawnType=" + spawnType +
+                    "; nativePosition=" + FormatVector3(nativePosition) +
+                    "; appliedSpawnType=" + spawnType +
+                    "; appliedPosition=" + FormatVector3(position) + ".");
+            }
 
             SnapFirstRemoteWorkshopCharacter(player, bro, position);
 
@@ -136,12 +236,17 @@ namespace CustomMapMultiplayer
                     spawnViaAirDrop,
                     position);
                 QueueWorkshopSpawnRebroadcast(
-                    "local player received its original spawn position; waiting for settled physics",
+                    isFirstDeployment
+                        ? "local player received its initial spawn position; waiting for settled physics"
+                        : "local player received a later respawn position; preserving initial backup",
                     750,
                     true);
-                DiagnosticLog.Info(
-                    "Recorded local Workshop spawn position for exact rebroadcast: player=" +
-                    player.playerNum + "; position=" + FormatVector3(position) + ".");
+                DiagnosticLog.Trace(
+                    "Updated mutable local Workshop rebroadcast position: player=" +
+                    player.playerNum + "; spawnType=" + spawnType +
+                    "; position=" + FormatVector3(position) +
+                    "; initialBackup=" +
+                    (hasInitialSpawn ? "preserved" : "missing") + ".");
             }
 
             if (bro != null && player.character != null)
@@ -157,6 +262,26 @@ namespace CustomMapMultiplayer
                 "Deferred Workshop spawn position: player=" + player.playerNum +
                 "; position=" + FormatVector3(position) +
                 "; broArgument=" + (bro == null ? "null" : "present") + ".");
+        }
+
+        private static bool IsStableDirectInitialSpawn(
+            Player.SpawnType spawnType,
+            bool spawnViaAirDrop,
+            Vector3 position)
+        {
+            return spawnType == Player.SpawnType.CustomSpawnPoint &&
+                !spawnViaAirDrop &&
+                position.x >= 0f;
+        }
+
+        private static bool IsAbnormalDropInRespawnPosition(Vector3 position)
+        {
+            return position.x < 0f || position.y > SortOfFollow.GetScreenMaxY() + 64f;
+        }
+
+        private static bool IsWorkshopInitialSpawnRespawnFixEnabled()
+        {
+            return Plugin.Settings != null && Plugin.Settings.EnableWorkshopDropInRespawnFix;
         }
 
         private static void AssignCharacterPostfix(Player __instance)

@@ -123,6 +123,12 @@ namespace CustomMapMultiplayer
             new Dictionary<string, TraceCacheEntry>();
         private static readonly Dictionary<int, DeferredSpawnPosition> PendingSpawnPositions =
             new Dictionary<int, DeferredSpawnPosition>();
+        private static readonly Dictionary<int, DeferredSpawnPosition> InitialWorkshopSpawnPositions =
+            new Dictionary<int, DeferredSpawnPosition>();
+        private static readonly HashSet<int> InitialWorkshopSpawnCaptureArmed =
+            new HashSet<int>();
+        private static readonly HashSet<int> InitialWorkshopSpawnCaptureClosed =
+            new HashSet<int>();
         private static readonly Dictionary<int, DeferredSpawnPosition> LocalWorkshopSpawnPositions =
             new Dictionary<int, DeferredSpawnPosition>();
         private static readonly Dictionary<int, TestVanDammeAnim> SnappedRemoteWorkshopCharacters =

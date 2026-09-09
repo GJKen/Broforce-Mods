@@ -9,7 +9,7 @@ namespace CustomMapMultiplayer
 {
     public static class Plugin
     {
-        private const int CurrentDiagnosticSettingsVersion = 13;
+        private const int CurrentDiagnosticSettingsVersion = 14;
         private const float FrpSettingsApplyDelaySeconds = 0.75f;
         private const float DefaultSettingsNavigationWidth = 190f;
         private const float DefaultSettingsContentWidth = 590f;
@@ -602,6 +602,20 @@ namespace CustomMapMultiplayer
                 Settings.DisablePlayerOverlapHighFive
                     ? text.OverlapMeleeHelpEnabled
                     : text.OverlapMeleeHelpDisabled);
+            GUILayout.Space(10f);
+
+            var workshopDropInRespawnFixEnabled = DrawSettingsToggle(
+                Settings.EnableWorkshopDropInRespawnFix,
+                Settings.EnableWorkshopDropInRespawnFix
+                    ? text.WorkshopDropInRespawnFixEnabled
+                    : text.WorkshopDropInRespawnFixDisabled,
+                GetSettingsToggleStyle());
+            if (workshopDropInRespawnFixEnabled != Settings.EnableWorkshopDropInRespawnFix)
+            {
+                Settings.EnableWorkshopDropInRespawnFix = workshopDropInRespawnFixEnabled;
+                SaveSettings(modEntry);
+            }
+            DrawIndentedHelp(text.WorkshopDropInRespawnFixHelp);
             GUILayout.Space(10f);
 
             var disableAfkSpectator = DrawSettingsToggle(
@@ -2281,6 +2295,11 @@ namespace CustomMapMultiplayer
             if (settings.DiagnosticSettingsVersion < 10)
             {
                 settings.DisablePlayerOverlapHighFive = true;
+            }
+
+            if (settings.DiagnosticSettingsVersion < 14)
+            {
+                settings.EnableWorkshopDropInRespawnFix = true;
             }
 
             if (settings.DiagnosticSettingsVersion < 7)
