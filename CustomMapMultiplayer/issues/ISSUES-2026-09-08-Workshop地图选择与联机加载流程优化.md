@@ -1,4 +1,4 @@
-# Workshop 增加Workshop地图选择与UMM面板布局优化
+# Workshop 地图选择与联机加载流程优化
 
 ## 当前实现
 
@@ -65,7 +65,38 @@ UMM 的 `UI.DrawTab` 会在主窗口的 `GUILayout.BeginScrollView` 内调用 Mo
 
 ### 联机流程保护
 
-地图目录和选择页只能改变本地设置展示与 `WorkshopId`。不得修改 Workshop 身份同步、Steam 下载、加载缓存、房主/加入方身份、房间创建/加入、主机迁移或其它联机 RPC 流程。加入方始终采用房主发布的 Workshop ID，本地保存的 ID 不能覆盖房主配置。
+地图目录和选择页只能改变本地设置展示与 `WorkshopId`。不得用本地缓存战役替换原生 `SteamController.LoadLevel`，也不得提前调用 `OnLevelLoadComplete` 绕过原生加载阶段；Workshop 身份同步、Steam 下载、房主/加入方身份、房间创建/加入、主机迁移和其它联机 RPC 流程仍由原生或既有联机逻辑处理。加入方始终采用房主发布的 Workshop ID，本地保存的 ID 不能覆盖房主配置。
+
+### 本轮联机加载精简（2026-09-09）
+
+本 issue 的 Workshop 地图目录和选择页实验曾引出联机加载时序回归。精简前，Mod 在本地缓存命中时会阻止原生 `SteamController.LoadLevel`，再直接反射调用 `OnLevelLoadComplete`，可能跳过房间内 P1-P4 确认和原生地图加载过场。
+
+精简前的路径：
+
+```text
+SteamController.LoadLevel
+    -> Mod 检查本地缓存
+    -> 缓存命中后阻止原生加载
+    -> Mod 直接调用 OnLevelLoadComplete
+    -> 可能跳过 P1-P4 和加载动画
+```
+
+本轮精简后的路径：
+
+```text
+SteamController.LoadLevel
+    -> Mod 只记录 Workshop ID
+    -> 继续执行 Broforce 原生流程
+    -> 显示并确认 P1-P4
+    -> 播放原生地图加载动画
+    -> 进入地图
+```
+
+- 联机 Workshop 的 `SteamController.LoadLevel` 始终交给原生流程处理，不再用缓存战役直接完成加载。
+- Workshop UGC 详情回调不再读取缓存战役并替换原生结果。
+- 保留原生 `OnLevelLoadComplete` 后置记录，用于记录实际完成加载的最近 Workshop 地图。
+- 保留房主退出后拦截过期 `LoadLevel` 请求的保护。
+- 这不是地图加载加速，而是减少 Mod 对原生联机时序的干预；地图实际加载继续由 Broforce/Steam 原生流程负责。
 
 ## 联机行为边界
 
@@ -75,13 +106,14 @@ UMM 的 `UI.DrawTab` 会在主窗口的 `GUILayout.BeginScrollView` 内调用 Mo
 
 ## 验收边界
 
-- 当前工作区已完成 Release 构建。本轮文档同步未进行新进程 MCP 画面验收，因此不能把地图选择页的最新运行画面写成已通过新进程验收。
-- 内网测试机路径当前不可用；部署和运行时加载状态应以对应端日志中的 `BUILD_INFO buildHash` 为准。
+- 地图选择页的最新运行画面仍未进行新进程 MCP 画面验收；本轮已单独完成联机 Workshop 加载时序实机验收。
+- 用户实机测试确认：创建房间后显示 P1-P4，确认后才进入第三方地图，原生加载过场动画正常保留，没有再次直接进入地图。
+- 本轮未新增 MCP 截图或双端日志，以上结论以用户实际运行结果为依据。
 
 ## 构建状态
 
-- 当前 Release `buildHash=cc364ae4180a8e861aaf9cdf9741069a7ae207b104a502046f3d95efe77489a9`。
-- 当前 Release DLL SHA-256 为 `6950B137789CE3C1F78E1A65DE928BA11C6FDD60FAB140FEBC5F5B46F9958F9A`。
+- 当前 Release `buildHash=71c81fb162edbadc47809db14fa12676b93b56565c314b5dea34cd404c4ac337`。
+- 当前 Release DLL SHA-256 为 `8A4BFE125D6EBFFDEAB9F55DA965EDDA919EEC87770880CA2F2297F4FF105B87`。
 
 ## 相关源码
 

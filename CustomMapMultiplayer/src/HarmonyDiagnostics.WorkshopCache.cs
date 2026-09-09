@@ -121,49 +121,27 @@ namespace CustomMapMultiplayer
                     return false;
                 }
 
-                if (!IsWorkshopOnlineSession())
+                // 联机 Workshop 必须保留原生房间确认和地图加载阶段，不能直接完成加载。
+                if (IsWorkshopOnlineSession())
                 {
-                    return true;
-                }
-
-                ulong workshopId;
-                if (!TryGetPublishedFileId(__0, out workshopId) || workshopId == 0)
-                {
-                    return true;
-                }
-
-                if (_workshopLoadRequestPending)
-                {
-                    if (_workshopLoadRequestId == workshopId &&
-                        DateTime.UtcNow <= _workshopLoadRequestStartedAtUtc.AddSeconds(
-                            WorkshopLoadRequestTimeoutSeconds))
+                    ulong workshopId;
+                    if (TryGetPublishedFileId(__0, out workshopId) && workshopId != 0)
                     {
-                        DiagnosticLog.Trace(
-                            "Skipped duplicate SteamController.LoadLevel while Workshop map is pending: id=" +
-                            workshopId + ".");
-                        return false;
+                        _workshopLoadRequestPending = true;
+                        _workshopLoadRequestId = workshopId;
+                        _workshopLoadRequestStartedAtUtc = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        ClearWorkshopLoadRequest();
                     }
 
-                    DiagnosticLog.Warning(
-                        "Workshop map load request timed out or changed; allowing a new request: previousId=" +
-                        _workshopLoadRequestId + "; currentId=" + workshopId + ".");
-                    ClearWorkshopLoadRequest();
+                    DiagnosticLog.InfoFileOnly(
+                        "Preserved native SteamController.LoadLevel for online Workshop session; " +
+                        "native player confirmation and loading animation remain active.");
+                    return true;
                 }
 
-                _workshopLoadRequestPending = true;
-                _workshopLoadRequestId = workshopId;
-                _workshopLoadRequestStartedAtUtc = DateTime.UtcNow;
-
-                Campaign cachedCampaign;
-                string cacheSource;
-                if (TryLoadInstalledWorkshopCampaign(__0, out cachedCampaign, out cacheSource))
-                {
-                    QueueCachedWorkshopCompletion(cachedCampaign, cacheSource, workshopId);
-                    return false;
-                }
-
-                DiagnosticLog.Info(
-                    "Workshop cache miss; falling back to Steam UGC download: id=" + workshopId + ".");
                 return true;
             }
             catch (Exception exception)
@@ -186,30 +164,8 @@ namespace CustomMapMultiplayer
                     return false;
                 }
 
-                if (!IsWorkshopOnlineSession() || __1 || !_workshopLoadRequestPending ||
-                    _cachedWorkshopCompletionPending || __0 == null)
-                {
-                    return true;
-                }
-
-                var resultId = GetFieldOrPropertyValue(__0, "m_nPublishedFileId");
-                ulong resultWorkshopId;
-                if (resultId == null || !TryGetPublishedFileId(resultId, out resultWorkshopId) ||
-                    resultWorkshopId != _workshopLoadRequestId)
-                {
-                    return true;
-                }
-
-                var fileSize = GetIntFieldOrProperty(__0, "m_nFileSize");
-                var fileHandle = GetFieldOrPropertyValue(__0, "m_hFile");
-                Campaign cachedCampaign;
-                if (!TryReadCachedUgcCampaign(fileHandle, fileSize, out cachedCampaign))
-                {
-                    return true;
-                }
-
-                QueueCachedWorkshopCompletion(cachedCampaign, "legacy-ugc", _workshopLoadRequestId);
-                return false;
+                // UGC details must remain on the native path; never substitute a cached campaign here.
+                return true;
             }
             catch (Exception exception)
             {
