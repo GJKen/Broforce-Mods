@@ -12,8 +12,8 @@
 
 | 项目 | 状态 |
 | --- | --- |
-| 当前分发构建 | `buildHash=698d416afe619519a1926a7928922add782198dfc507852570bc12202a487ee2` |
-| DLL SHA-256 | `92A9045FA4A646C9EA3D0FC436B39262B131A49B133B53C000BBAAAC9C04F79E` |
+| 当前分发构建 | `buildHash=cc364ae4180a8e861aaf9cdf9741069a7ae207b104a502046f3d95efe77489a9` |
+| DLL SHA-256 | `6950B137789CE3C1F78E1A65DE928BA11C6FDD60FAB140FEBC5F5B46F9958F9A` |
 | DLL 程序集版本 | `0.5.0.0` |
 | Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
 | FRP 直连 | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |

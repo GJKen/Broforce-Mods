@@ -2353,6 +2353,8 @@ namespace CustomMapMultiplayer
                     settings.FrpDirectServerPort);
             }
             settings.FrpDirectRoomPassword = settings.FrpDirectRoomPassword ?? string.Empty;
+            settings.WorkshopFavoriteIds = settings.WorkshopFavoriteIds ?? string.Empty;
+            settings.WorkshopRecentIds = settings.WorkshopRecentIds ?? string.Empty;
 
             if (settings.DiagnosticSettingsVersion < 13)
             {
