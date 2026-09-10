@@ -2,7 +2,9 @@
 
 ## 状态
 
-根因已定位，Steam 单 Client 房主退出路径的修复已实现并通过用户验收。当前工作区是用于 FRP 对照测试的实验构建，`buildHash=69ad1b5fdbbe22d74d5ed166bea8b50ad2e24c6c028b5daba9eb4e51ef4e6f3b`；此前保留的 Steam 修复构建为 `0a3996be28566e0d5eb002782af177aad69f8df9cc1fdf97e1d7d0a272b939ba`。本文件记录的是独立的退出清理修复，不恢复“加入状态与退出原因需向全房间显示”功能。
+历史根因已定位，但此前把“只剩一个加入方”处理为退出房间的方案不符合官方 Steam Lobby 行为。2026-09-10 的最新双端日志确认该分支会错误触发 `SteamLayer.LeaveMatch`；当前修正恢复官方 Host migration：只要加入方仍在房间，就继续接管 Host 和 Workshop 状态。本文件中的单 Client 退出结论已被当前修正覆盖，用户已确认修复版本符合预期。
+
+此前保留的 Steam 修复构建和 FRP 对照记录仍作为历史证据，不代表当前 Steam 单 Client 的验收预期。
 
 用户此前确认 Steam 测试返回正常：房主退出后，加入方能够正常返回，不再出现黑屏。本次 FRP 实验使用了明确排除本轮新增退出保护的构建 `buildHash=69ad1b5fdbbe22d74d5ed166bea8b50ad2e24c6c028b5daba9eb4e51ef4e6f3b`，用户确认 FRP 房主退出后加入方会直接返回主菜单，没有复现本 issue 的黑屏。因此 FRP Direct 不属于本 issue 的受影响路径；真正的多人 Host migration 和其它退出路径仍需分别回归。
 
@@ -40,19 +42,20 @@ Workshop UGC 回调
 
 ## 修复方案
 
-### 1. 区分真正的 Host migration
+### 1. 识别官方 Host migration
 
 - 在客户端仍能读取 `PID.ServerID` 时保存当前 Host PID。
 - 在 `ConnectionLayer.RemovePlayer` 的清理前观察被移除的 PID，确认它是否为当前或此前记录的 Host PID。
-- Host 角色变化时，统计排除旧 Host PID 后仍连接的远程玩家数量。
-- 仍有远程玩家时，继续执行原有 Host migration 流程。
-- 没有远程玩家时，判定为房主离开后的房间退出，不执行 Workshop Host promotion。
+- Host 角色变化时确认旧 Host PID 已离开；当前本地加入方仍是房间成员。
+- 当前加入方仍是房间成员时，无论是否还有其它远程玩家，都将自身计入有效成员并继续执行原有 Host migration 流程。
+- 不再使用“其它远程成员数量为零”作为退出房间条件，避免把唯一剩余的加入方错误清理掉。
+- 只有旧 Host 排除后连接表中没有任何有效成员时，才执行退出清理。
 
-### 2. 清理单客户端退出状态
+### 2. 历史上的单客户端退出清理
 
-单客户端退出路径调用 `ClearInjectedWorkshopRuntimeState`，清理网络会话、Workshop 身份、关卡切换状态、暂停状态和延迟加入状态，并将游戏状态恢复为原生主菜单。
+此前的单客户端退出路径曾调用 `ClearInjectedWorkshopRuntimeState`，清理网络会话、Workshop 身份、关卡切换状态、暂停状态和延迟加入状态，并将游戏状态恢复为原生主菜单。
 
-该路径不会重新设置 `loadCustomCampaign=true`。
+该路径已被当前官方 Host migration 要求覆盖，不再用于 Steam 房主离开后的单 Client 场景。
 
 ### 3. 阻止退出后的 Workshop 加载循环
 
@@ -75,6 +78,17 @@ FRP Direct 的协议不执行 Host migration，房主退出时结束房间。202
 - `src/HarmonyDiagnostics.Patches.cs`：允许退出路径的原生 `MainMenu` 加载。
 - `src/HarmonyDiagnostics.WorkshopCache.cs`：阻止退出后的过期 Workshop 加载和 UGC 回调。
 
+## 后续回归修正（2026-09-10）
+
+最新 Client 日志 `diagnostics-client-auto-20260909-235119-239-efc3c742-20260909-235119-239.log` 记录了错误路径：
+
+```text
+Online session role changed from client to host after the old host left, but no remote member remains ...; treating this as room exit instead of Host migration.
+SESSION_END reason=SteamLayer_LeaveMatch
+```
+
+这里的“no remote member”只表示没有其它远端 PID，不表示房间为空；当前 Client 自己仍在房间内，应该计为有效成员并继续成为 Host。当前源码已改为统计包含本地成员的有效连接；单 Client 和多人 Client 都继续执行 `HandleWorkshopHostPromotion`，只有确实没有有效成员时才执行退出清理。
+
 ## 历史运行日志证据
 
 此前修复分支的一次双端日志记录了该修复路径：
@@ -95,11 +109,10 @@ SESSION_END reason=SteamLayer_LeaveMatch
 
 ## 验收重点
 
-- 加入方停留在 `P1-P4` 时，房主退出后能够正常回到原生主菜单。
-- 不再反复调用 `GameState.LoadLevel(MainMenu)`、`SteamController.LoadLevel` 和 Workshop UGC 回调。
-- 日志能够出现稳定的 `Scene loaded: MainMenu` 和 `SESSION_END`。
-- 两个或更多加入方存在时，真正的 Host migration 仍然执行 Workshop 状态同步。
-- Steam Lobby 的单 Client 房主退出路径已由用户验收；FRP Direct 对照测试确认房主退出后加入方直接返回主菜单，没有复现本 issue 的黑屏。
+- 加入方停留在 `P1-P4` 或任务失败状态时，房主退出后仍应完成 Host migration，不应主动回到原生主菜单。
+- 单 Client 和多 Client 都应继续发布 Workshop 身份、地图和大厅 ready 状态。
+- Steam 日志不应出现由该路径触发的 `SESSION_END reason=SteamLayer_LeaveMatch`。
+- FRP Direct 对照测试仍确认房主退出后加入方直接返回主菜单；FRP 不支持 Host migration。
 - 正常主动退出、突然断线、多次重试以及真正的多人 Host migration 仍需分别回归。
 
 ## 实施记录（2026-09-05）

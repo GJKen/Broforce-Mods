@@ -186,6 +186,7 @@ namespace CustomMapMultiplayer
         private static bool _sessionIsHost;
         private static bool _networkSessionActive;
         private static bool _nativeMainMenuExitPending;
+        private static bool _nativeMainMenuLoadStarted;
         private static byte _lastKnownOnlineServerPidByte;
         private static bool _hasLastKnownOnlineServerPid;
         private static byte _removedOnlineServerPidByte;
@@ -216,6 +217,7 @@ namespace CustomMapMultiplayer
             _sessionIsHost = false;
             _networkSessionActive = false;
             _nativeMainMenuExitPending = false;
+            _nativeMainMenuLoadStarted = false;
             _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
             ClearWorkshopOnlineLobbyReturnState();
             _restoreMainMenuAfterLobbyReturnPending = false;
@@ -405,6 +407,7 @@ namespace CustomMapMultiplayer
                 _sessionIsHost = false;
                 _networkSessionActive = false;
                 _nativeMainMenuExitPending = false;
+                _nativeMainMenuLoadStarted = false;
                 _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
                 ClearWorkshopOnlineLobbyReturnState();
                 _restoreMainMenuAfterLobbyReturnPending = false;
@@ -495,6 +498,10 @@ namespace CustomMapMultiplayer
             try
             {
                 ShowFullFrpRoomNoticeIfNeeded(__originalMethod, __args);
+                if (ShouldBlockNativeMainMenuExitTransition(__originalMethod, __args))
+                {
+                    return false;
+                }
                 if (ShouldBlockMissingWorkshopTransition(__originalMethod))
                 {
                     return false;

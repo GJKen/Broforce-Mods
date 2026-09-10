@@ -66,12 +66,12 @@ handoff=正式源码文件、构建哈希和后续验收要求
 
 ### Workshop 房主退出后的加入方返回
 
-该专项用于确认房主离开后“单 Client 房间退出”和“多人 Host migration”没有被混淆。Steam 单 Client 黑屏路径已由用户验收；FRP Direct 在排除本轮新增退出保护的实验构建中确认直接返回主菜单，没有复现本 issue 的黑屏。本次未提供独立日志或截图，以下项目用于保留回归边界：
+该专项用于确认房主离开后加入方继续执行官方 Host migration。FRP Direct 仍按现有协议结束房间，不支持主机迁移。本次最新双端日志已确认旧的“单 Client 直接退出”判断会错误调用 `SteamLayer.LeaveMatch`，因此不再作为 Steam 的预期行为：
 
-- Steam Workshop 场景中让加入方停留在 `P1-P4`，房主进入地图后退出房间；加入方应完成原生 `MainMenu` 加载并结束会话，不应重新设置 `loadCustomCampaign=true`，也不应反复触发 `GameState.LoadLevel(MainMenu)`、`SteamController.LoadLevel` 或 Workshop UGC 回调。该行为已由用户测试确认正常。
-- 后续若取得日志，应对齐加入方日志中的旧 Host PID、角色变化、`Scene loaded: MainMenu` 和 `SESSION_END`，确认单 Client 路径没有 Workshop Host promotion。
+- Steam Workshop 场景中即使只有一个加入方，房主退出后加入方也应将自身计为有效成员，记录 `client to host`、继续 Workshop Host promotion，并保持房间，不应出现 `SESSION_END reason=SteamLayer_LeaveMatch`。
+- 加入方处于死亡或任务失败状态时，也应先完成 Host promotion；应检查 Workshop 身份、当前场景和大厅状态仍被发布，没有被清理为原生 MainMenu。
 - FRP Direct 房主退出专项：确认加入方直接完成原生 `MainMenu` 加载并结束会话，且没有过期 Workshop 加载请求；当前对照测试已确认正常。FRP Direct 仍应结束房间，不应被记录为支持 Host migration。
-- 使用至少两名加入方单独复测真正的多人 Host migration，确认仍会接管并发布 Workshop 状态；再回归正常加入、主动退出、突然断线和多次重试。
+- 使用至少两名加入方复测真正的多人 Host migration，确认新 Host 能继续发布 Workshop 状态；再回归正常主动退出、突然断线和多次重试。
 
 完整复现和修复记录见 [Workshop 房主退出后加入方返回黑屏](../issues/ISSUES-2026-09-05-Workshop房主退出后加入方返回黑屏.md)。
 
@@ -102,7 +102,7 @@ handoff=正式源码文件、构建哈希和后续验收要求
 | --- | --- |
 | 英雄回复 | Client 可能丢失原生英雄类型回复；18 秒备用生成只能缓解，不能替代网络同步 |
 | 晚加入/重入 | 当前地图已通过；不同地图、控制器、高延迟、异常断网和长期多轮仍需覆盖 |
-| 房主退出/Host migration | Steam 单 Client 房主退出后的 MainMenu 返回和 Workshop 加载循环修复已通过用户验收；FRP Direct 对照测试确认房主退出后直接返回主菜单，不属于本 issue 的受影响路径；多人 Host migration 及其它回归仍需覆盖 |
+| 房主退出/Host migration | Steam 单加入方房主退出后已完成官方 Host migration 并通过用户验收；多加入方迁移、死亡/任务失败状态、突然断线和多轮回归仍需覆盖；FRP Direct 对照测试确认房主退出后直接返回主菜单，不属于本 issue 的受影响路径 |
 | AFK/失败 | 自动 AFK 和主动 AFK 的基础双端场景已完成验收；仍需覆盖远端槽位移除后的 Host 存活人数、失败判定、不同地图、高延迟和长期多轮重入 |
 | Workshop 地图 | 缺订阅时的自动识别、按 UMM 语言提示和加载阻止已实现；双端实测已确认中英文提示正确，且缺图时成功在进入 Workshop 加载动画前拦截切换。其它地图、高延迟和长期运行仍需覆盖；`GeneratePole.Awake`、`BroBase` 或特效可能抛出地图自身异常 |
 | Workshop 切关 | `3715087178` 的重复结束动作保护已实现并构建，普通成功、静默成功、失败重试和最终结算仍待双端复测；`3781818421` 仍作为独立问题保留 |

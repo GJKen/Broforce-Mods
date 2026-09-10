@@ -587,14 +587,23 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                if (_nativeMainMenuExitPending &&
-                    string.Equals(nextScene, LevelSelectionController.MainMenuScene, StringComparison.OrdinalIgnoreCase))
+                if (_nativeMainMenuExitPending)
                 {
-                    ClearWorkshopLoadRequest();
-                    ClearDuplicateWorkshopLoadSuppression();
-                    DiagnosticLog.InfoFileOnly(
-                        "Allowed native MainMenu load after online Host departure; Workshop injection is disabled.");
-                    return true;
+                    if (IsNativeMainMenuLoadRequest(nextScene))
+                    {
+                        ClearWorkshopLoadRequest();
+                        ClearDuplicateWorkshopLoadSuppression();
+                        DiagnosticLog.InfoFileOnly(
+                            "Allowed native MainMenu load after online Host departure; Workshop injection is disabled.");
+                        return true;
+                    }
+
+                    if (!_nativeMainMenuLoadStarted)
+                    {
+                        DiagnosticLog.InfoFileOnly(
+                            "Blocked stale GameState.LoadLevel after online Host departure; native MainMenu is pending.");
+                    }
+                    return false;
                 }
 
                 PrepareWorkshopOnlineLobbyMainMenuLoad(nextScene);
@@ -637,6 +646,72 @@ namespace CustomMapMultiplayer
             }
 
             return true;
+        }
+
+        private static bool ShouldBlockNativeMainMenuExitTransition(
+            MethodBase method,
+            object[] arguments)
+        {
+            if (!_nativeMainMenuExitPending || method == null || method.DeclaringType == null ||
+                method.DeclaringType.Name != "GameModeController")
+            {
+                return false;
+            }
+
+            if (method.Name == "SwitchLevel")
+            {
+                return true;
+            }
+
+            if (method.Name != "LoadNextScene" && method.Name != "LoadSceneCore")
+            {
+                return false;
+            }
+
+            if (arguments == null || arguments.Length == 0 || arguments[0] == null)
+            {
+                return true;
+            }
+
+            var state = arguments[0];
+            var targetScene = GetStringFieldOrProperty(state, "_sceneToLoad");
+            if (string.IsNullOrEmpty(targetScene))
+            {
+                targetScene = GetStringFieldOrProperty(state, "sceneToLoad");
+            }
+
+            return !string.Equals(
+                targetScene,
+                LevelSelectionController.MainMenuScene,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsNativeMainMenuLoadRequest(string nextScene)
+        {
+            if (string.Equals(
+                nextScene,
+                LevelSelectionController.MainMenuScene,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
+            if (state == null)
+            {
+                return false;
+            }
+
+            var targetScene = GetStringFieldOrProperty(state, "sceneToLoad");
+            if (string.IsNullOrEmpty(targetScene))
+            {
+                targetScene = GetStringFieldOrProperty(state, "_sceneToLoad");
+            }
+
+            return string.Equals(
+                targetScene,
+                LevelSelectionController.MainMenuScene,
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private static void PatchLateHeroResponseGuard()

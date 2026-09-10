@@ -283,7 +283,14 @@ namespace CustomMapMultiplayer
             bool protectNativeMainMenu)
         {
             var hadInjectedState = HasInjectedWorkshopRuntimeState();
-            _nativeMainMenuExitPending = protectNativeMainMenu && endNetworkSession && hadInjectedState;
+            var shouldRequestNativeMainMenu = string.Equals(
+                trigger,
+                "old Host left and no connected member remains",
+                StringComparison.Ordinal);
+            var wasNativeMainMenuExitPending = _nativeMainMenuExitPending;
+            _nativeMainMenuExitPending = protectNativeMainMenu &&
+                endNetworkSession &&
+                (hadInjectedState || wasNativeMainMenuExitPending);
 
             _injectedForSession = false;
             _workshopCompletionHandledForSession = true;
@@ -312,6 +319,10 @@ namespace CustomMapMultiplayer
                 DiagnosticLog.Trace(
                     "Workshop runtime tracking cleared without changing game state; trigger=" +
                     trigger + ".");
+                if (shouldRequestNativeMainMenu)
+                {
+                    RequestNativeMainMenuAfterHostDeparture();
+                }
                 return;
             }
 
@@ -357,6 +368,49 @@ namespace CustomMapMultiplayer
             DiagnosticLog.Info(
                 "Cleared injected Workshop game state so subsequent level selection uses the native campaign; " +
                 "trigger=" + trigger + ".");
+            if (shouldRequestNativeMainMenu)
+            {
+                RequestNativeMainMenuAfterHostDeparture();
+            }
+        }
+
+        private static void RequestNativeMainMenuAfterHostDeparture()
+        {
+            if (!_nativeMainMenuExitPending || _nativeMainMenuLoadStarted)
+            {
+                return;
+            }
+
+            try
+            {
+                var gameStateType = AccessTools.TypeByName("GameState");
+                var loadLevel = gameStateType == null
+                    ? null
+                    : gameStateType.GetMethod(
+                        "LoadLevel",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance,
+                        null,
+                        new[] { typeof(string) },
+                        null);
+                if (loadLevel == null)
+                {
+                    DiagnosticLog.Warning(
+                        "Native MainMenu load after online Host departure could not find GameState.LoadLevel(string).");
+                    return;
+                }
+
+                _nativeMainMenuLoadStarted = true;
+                loadLevel.Invoke(null, new object[] { LevelSelectionController.MainMenuScene });
+                DiagnosticLog.Info(
+                    "Requested native MainMenu load after online Host departure; " +
+                    "Workshop injection is disabled.");
+            }
+            catch (Exception exception)
+            {
+                _nativeMainMenuLoadStarted = false;
+                DiagnosticLog.Warning(
+                    "Native MainMenu load after online Host departure failed: " + exception);
+            }
         }
 
         private static bool HasInjectedWorkshopRuntimeState()
@@ -471,16 +525,16 @@ namespace CustomMapMultiplayer
                     return;
                 }
 
-                var connectedRemoteMembers = -1;
                 if (onlineHost && !_sessionIsHost)
                 {
                     byte formerHostPidByte;
                     var hasFormerHostPid = TryGetFormerOnlineServerPid(
                         out formerHostPidByte);
-                    if (!TryGetConnectedRemoteMemberCount(
+                    var connectedMembers = -1;
+                    if (!TryGetConnectedMemberCount(
                         hasFormerHostPid,
                         formerHostPidByte,
-                        out connectedRemoteMembers))
+                        out connectedMembers))
                     {
                         DiagnosticLog.Warning(
                             "Online host-role change is waiting for the connection member view; " +
@@ -488,11 +542,11 @@ namespace CustomMapMultiplayer
                         return;
                     }
 
-                    if (connectedRemoteMembers == 0)
+                    if (connectedMembers == 0)
                     {
                         DiagnosticLog.Info(
-                            "Online session role changed from client to host after the old host left, " +
-                            "but no remote member remains after excluding old Host PID " +
+                            "Online session role changed from client to host, but no connected member " +
+                            "remains after excluding old Host PID " +
                             (hasFormerHostPid ? formerHostPidByte.ToString() : "unknown") +
                             "; treating this as room exit instead of Host migration.");
                         _sessionIsHost = true;
@@ -501,8 +555,8 @@ namespace CustomMapMultiplayer
                     }
 
                     DiagnosticLog.Info(
-                        "Online host-role change has " + connectedRemoteMembers +
-                        " remaining remote member(s) after excluding old Host PID " +
+                        "Online host-role change has " + connectedMembers +
+                        " connected member(s) after excluding old Host PID " +
                         (hasFormerHostPid ? formerHostPidByte.ToString() : "unknown") +
                         "; treating it as genuine Host migration.");
                     ClearOnlineHostObservation();
@@ -618,15 +672,15 @@ namespace CustomMapMultiplayer
         {
             ClearLateJoinState();
             DiagnosticLog.Info(
-                "Suppressed Workshop Host promotion because the room has no remaining remote member; " +
+                "Suppressed Workshop Host promotion because no connected member remains; " +
                 "clearing network and Workshop runtime state for the native MainMenu.");
             ClearInjectedWorkshopRuntimeState(
-                "old Host left and no remote member remains",
+                "old Host left and no connected member remains",
                 true,
                 true);
         }
 
-        private static bool TryGetConnectedRemoteMemberCount(
+        private static bool TryGetConnectedMemberCount(
             bool excludePid,
             byte excludedPidByte,
             out int count)
@@ -646,7 +700,7 @@ namespace CustomMapMultiplayer
                 {
                     continue;
                 }
-                if (pid == null || pid.IsMine || !IsOnlinePlayerPid(pid) ||
+                if (pid == null || !IsOnlinePlayerPid(pid) ||
                     wrapper == null || !wrapper.Connected)
                 {
                     continue;
@@ -782,6 +836,7 @@ namespace CustomMapMultiplayer
                     _nativeMainMenuExitPending)
                 {
                     _nativeMainMenuExitPending = false;
+                    _nativeMainMenuLoadStarted = false;
                     ClearWorkshopLoadRequest();
                     DiagnosticLog.Info(
                         "Native MainMenu loaded after online Host departure; released the stale Workshop exit guard.");
@@ -1193,7 +1248,8 @@ namespace CustomMapMultiplayer
             try
             {
                 var settings = Plugin.Settings;
-                if (settings == null || !settings.EnableOnlineWorkshopInjection || _injectedForSession)
+                if (settings == null || !settings.EnableOnlineWorkshopInjection ||
+                    _injectedForSession || !_networkSessionActive || _nativeMainMenuExitPending)
                 {
                     return;
                 }
@@ -1323,6 +1379,7 @@ namespace CustomMapMultiplayer
             ClearLateJoinState();
             ClearLifecycleState();
             _nativeMainMenuExitPending = false;
+            _nativeMainMenuLoadStarted = false;
 
             try
             {

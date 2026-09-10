@@ -37,13 +37,14 @@ Mod 不会替用户订阅、搜索社区或主动下载地图。实际地图下�
 
 ## 房主退出与 Host migration
 
-Steam 房主离开后，网络层可能先把原加入方标记为新的 Host。Mod 会在 `ConnectionLayer.RemovePlayer` 清理旧房主前记录其 PID，并在判断 Host 角色变化时排除这个已离开的成员：
+Steam 房主离开后，网络层可能先把当前加入方标记为新的 Host。Mod 会在 `ConnectionLayer.RemovePlayer` 清理旧房主前记录其 PID，用于确认角色变化来自旧 Host 离开；成员统计包含当前本地加入方，不会因为没有其它远端 PID 而被误判为需要退出：
 
-- 排除后没有其它远端成员时，这是“房主退出、当前只剩一个 Client”的房间退出，不是真正的 Host migration。此路径清理网络、Workshop、暂停和切关状态，不执行 Workshop Host promotion，也不重新设置 `GameState.loadCustomCampaign=true`，随后放行原生 `MainMenu`。
-- 退出期间会拦截过期的 Workshop `SteamController.LoadLevel` 请求和 UGC 回调，避免原生主菜单加载与 Workshop 加载循环相互触发。
-- 排除后仍有其它远端成员时，才按真正的多人 Host migration 继续接管房主发布的 Workshop 状态。
+- 只要当前加入方仍在 Steam 房间内，即使它是唯一剩余成员，也计为有效成员并继续执行官方 Host migration；不会主动调用 `LeaveMatch` 或返回原生 `MainMenu`。
+- Host promotion 会保留 `GameState.loadCustomCampaign=true`，重新发布当前地图、关卡编号、Workshop 身份和大厅 ready 状态。
+- 原生主菜单退出保护只用于明确的 `LeaveMatch` 或关闭注入清理，不参与正常的 Steam Host migration。
+- 只有连接表中已没有任何有效成员时，才清理会话并返回原生 `MainMenu`。
 
-FRP Direct 的房主退出仍按现有协议结束房间，不支持主机迁移；用户在排除本轮新增退出保护的实验构建中确认加入方会直接返回主菜单，没有复现本 issue 的黑屏。Steam 单 Client 房主退出黑屏已由用户验收；完整边界见[Workshop 房主退出后加入方返回黑屏](../issues/ISSUES-2026-09-05-Workshop房主退出后加入方返回黑屏.md)。
+FRP Direct 的房主退出仍按现有协议结束房间，不支持主机迁移；用户在排除本轮新增退出保护的实验构建中确认加入方会直接返回主菜单，没有复现本 issue 的黑屏。Steam 单加入方房主退出后会保留房间并完成官方 Host migration，已由用户验收；多加入方和异常状态边界见[Workshop 房主退出后加入方返回黑屏](../issues/ISSUES-2026-09-05-Workshop房主退出后加入方返回黑屏.md)。
 
 ## 晚加入与重入
 
