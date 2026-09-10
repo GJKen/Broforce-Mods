@@ -9,7 +9,7 @@ namespace CustomMapMultiplayer
 {
     public static class Plugin
     {
-        private const int CurrentDiagnosticSettingsVersion = 14;
+        private const int CurrentDiagnosticSettingsVersion = 15;
         private const float FrpSettingsApplyDelaySeconds = 0.75f;
         private const float DefaultSettingsNavigationWidth = 190f;
         private const float DefaultSettingsContentWidth = 590f;
@@ -586,6 +586,20 @@ namespace CustomMapMultiplayer
             SettingsUiText text)
         {
             DrawViewHeading(text.MultiplayerOptions, text.MultiplayerOptionsIntro);
+
+            var onlineKickFixEnabled = DrawSettingsToggle(
+                Settings.EnableOnlineKickFix,
+                Settings.EnableOnlineKickFix
+                    ? text.OnlineKickFixEnabled
+                    : text.OnlineKickFixDisabled,
+                GetSettingsToggleStyle());
+            if (onlineKickFixEnabled != Settings.EnableOnlineKickFix)
+            {
+                Settings.EnableOnlineKickFix = onlineKickFixEnabled;
+                SaveSettings(modEntry);
+            }
+            DrawIndentedHelp(text.OnlineKickFixHelp);
+            GUILayout.Space(10f);
 
             var overlapMeleeEnabled = DrawSettingsToggle(
                 Settings.DisablePlayerOverlapHighFive,
@@ -2300,6 +2314,11 @@ namespace CustomMapMultiplayer
             if (settings.DiagnosticSettingsVersion < 14)
             {
                 settings.EnableWorkshopDropInRespawnFix = true;
+            }
+
+            if (settings.DiagnosticSettingsVersion < 15)
+            {
+                settings.EnableOnlineKickFix = true;
             }
 
             if (settings.DiagnosticSettingsVersion < 7)

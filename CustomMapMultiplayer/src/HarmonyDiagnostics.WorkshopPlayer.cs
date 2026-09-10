@@ -548,7 +548,25 @@ namespace CustomMapMultiplayer
             }
 
             var playerNum = arguments[0] is int ? (int)arguments[0] : -1;
-            if (playerNum < 0 || playerNum >= 4 || HeroController.PIDS == null)
+            if (playerNum < 0 || playerNum >= 4)
+            {
+                return;
+            }
+
+            var nativeKickDropout = ConsumeNativeKickDropout(playerNum);
+            if (nativeKickDropout)
+            {
+                PendingLocalWorkshopRejoins.Remove(playerNum);
+                PreparedLocalWorkshopRejoins.Remove(playerNum);
+                WorkshopDropoutHeroTypes.Remove(playerNum);
+                WorkshopDropoutControllerIds.Remove(playerNum);
+                DiagnosticLog.Info(
+                    "Skipped Workshop automatic rejoin for native host kick: player=" +
+                    playerNum + ".");
+                return;
+            }
+
+            if (HeroController.PIDS == null)
             {
                 return;
             }

@@ -140,6 +140,7 @@ namespace CustomMapMultiplayer
             ClearEntityFinalStateSynchronizationState();
             ClearDemolitionBroBombDetonationState();
             ClearMcBroverTurkeyDetonationState();
+            ClearNativeKickDropouts();
             ResetWorkshopSpawnTracking("lifecycle state reset");
             PendingLocalWorkshopRejoins.Clear();
             PreparedLocalWorkshopRejoins.Clear();

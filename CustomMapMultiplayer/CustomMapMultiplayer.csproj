@@ -38,6 +38,10 @@
       <HintPath>$(BroforceManagedPath)\UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityModManager">
       <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
       <Private>false</Private>
@@ -77,6 +81,7 @@
     <Compile Include="src\HarmonyDiagnostics.Afk.cs" />
     <Compile Include="src\HarmonyDiagnostics.Chat.cs" />
     <Compile Include="src\HarmonyDiagnostics.Melee.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Kick.cs" />
     <Compile Include="src\HarmonyDiagnostics.Acid.cs" />
     <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopLevelEnd.cs" />

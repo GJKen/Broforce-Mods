@@ -30,6 +30,9 @@ namespace CustomMapMultiplayer
         internal string WorkshopDropInRespawnFixEnabled;
         internal string WorkshopDropInRespawnFixDisabled;
         internal string WorkshopDropInRespawnFixHelp;
+        internal string OnlineKickFixEnabled;
+        internal string OnlineKickFixDisabled;
+        internal string OnlineKickFixHelp;
         internal string ManualAfkButton;
         internal string ManualAfkSinglePlayerNotice;
         internal string WorkshopNotice;
@@ -141,6 +144,9 @@ namespace CustomMapMultiplayer
             WorkshopDropInRespawnFixEnabled = "Enabled Workshop drop-in respawn position fix",
             WorkshopDropInRespawnFixDisabled = "Disabled Workshop drop-in respawn position fix",
             WorkshopDropInRespawnFixHelp = "Corrects abnormal DropInDuringGame positions only after a stable direct Workshop spawn; transport, parachute, checkpoint, rescue, and cage spawns remain native.",
+            OnlineKickFixEnabled = "Enabled native online kick fixes and optimizations",
+            OnlineKickFixDisabled = "Disabled native online kick fixes and optimizations",
+            OnlineKickFixHelp = "A joining player cannot kick the host through the native online kick flow. When enabled, the host's own kick prompt and kick explosion damage are removed; the host can still kick joining players, and the result is synchronized to everyone.",
             ManualAfkButton = "Enter AFK now",
             ManualAfkSinglePlayerNotice = "AFK is unavailable while you are the only player in the room.",
             WorkshopNotice = "When using a Workshop map, all players must use the same Mod build and subscribe to the same map.\nThe host enters the numeric Workshop ID.\nAfter joining, the joining player uses the host's Workshop ID; this setting can be ignored.",
@@ -261,6 +267,9 @@ namespace CustomMapMultiplayer
             WorkshopDropInRespawnFixEnabled = "已启用 Workshop 复活位置修复",
             WorkshopDropInRespawnFixDisabled = "已禁用 Workshop 复活位置修复",
             WorkshopDropInRespawnFixHelp = "修复部分 Workshop 地图中角色死亡后复活位置错误的问题；运输、降落伞、检查点、救援和笼子出生保持原生行为。",
+            OnlineKickFixEnabled = "已启用 原生联机踢人机制修复与优化",
+            OnlineKickFixDisabled = "已禁用 原生联机踢人机制修复与优化",
+            OnlineKickFixHelp = "房主不会被联机玩家踢出；启用后隐藏房主自身踢人气泡以及踢人爆炸，同时保留房主正常踢出加入方且结果同步给所有玩家。",
             ManualAfkButton = "立即进入 AFK",
             ManualAfkSinglePlayerNotice = "房间只有你一人时无法进入 AFK。",
             WorkshopNotice = "使用 Workshop 地图时，所有玩家必须使用相同的 Mod 构建，并订阅同一张地图。\n房主填写数字 Workshop ID；\n进入房间后，加入方则会使用房主的 Workshop ID，此项无需留意。",

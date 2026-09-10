@@ -356,6 +356,7 @@ namespace CustomMapMultiplayer
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
             PatchPlayerOverlapHighFiveBehavior();
+            PatchOnlineKickPermissions();
             PatchChatPauseBoundary();
             PatchChatMessageLengthLimit();
             PatchChatMessageViewport();
