@@ -1,0 +1,110 @@
+{
+  "checked_at": "2026-09-15T08:10:21",
+  "source_file": "haiwang_trident_traversal-v2.aseprite",
+  "source_saved_at": "2026-09-15T08:01:34",
+  "source_sha256": "34c287d0b2598e6cca6c88864e765267224cdc621bacb1799bdde6d8a27eadaa",
+  "source_unchanged": true,
+  "source_frames": 86,
+  "layer_frames_checked": 516,
+  "atlas_frame_pairs_checked": 86,
+  "atlas_size": [
+    1024,
+    1024
+  ],
+  "changed_body_cells": [
+    76,
+    91,
+    160,
+    163,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    193,
+    194,
+    195,
+    196,
+    197,
+    517,
+    518,
+    519,
+    520,
+    521,
+    522,
+    523
+  ],
+  "changed_weapon_cells": [
+    658,
+    685,
+    691,
+    692,
+    693,
+    703,
+    712,
+    721,
+    730,
+    739,
+    748
+  ],
+  "unrelated_atlas_cells_unchanged": true,
+  "standalone_actions": [
+    {
+      "file": "haiwang_trident_wall-v2.aseprite",
+      "tag": "贴墙",
+      "source_frames": [
+        1,
+        10
+      ],
+      "frames": 10,
+      "layers": 6,
+      "sha256": "81194e7d2c67763863c09c1dcf619632ed94a6ff7fd7820baca82c19ba22c8a9"
+    },
+    {
+      "file": "haiwang_trident_hanging-v2.aseprite",
+      "tag": "悬挂",
+      "source_frames": [
+        11,
+        28
+      ],
+      "frames": 18,
+      "layers": 6,
+      "sha256": "4ad13f2c85562c88e171167b9167a39423a3dffb8f85749e92fe4262f5573856"
+    },
+    {
+      "file": "haiwang_trident_climbing-v2.aseprite",
+      "tag": "攀爬",
+      "source_frames": [
+        29,
+        48
+      ],
+      "frames": 20,
+      "layers": 6,
+      "sha256": "ac72ad02b086013cb018918b49f8924df31c8d2a0b6b6fbbec221a838ad3412d"
+    },
+    {
+      "file": "haiwang_trident_ladder-v2.aseprite",
+      "tag": "爬梯",
+      "source_frames": [
+        49,
+        68
+      ],
+      "frames": 20,
+      "layers": 6,
+      "sha256": "04ff7c9689afbd74b85fa07d30ed12917778daeaf96c8b0fd037a92478643c8a"
+    },
+    {
+      "file": "haiwang_trident_zipline-v2.aseprite",
+      "tag": "滑索",
+      "source_frames": [
+        69,
+        86
+      ],
+      "frames": 18,
+      "layers": 6,
+      "sha256": "17b596b243aa9aca26c63ed9705a6a4bc090839f60a2fd4d48c446b7c3eef50b"
+    }
+  ],
+  "backup": "backups/before-user-traversal-sync-20260915-080559"
+}

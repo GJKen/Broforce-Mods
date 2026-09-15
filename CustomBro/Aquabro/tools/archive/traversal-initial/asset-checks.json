@@ -1,0 +1,58 @@
+{
+  "source_frames": 86,
+  "layers": [
+    "绿色裤靴",
+    "金色鳞甲与颈部",
+    "抓附手臂",
+    "金发与脸部",
+    "金色三叉戟",
+    "活动手臂"
+  ],
+  "tags": [
+    [
+      "贴墙",
+      1,
+      10
+    ],
+    [
+      "悬挂",
+      11,
+      28
+    ],
+    [
+      "攀爬",
+      29,
+      48
+    ],
+    [
+      "爬梯",
+      49,
+      68
+    ],
+    [
+      "滑索",
+      69,
+      86
+    ]
+  ],
+  "body_cells": 76,
+  "unarmed_frames": 68,
+  "unarmed_body_cells": 58,
+  "zipline_frames": 18,
+  "paired_weapon_cells": 162,
+  "cleared_weapon_cells": 522,
+  "unchanged_old_body_cells": 948,
+  "unchanged_old_weapon_cells": 73,
+  "preserved_user_sources": [
+    "haiwang_trident_held-v2.aseprite",
+    "haiwang_trident_run-v2.aseprite",
+    "haiwang_trident_run-v3.aseprite",
+    "haiwang_trident_jump-v2.aseprite",
+    "haiwang_trident_crouch-v2.aseprite"
+  ],
+  "pixel_pairing": "86/86",
+  "small_transparent_gaps": 0,
+  "weapon_body_overlaps": 0,
+  "empty_hand_and_zipline_isolation": "passed",
+  "gameplay_verification": "pending"
+}

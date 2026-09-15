@@ -1,0 +1,11 @@
+{
+  "movement_body_cells": 44,
+  "movement_weapon_cells": 36,
+  "attack_poses": 36,
+  "traversal_source_frames": 86,
+  "traversal_body_cells": 76,
+  "run_source": "01_动作主稿/haiwang_trident_run-v3.aseprite",
+  "landing_to_run_v3": true,
+  "aseprite_png_match": true,
+  "gameplay_verified": false
+}

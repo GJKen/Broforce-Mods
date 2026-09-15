@@ -1,0 +1,37 @@
+{
+  "completed_at": "2026-09-15T22:14:06.9054370+08:00",
+  "change": "跑步改用关键文件目录v3，重新生成身体、武器、飞行戟贴图，包含滑索完整长度三叉戟修订",
+  "build": "BuildBro.ps1",
+  "build_success": true,
+  "deployment": "E:\\Games\\Broforce Mods\\Broforce\\profiles\\Broforce\\UMM\\BroMaker_Storage\\Bro Template",
+  "files": [
+    {
+      "file": "Bro Template.dll",
+      "sha256": "5B0283B0C0D2F9A36F129B43940B7824B19EA83E3293D881145B9F1370ACA910",
+      "deployed_sha256": "5B0283B0C0D2F9A36F129B43940B7824B19EA83E3293D881145B9F1370ACA910",
+      "match": true
+    },
+    {
+      "file": "sprite.png",
+      "sha256": "4A306C3F91EDB4F1E2202E7B59FAD0A30F4B329811F424430A1883CA0DECBC66",
+      "deployed_sha256": "4A306C3F91EDB4F1E2202E7B59FAD0A30F4B329811F424430A1883CA0DECBC66",
+      "match": true
+    },
+    {
+      "file": "gunSprite.png",
+      "sha256": "A4FD0E4B5511E3F35111ABDB6F0E800262D0686B62046A17CE58656F38B5ED33",
+      "deployed_sha256": "A4FD0E4B5511E3F35111ABDB6F0E800262D0686B62046A17CE58656F38B5ED33",
+      "match": true
+    },
+    {
+      "file": "projectiles\\Trident.png",
+      "sha256": "F94DF2024B9AACBB6505756AED7A755275297138D0E5C23ABB6B1D5B6027908A",
+      "deployed_sha256": "F94DF2024B9AACBB6505756AED7A755275297138D0E5C23ABB6B1D5B6027908A",
+      "match": true
+    }
+  ],
+  "checks": "key-source-checks.json",
+  "tests": "攻击390项、水墙16项、移动动画1856项通过",
+  "backup": "E:\\Study\\C#\\Broforce-Mods\\CustomBro\\BroTemplate\\backups\\before-key-sources-run-v3-20260915-2230",
+  "gameplay_verified": false
+}

@@ -7,3 +7,14 @@
 
 # Local reverse-engineering reference; never publish extracted game source.
 /Broforce_src/Broforce-Source/
+
+# 从游戏 assetbundle 导出的官方贴图/音频,仅供自用参考,不随仓库分发。
+# 内容清单与重导方法见 Broforce_src/GameAssets/README.md
+/Broforce_src/GameAssets
+
+# Custom bro local build settings, working backups and generated Python caches.
+/CustomBro/*/LocalBroforcePath.props
+/CustomBro/*/backups/
+/CustomBro/*/tools/archive/**/*.dll
+**/__pycache__/
+*.py[cod]

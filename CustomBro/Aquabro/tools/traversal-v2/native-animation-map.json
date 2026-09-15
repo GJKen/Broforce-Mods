@@ -1,0 +1,93 @@
+{
+  "game_assembly_sha256": "6059336ee9e93a9bcd46e89d259687ae179ce32e0ddbee78dd7b0acf8b0ff3a9",
+  "bromaker_assembly_sha256": "9c1f1a2cf6503b1dfb976497c9a8c2ad5efac6e6c3746470343272c7eca6e636",
+  "native_source": "本机实际安装 DLL 反编译，2026-09-14",
+  "new_flags_in_start": {
+    "useNewKnifeClimbingFrames": true,
+    "useNewLadderClimbingFrames": false,
+    "useLadderClimbingTransition": false
+  },
+  "better_animation_flags_already_enabled": [
+    "useNewFrames",
+    "useNewLedgeGrappleFrames",
+    "useNewKnifeClimbingFrames",
+    "useNewDuckingFrames"
+  ],
+  "hanging_local_offset": [
+    0,
+    -2
+  ],
+  "hanging_grip_x": [
+    22,
+    22,
+    21,
+    18,
+    14,
+    10,
+    22,
+    22,
+    21,
+    18,
+    14,
+    10
+  ],
+  "hanging_grip_y": 9,
+  "native_wall_drag_cells": [
+    [
+      76,
+      80
+    ],
+    [
+      86,
+      90
+    ]
+  ],
+  "native_wall_climb_and_anticipation_cells": [
+    [
+      76,
+      85
+    ],
+    [
+      86,
+      95
+    ]
+  ],
+  "native_hanging_and_zipline_cells": [
+    [
+      107,
+      118
+    ],
+    [
+      119,
+      124
+    ]
+  ],
+  "native_ladder_cells": {
+    "up": [
+      160,
+      167
+    ],
+    "down": [
+      168,
+      170
+    ],
+    "idle": [
+      171,
+      173
+    ],
+    "transition": [
+      192,
+      197
+    ]
+  },
+  "zipline_remap_cells": [
+    512,
+    529
+  ],
+  "native_chimney_flip_cells": [
+    203,
+    214
+  ],
+  "ledge_top_out": "ChangeFrame() 的 ledgeGrapple 分支调用 AnimateRunning()；保留当前站跑跳衔接",
+  "gameplay_verified": false
+}

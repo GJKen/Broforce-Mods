@@ -1,0 +1,27 @@
+{
+  "completed_at": "2026-09-15T09:33:39.7818056+08:00",
+  "change": "绳索蓄力手臂修订：18个武器格已同步；重新构建并部署DLL及武器贴图",
+  "build": "BuildBro.ps1 -SkipDeploy；定向部署 Bro Template.dll 与 gunSprite.png",
+  "build_success": true,
+  "deployment": "E:\\Games\\Broforce Mods\\Broforce\\profiles\\Broforce\\UMM\\BroMaker_Storage\\Bro Template",
+  "files": [
+    {
+      "file": "Bro Template.dll",
+      "bytes": 36864,
+      "sha256": "748e3fc095486e60a4a7297e13b2b26c49b66bd32cbd3d9df7abc5b25526dc8f",
+      "deployed_sha256": "748e3fc095486e60a4a7297e13b2b26c49b66bd32cbd3d9df7abc5b25526dc8f",
+      "match": true
+    },
+    {
+      "file": "gunSprite.png",
+      "bytes": 23039,
+      "sha256": "5fb3a5351edd72ae1876a1d0a014b086423b3ce5d4de3efaf45dc6094ea0e9c4",
+      "deployed_sha256": "5fb3a5351edd72ae1876a1d0a014b086423b3ce5d4de3efaf45dc6094ea0e9c4",
+      "match": true
+    }
+  ],
+  "source": "tools/haiwang_trident_zipline_charge.aseprite",
+  "integration_checks": "tools/traversal-v2/zipline-charge-integration.json",
+  "backup": "E:\\Study\\C#\\Broforce-Mods\\CustomBro\\BroTemplate\\backups\\before-zipline-charge-deploy-20260915-092124",
+  "gameplay_verified": false
+}

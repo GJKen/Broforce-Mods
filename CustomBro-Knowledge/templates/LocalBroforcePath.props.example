@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <!-- Set these paths locally; do not commit real machine-specific paths. -->
+    <!-- Real values on this machine (2026-09, r2modman custom data dir): -->
+    <BroforceManagedPath>E:\SteamLibrary\steamapps\common\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
+    <UnityModManagerPath>E:\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Core</UnityModManagerPath>
+    <RocketLibPath>E:\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\RocketLib-RocketLib\RocketLib\RocketLib.dll</RocketLibPath>
+
+    <!-- BroMaker dll and BroMaker_Storage target folder (deploy destination). -->
+    <BroMakerLibPath>E:\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\BroMaker-BroMaker\BroMakerLib\BroMakerLib.dll</BroMakerLibPath>
+    <!-- Newtonsoft.Json.dll ships inside the RocketLib package folder -->
+    <NewtonsoftJsonPath>E:\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\Mods\RocketLib-RocketLib\RocketLib\Newtonsoft.Json.dll</NewtonsoftJsonPath>
+    <BroMakerStoragePath>E:\Games\Broforce Mods\Broforce\profiles\Broforce\UMM\BroMaker_Storage</BroMakerStoragePath>
+
+    <!-- Bro folder name inside BroMaker_Storage; must contain the .mod.json, bro .json and sprites. -->
+    <BroStorageFolderName>MyBro</BroStorageFolderName>
+  </PropertyGroup>
+</Project>

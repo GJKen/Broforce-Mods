@@ -1,0 +1,34 @@
+{
+  "completed_at": "2026-09-16T01:17:10+08:00",
+  "change": "保留 SetBrosPositions 后置补丁的完整 UV 恢复，删除重复的 Helicopter.Update 后置补丁",
+  "build": "BuildBro.ps1",
+  "build_success": true,
+  "deployment": "E:\\Games\\Broforce Mods\\Broforce\\profiles\\Broforce\\UMM\\BroMaker_Storage\\Bro Template",
+  "files": [
+    {
+      "file": "Bro Template.dll",
+      "sha256": "7192969A97D4D5259FAA5338DA5F16D489503A6BDAC93A584C4538617D6EFC46",
+      "deployed_sha256": "7192969A97D4D5259FAA5338DA5F16D489503A6BDAC93A584C4538617D6EFC46",
+      "match": true
+    },
+    {
+      "file": "sprite.png",
+      "sha256": "4A306C3F91EDB4F1E2202E7B59FAD0A30F4B329811F424430A1883CA0DECBC66",
+      "deployed_sha256": "4A306C3F91EDB4F1E2202E7B59FAD0A30F4B329811F424430A1883CA0DECBC66",
+      "match": true
+    },
+    {
+      "file": "gunSprite.png",
+      "sha256": "A4FD0E4B5511E3F35111ABDB6F0E800262D0686B62046A17CE58656F38B5ED33",
+      "deployed_sha256": "A4FD0E4B5511E3F35111ABDB6F0E800262D0686B62046A17CE58656F38B5ED33",
+      "match": true
+    }
+  ],
+  "tests": "攻击390项、水墙16项、移动动画1856项通过",
+  "backup": "E:\\Study\\C#\\Broforce-Mods\\CustomBro\\BroTemplate\\backups\\before-key-sources-run-v3-20260915-2230",
+  "gameplay_verified": false,
+  "mcp_verified": false,
+  "user_retest": "待用户使用当前 DLL 独立复测",
+  "source_verification": "关键文件目录中的站姿身体格只含身体，武器格 0 和 9 只含持戟手臂与三叉戟，源稿和生成贴图没有重复身体",
+  "verification": "清理版 DLL 已成功加载并进入难度选择界面；当前没有直升机实例，等待重新进入直升机场景检查网格 UV 和最终画面"
+}

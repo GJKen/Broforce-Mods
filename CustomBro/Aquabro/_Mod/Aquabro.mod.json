@@ -1,0 +1,8 @@
+{
+  "Version": "1.0.0",
+  "BroMakerVersion": "2.6.2",
+  "Name": "Aquabro",
+  "Author": "gjken",
+  "CustomBros": ["Aquabro.json"],
+  "Assemblies": ["Aquabro.dll"]
+}

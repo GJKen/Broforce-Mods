@@ -1,0 +1,672 @@
+{
+  "body_cells": [
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120,
+    121,
+    122,
+    123,
+    124
+  ],
+  "saved_atlas_matches_png": true,
+  "shared_frames": 10,
+  "source_frames": 48,
+  "unchanged_body_cells": 986,
+  "unique_body_cells": 38,
+  "method": "Aseprite MCP / 原版轮廓逐像素重画",
+  "reference_offset": [
+    0,
+    -1
+  ],
+  "unique_pose_checks": [
+    {
+      "reference": 76,
+      "arm_pixels": 32,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 77,
+      "arm_pixels": 36,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 78,
+      "arm_pixels": 33,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": [
+        [
+          [
+            17,
+            15
+          ],
+          [
+            17,
+            16
+          ]
+        ]
+      ]
+    },
+    {
+      "reference": 79,
+      "arm_pixels": 39,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 80,
+      "arm_pixels": 41,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 81,
+      "arm_pixels": 39,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 82,
+      "arm_pixels": 39,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": [
+        [
+          [
+            18,
+            17
+          ],
+          [
+            18,
+            16
+          ],
+          [
+            18,
+            15
+          ]
+        ]
+      ]
+    },
+    {
+      "reference": 83,
+      "arm_pixels": 37,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 84,
+      "arm_pixels": 31,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 85,
+      "arm_pixels": 33,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 86,
+      "arm_pixels": 28,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 87,
+      "arm_pixels": 30,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 88,
+      "arm_pixels": 35,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 89,
+      "arm_pixels": 37,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 90,
+      "arm_pixels": 43,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 91,
+      "arm_pixels": 34,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 92,
+      "arm_pixels": 40,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 93,
+      "arm_pixels": 36,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 94,
+      "arm_pixels": 40,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 95,
+      "arm_pixels": 38,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 107,
+      "arm_pixels": 43,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": [
+        [
+          [
+            19,
+            13
+          ]
+        ]
+      ]
+    },
+    {
+      "reference": 108,
+      "arm_pixels": 48,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": [
+        [
+          [
+            20,
+            14
+          ]
+        ]
+      ]
+    },
+    {
+      "reference": 109,
+      "arm_pixels": 43,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 110,
+      "arm_pixels": 39,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 111,
+      "arm_pixels": 36,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 112,
+      "arm_pixels": 44,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 113,
+      "arm_pixels": 41,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 114,
+      "arm_pixels": 41,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": [
+        [
+          [
+            20,
+            14
+          ]
+        ]
+      ]
+    },
+    {
+      "reference": 115,
+      "arm_pixels": 31,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 116,
+      "arm_pixels": 35,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 117,
+      "arm_pixels": 54,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 118,
+      "arm_pixels": 45,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": [
+        [
+          [
+            19,
+            14
+          ]
+        ]
+      ]
+    },
+    {
+      "reference": 119,
+      "arm_pixels": 27,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 120,
+      "arm_pixels": 27,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 121,
+      "arm_pixels": 27,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 122,
+      "arm_pixels": 27,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 123,
+      "arm_pixels": 27,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    },
+    {
+      "reference": 124,
+      "arm_pixels": 27,
+      "connected": true,
+      "native_limb_pixels": true,
+      "native_torso_and_pants": true,
+      "held_palette": true,
+      "retained_native_negative_spaces": []
+    }
+  ],
+  "gif_checks": [
+    {
+      "file": "wall.gif",
+      "frames": 10,
+      "durations_ms": [
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60
+      ],
+      "pixels_match_source": true
+    },
+    {
+      "file": "wall-rambro-compare.gif",
+      "frames": 10,
+      "durations_ms": [
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60
+      ],
+      "pixels_match_source": true
+    },
+    {
+      "file": "hanging.gif",
+      "frames": 18,
+      "durations_ms": [
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40
+      ],
+      "pixels_match_source": true
+    },
+    {
+      "file": "hanging-rambro-compare.gif",
+      "frames": 18,
+      "durations_ms": [
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40
+      ],
+      "pixels_match_source": true
+    },
+    {
+      "file": "climbing.gif",
+      "frames": 20,
+      "durations_ms": [
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60
+      ],
+      "pixels_match_source": true
+    },
+    {
+      "file": "climbing-rambro-compare.gif",
+      "frames": 20,
+      "durations_ms": [
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60
+      ],
+      "pixels_match_source": true
+    }
+  ],
+  "intentional_negative_spaces": "仅保留原版同位置透明的脸部与手臂间留白",
+  "deployment": "本轮未重新构建或部署",
+  "preservation": {
+    "dimensions_frames_layers_tags_durations_preserved": true,
+    "hidden_reference_layers_preserved": 1,
+    "retained_cels": 228,
+    "retained_traversal_frames": 38,
+    "saved_independent_and_total_frames_match": 48
+  },
+  "preserved_files": [
+    {
+      "file": "tools/haiwang_trident_held-v2.aseprite",
+      "sha256": "a2ac69cd366ef5e8e2cec1e592e9e170125b8c4ccb66cce883ba270d912b17f4"
+    },
+    {
+      "file": "tools/haiwang_trident_run-v2.aseprite",
+      "sha256": "a400d25d6a791620fa6493040f2dcad177de5181e17cc653756a1ae8c9bfd26d"
+    },
+    {
+      "file": "tools/haiwang_trident_run-v3.aseprite",
+      "sha256": "4e166fd2118246df3893f8ce64f6bbbadf51259ef96e890315a4494ebb65fcdf"
+    },
+    {
+      "file": "tools/haiwang_trident_jump-v2.aseprite",
+      "sha256": "c736ce5436659455bc1a2874ecf2bbc088c4ed22d8f6e872b8a52af4f2397b33"
+    },
+    {
+      "file": "tools/haiwang_trident_crouch-v2.aseprite",
+      "sha256": "a2dc6eab1e4a301ea765882ee7d1bfa180930272abdc5056bcfaaf13c6d34bfa"
+    },
+    {
+      "file": "tools/haiwang_trident_ladder-v2.aseprite",
+      "sha256": "7ab96a5044f8beabc8b4267547cc1a50647b0ba1d6e30555b1b3139c69c6f170"
+    },
+    {
+      "file": "tools/haiwang_trident_zipline-v2.aseprite",
+      "sha256": "f6b83ff55b98fac5184a14bd39cb179c9421780a7bb8bc43c00dec142fc2af15"
+    },
+    {
+      "file": "tools/haiwang_trident_gun_atlas.aseprite",
+      "sha256": "570f8c0e153b5e90cb6848b10fce4a36cc0e07bb96c7b93ab3a8630a8dca4d24"
+    },
+    {
+      "file": "_Mod/gunSprite.png",
+      "sha256": "bfc155c70f9fb9571f181968ffa922985553cc51c1b07692d1319e5825f035bc"
+    },
+    {
+      "file": "_Mod/Bro Template.dll",
+      "sha256": "3f450e985d31b501def1f6a33aac0803b6d47cd922fe4766f92865603ed95f0d"
+    }
+  ],
+  "updated_files": [
+    {
+      "file": "tools/haiwang_trident_wall-v2.aseprite",
+      "sha256": "d5bc2d72e62b49056f0a52e769b01eb6d647189e27d67d47151f0a2c33481277"
+    },
+    {
+      "file": "tools/haiwang_trident_hanging-v2.aseprite",
+      "sha256": "8da10c64f4b40880b0da80eb12c76f0499dbfaa020a972255e807d69fcb00f69"
+    },
+    {
+      "file": "tools/haiwang_trident_climbing-v2.aseprite",
+      "sha256": "5dae3233bac9237411dd6624ff8cffe16bc142a03d7af4fb7021294e0490acb7"
+    },
+    {
+      "file": "tools/haiwang_trident_traversal-v2.aseprite",
+      "sha256": "8a14aa32e3ac715f59e79b2f02fcf96a6a8796d2e912c207e0ae146012fe8956"
+    },
+    {
+      "file": "tools/haiwang_trident_body_atlas.aseprite",
+      "sha256": "a39a2c80eade9ca66a2314c157677f95e0e5798b39fe96b56a7d11ea952e9533"
+    },
+    {
+      "file": "_Mod/sprite.png",
+      "sha256": "6f2fcff0496f20adb87a343c27beb7ad0a34eed347be7c27256f71a878c73e2f"
+    }
+  ],
+  "reference_asset": {
+    "file": "Broforce_src/GameAssets/hero/RAMBO_anim_1024x512.png",
+    "sha256": "442f70035e227a553cb5b61ae66329b053f55563e6d1df43e6a49358d3f0420f"
+  },
+  "backup": "backups/before-rambro-proportions-20260915-064442"
+}
