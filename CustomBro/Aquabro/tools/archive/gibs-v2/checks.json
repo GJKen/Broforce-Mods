@@ -1,0 +1,25 @@
+{
+  "action": "实体破裂",
+  "sourceFrame": 1,
+  "reference": "Rambro body atlas",
+  "source": "CustomBro/Aquabro/tools/海王_Aseprite关键文件/04_死亡碎块/haiwang_trident_death_gibs-v1.aseprite",
+  "atlas": "CustomBro/Aquabro/tools/海王_Aseprite关键文件/03_游戏图集/haiwang_trident_body_atlas.aseprite",
+  "atlasBaseline": "CustomBro/Aquabro/tools/archive/gibs-v2/before-source-refresh-20260918-040440/work-body-atlas.aseprite",
+  "samples": [
+    {"name":"head","lowerLeftPixel":[320,17],"pixelDimensions":[16,16],"pngRect":[320,1,16,16],"originalPixels":48,"mappedPixels":52,"changedPixels":233,"semiTransparent":0},
+    {"name":"torso","lowerLeftPixel":[320,30],"pixelDimensions":[16,16],"pngRect":[320,14,16,16],"originalPixels":88,"mappedPixels":88,"changedPixels":184,"semiTransparent":0},
+    {"name":"arm","lowerLeftPixel":[341,13],"pixelDimensions":[8,8],"pngRect":[341,5,8,8],"originalPixels":19,"mappedPixels":19,"changedPixels":45,"semiTransparent":0},
+    {"name":"leg","lowerLeftPixel":[341,27],"pixelDimensions":[8,8],"pngRect":[341,19,8,8],"originalPixels":14,"mappedPixels":14,"changedPixels":55,"semiTransparent":0}
+  ],
+  "geometryChanged": true,
+  "geometryChanges": [{"piece":"head","atlas":[325,10],"source":[5,9],"type":"added"},{"piece":"head","atlas":[332,10],"source":[12,9],"type":"added"},{"piece":"head","atlas":[324,11],"source":[4,10],"type":"added"},{"piece":"head","atlas":[324,12],"source":[4,11],"type":"added"}],
+  "atlasChangedPixels": 22,
+  "outsideSamplePixels": 0,
+  "sourceSemiTransparentPixels": 0,
+  "afterSemiTransparentPixels": 0,
+  "addedOutsideNative": 4,
+  "removedNative": 0,
+  "changedSkinPixels": 3,
+  "changedBloodPixels": 3,
+  "preview": {"normal":"normal.gif","slow":"slow.gif","compare":"rambro-aquabro-compare-annotated.png"}
+}

@@ -1,0 +1,135 @@
+{
+  "sourceHash": "2BE52226347BF2B33325CD1CEAD403376A55A4B485E6DF2DE83CCACBCDE91CF5",
+  "preservation": {
+    "count": 211,
+    "changed": []
+  },
+  "exports": {
+    "frames": 2,
+    "height": 32,
+    "layers": [
+      {
+        "editable": true,
+        "name": "后侧手臂",
+        "pixels": [
+          11,
+          0
+        ]
+      },
+      {
+        "editable": true,
+        "name": "绿色裤靴",
+        "pixels": [
+          32,
+          31
+        ]
+      },
+      {
+        "editable": true,
+        "name": "金色鳞甲与颈部",
+        "pixels": [
+          52,
+          54
+        ]
+      },
+      {
+        "editable": true,
+        "name": "金发与脸部",
+        "pixels": [
+          40,
+          43
+        ]
+      },
+      {
+        "editable": true,
+        "name": "前侧手臂",
+        "pixels": [
+          19,
+          18
+        ]
+      },
+      {
+        "editable": true,
+        "name": "金色三叉戟（空手留空）",
+        "pixels": [
+          0,
+          0
+        ]
+      }
+    ],
+    "paletteMismatches": 0,
+    "previewMismatches": 0,
+    "rawOutsideCanvas": 0,
+    "rawSemiTransparent": 0,
+    "width": 32
+  },
+  "pixels": {
+    "frames": [
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          7,
+          16,
+          25,
+          30
+        ],
+        "cell": 4,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          154
+        ],
+        "durationMs": 1000,
+        "frame": 1,
+        "holes": [],
+        "pixels": 154,
+        "removed": [
+          {
+            "color": "870000",
+            "x": 22,
+            "y": 29
+          },
+          {
+            "color": "C20000",
+            "x": 23,
+            "y": 29
+          },
+          {
+            "color": "870000",
+            "x": 22,
+            "y": 30
+          },
+          {
+            "color": "C20000",
+            "x": 23,
+            "y": 30
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          7,
+          22,
+          25,
+          30
+        ],
+        "cell": 5,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          146
+        ],
+        "durationMs": 1000,
+        "frame": 2,
+        "holes": [],
+        "pixels": 146,
+        "removed": [],
+        "semiTransparent": 0
+      }
+    ],
+    "issues": [],
+    "method": "原版逐像素换装"
+  }
+}

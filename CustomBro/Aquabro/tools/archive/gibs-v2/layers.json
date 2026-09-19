@@ -1,0 +1,67 @@
+{ "frames": {
+   "haiwang_trident_gibs-v1 (原版兰博碎块参考（隐藏）).aseprite": {
+    "frame": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "sourceSize": { "w": 30, "h": 30 },
+    "duration": 1000
+   },
+   "haiwang_trident_gibs-v1 (金发与脸部（头部碎块）).aseprite": {
+    "frame": { "x": 0, "y": 30, "w": 30, "h": 30 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "sourceSize": { "w": 30, "h": 30 },
+    "duration": 1000
+   },
+   "haiwang_trident_gibs-v1 (金色鳞甲与颈部（躯干碎块）).aseprite": {
+    "frame": { "x": 0, "y": 60, "w": 30, "h": 30 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "sourceSize": { "w": 30, "h": 30 },
+    "duration": 1000
+   },
+   "haiwang_trident_gibs-v1 (前侧手臂（双臂共用碎块）).aseprite": {
+    "frame": { "x": 0, "y": 90, "w": 30, "h": 30 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "sourceSize": { "w": 30, "h": 30 },
+    "duration": 1000
+   },
+   "haiwang_trident_gibs-v1 (后侧手臂（双臂共用碎块）).aseprite": {
+    "frame": { "x": 0, "y": 120, "w": 30, "h": 30 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "sourceSize": { "w": 30, "h": 30 },
+    "duration": 1000
+   },
+   "haiwang_trident_gibs-v1 (绿色裤靴（双腿碎块）).aseprite": {
+    "frame": { "x": 0, "y": 150, "w": 30, "h": 30 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "sourceSize": { "w": 30, "h": 30 },
+    "duration": 1000
+   },
+   "haiwang_trident_gibs-v1 (金色三叉戟（空手留空）).aseprite": {
+    "frame": { "x": 0, "y": 180, "w": 30, "h": 30 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 30, "h": 30 },
+    "sourceSize": { "w": 30, "h": 30 },
+    "duration": 1000
+   }
+ },
+ "meta": {
+  "app": "https://www.aseprite.org/",
+  "version": "1.3.18.1-x64",
+  "image": "layers.png",
+  "format": "RGBA8888",
+  "size": { "w": 30, "h": 210 },
+  "scale": "1"
+ }
+}

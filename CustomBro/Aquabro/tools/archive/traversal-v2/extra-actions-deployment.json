@@ -1,0 +1,39 @@
+{
+  "completed_at": "2026-09-16T16:19:39.6584634+08:00",
+  "change": "接入普通死亡、击掌、落地翻滚、水墙特技施放和蹬墙翻转，共41个身体格",
+  "key_source_files": 20,
+  "additional_body_cells": 41,
+  "build": "BuildBro.ps1",
+  "build_success": true,
+  "deployment": "E:\\Games\\Broforce Mods\\Broforce\\profiles\\Broforce\\UMM\\BroMaker_Storage\\Aquabro",
+  "files": [
+    {
+      "file": "Aquabro.dll",
+      "sha256": "3EA5198BDCDFFEFDEA9F7D3AD3D1239687948A9EEAC9D64752DA689F7D805730",
+      "deployed_sha256": "3EA5198BDCDFFEFDEA9F7D3AD3D1239687948A9EEAC9D64752DA689F7D805730",
+      "match": true
+    },
+    {
+      "file": "sprite.png",
+      "sha256": "A86EE936FDEC269D009A7D024FE3E0E3E6347B514635107E48FC1C95C6F33AEC",
+      "deployed_sha256": "A86EE936FDEC269D009A7D024FE3E0E3E6347B514635107E48FC1C95C6F33AEC",
+      "match": true
+    },
+    {
+      "file": "gunSprite.png",
+      "sha256": "A4FD0E4B5511E3F35111ABDB6F0E800262D0686B62046A17CE58656F38B5ED33",
+      "deployed_sha256": "A4FD0E4B5511E3F35111ABDB6F0E800262D0686B62046A17CE58656F38B5ED33",
+      "match": true
+    },
+    {
+      "file": "projectiles\\Trident.png",
+      "sha256": "F94DF2024B9AACBB6505756AED7A755275297138D0E5C23ABB6B1D5B6027908A",
+      "deployed_sha256": "F94DF2024B9AACBB6505756AED7A755275297138D0E5C23ABB6B1D5B6027908A",
+      "match": true
+    }
+  ],
+  "checks": "key-source-checks.json",
+  "tests": "攻击390项、水墙16项、移动动画1856项通过",
+  "backup": "E:\\Study\\C#\\Broforce-Mods\\CustomBro\\Aquabro\\backups\\before-extra-actions-20260916-161400",
+  "gameplay_verified": false
+}

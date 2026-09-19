@@ -1,6 +1,7 @@
 -- Aseprite MCP：从当前分层源稿生成待核对图集；输出到临时目录，核对后再替换项目图集。
 local root=app.params['root'] or 'E:/Study/C#/Broforce-Mods/CustomBro/Aquabro/'
 local work=app.params['work'] or 'C:/Users/5700G/AppData/Local/Temp/haiwang-unarmed-traversal/'
+local keyRoot=root..'tools/海王_Aseprite关键文件/'
 local pc=app.pixelColor
 local function rgb(r,g,b) return pc.rgba(r,g,b,255) end
 local skin,mid,shade=rgb(233,166,140),rgb(215,148,121),rgb(181,124,101)
@@ -61,10 +62,10 @@ end
 local function opaque(im,x,y)
   return x>=0 and y>=0 and x<im.width and y<im.height and pc.rgbaA(im:getPixel(x,y))>0
 end
-local source=app.open(root..'tools/haiwang_trident_traversal-v2.aseprite')
+local source=app.open(keyRoot..'01_动作主稿/haiwang_trident_traversal-v2.aseprite')
 assert(source and source.width==32 and source.height==32 and #source.frames==86 and #source.layers==6,'源稿结构已变化')
-local body=app.open(root..'tools/haiwang_trident_body_atlas.aseprite')
-local gun=app.open(root..'tools/haiwang_trident_gun_atlas.aseprite')
+local body=app.open(keyRoot..'03_游戏图集/haiwang_trident_body_atlas.aseprite')
+local gun=app.open(keyRoot..'03_游戏图集/haiwang_trident_gun_atlas.aseprite')
 assert(body and gun and body.width==1024 and gun.width==1024)
 local ziplineCharge=dofile(root..'tools/traversal-v2/zipline_charge_source.lua')(root)
 local oldGun=blank(gun.width,gun.height);oldGun:drawSprite(gun,1)

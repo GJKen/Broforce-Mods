@@ -148,6 +148,18 @@ namespace Aquabro
             RenderTrident();
         }
 
+        protected override void AnimateGesture()
+        {
+            bool wasFlexing = this.currentGesture == GestureElement.Gestures.Flex;
+            base.AnimateGesture();
+            if (wasFlexing)
+            {
+                // The base method selects Rambro's gesture row. Keep its timing and
+                // event logic, then redirect the rendered body to Aquabro's flex cells.
+                SetBodyFrame(352 + Mathf.Clamp(this.frame, 0, 23));
+            }
+        }
+
         private static FieldInfo FindSpriteTextureField()
         {
             // texture 在不同 Broforce 版本中声明于 SpriteSM 或其 SpriteBase 基类。

@@ -2,21 +2,55 @@
 
 本文记录当前源码实际使用的原版接口、游戏实测结果及动画编辑反馈。动画素材检查与游戏内验证分别注明，避免后续修改时遗漏原版表现或混淆接入状态。
 
-最新状态：2026-09-16 已通过 MCP 定位并修复直升机状态下尺寸字段已经恢复、实际网格 UV 仍沿用旧图集格高的问题；新 DLL 与贴图已部署且校验一致，游戏重启后在暂停的直升机场景中确认身体和武器的实际 UV 纵向跨度均为 `0.03125`，MCP 截图只显示一个海王。关键源文件检查确认武器格没有重复身体。MCP 观测已通过，仍需与用户独立复测分开记录。部署详情见 [helicopter-texture-fix-deployment.json](traversal-v2/helicopter-texture-fix-deployment.json)。
+最新状态：2026-09-19 已完成寄生死亡（胸口爆裂）身体 235–242 的换装接入：源稿 `insemination-death-v3` 同步进身体图集与 `_Mod/sprite.png`，`BuildBro.ps1` 已构建部署，本地与部署的 DLL、身体贴图哈希一致。游戏只读取导出的 `_Mod` 资源；等待用户重启游戏实测。
+
+## 2026-09-19：寄生死亡 235–242 换装接入
+
+- 交付：正式源稿 `海王_Aseprite关键文件/01_动作主稿/haiwang_trident_insemination-death-v3.aseprite`，32×32、8 帧×33ms、六层中文分层（后侧手臂为空、三叉戟层空、空手），对应身体格 235–242，取帧顺序 235→242，死亡状态不使用武器格。
+- 换装基准：以 Rambro `RAMBO_anim_1024x512.png` 的 235–242 为逐像素底稿。对比 Bronan、BroLee、RoboCop 同格确认背部大包是角色衣服颜色（随衣换色）而非异形本体，换成橙金鳞甲；裤棕→绿裤靴；异形红按已验收死亡格 4–5 的同位置映射（亮红 194/154→脸肤色 233,166,140，暗红 135/97→金发 232,175,51）。
+- 条纹走线（"肚子膨胀"弧线）：帧 1–3 近直条；帧 4–6 极点同心弧；帧 7–8 轮廓平行弧线（条纹带＝每列顶部轮廓下移的深度奇偶，弧度随膨胀递增）。期间经历了用户横条初版 → 极点弧 → 轮廓平行弧三次迭代，帧 4–6 按用户要求回退为极点弧版本；用户各阶段版本备份在 `tools/_rambro235242/backup-*.aseprite`。
+- 机器核对：8 格掩码与原版零差异、原皮肤位零缺失、每帧单连通块、无半透明像素、无游离像素、轮廓无扩大缩小位移；颜色全集来自既有色板映射。逐帧"原版/换装后"并排对照与正常/慢速 GIF 见 `tools/_rambro235242/`，完整说明见其 `验收说明.md`。
+- 同步：`rebuild_key_sources.lua` 新增 `bodyOnly('insemination-death-v3', 8, 235)`（校验计数更新为 93 格）；身体图集与 `_Mod/sprite.png` 已同步，8 格逐像素匹配源稿。本轮前备份：`tools/_rambro235242/backup-user-horizontal-20260919.aseprite`（用户横条版）与 `backup-weak-arc-20260919.aseprite`（极点弧版）。
+- 构建部署：`BuildBro.ps1` 编译并部署成功。DLL SHA-256 `18F341C275F4F7358667F281B9A93E733974974FC45109739AEBBAD02B59FBE0`，身体 PNG `402B016C9FF7F5584AA907CCC411115D2C51C9819D483D54DBE8DEAA134D140A`，本地与部署三者（DLL、身体贴图、武器贴图）哈希一致。
+- 待实测：重启游戏后被异形寄生死亡时查看 235–242 的鳞甲条纹弧线与膨胀节奏；本组为死亡状态贴图，与格 4–5 普通死亡、死亡碎块互不影响。
+- 遗留：`tools` 下存在文件名乱码的重复目录（`????_Aseprite??????`，含作废 v2 源稿与旧图集副本），待用户确认后清理。
+
+## 2026-09-18：实体破裂碎块换装
+
+- 这次处理的是死亡时 `GibHolderBro` 创建的实体碎块取样区，不是普通死亡身体动画格。以 Rambro 身体图集为逐像素底稿，在四个原坐标内换装海王外观：头部 `(320,17)`／`16×16`、躯干 `(320,30)`／`16×16`、双臂 `(341,13)`／`8×8`、双腿 `(341,27)`／`8×8`。源稿帧 1 只用于编辑和预览，不对应游戏身体格号。
+- 交付源稿为 `海王_Aseprite关键文件/04_死亡碎块/haiwang_trident_death_gibs-v1.aseprite`；正常与慢速预览为 `archive/gibs-v2/normal.gif`、`archive/gibs-v2/slow.gif`，原版／换装并排对照为 `archive/gibs-v2/rambro-aquabro-compare-annotated.png`，逐区验收为 `archive/gibs-v2/checks.json`。检查结果：头部新增 4 个像素，皮肤变化 `3`，血液变化 `3`，四个取样区外变化 `0`，半透明像素 `0`。
+- 本轮按用户要求同步了 `海王_Aseprite关键文件/03_游戏图集/haiwang_trident_body_atlas.aseprite` 和 `_Mod/sprite.png`；普通死亡身体格 4–5、代码和武器图集未因本轮变更。`BuildBro.ps1` 已重新构建并部署 DLL 与贴图，本地与部署文件哈希一致。
+- 用户微调新增的头部像素坐标为图集 `(325,10)`、`(332,10)`、`(324,11)`、`(324,12)`。同步前备份为 `archive/gibs-v2/before-source-refresh-20260918-040440/`；后续同步使用 [sync_gibs_from_source.lua](gibs-v2/sync_gibs_from_source.lua)，完整交接说明见 [archive/gibs-v2/handoff.md](archive/gibs-v2/handoff.md)。
+
+## 2026-09-18：地面秀肌肉源稿同步修复
+
+- 用户微调了 `海王_Aseprite关键文件/01_动作主稿/haiwang_trident_flex-v2.aseprite` 的发型，但旧同步脚本读取了临时目录中的旧副本，因此游戏中的 `352–375` 仍是旧贴图。
+- `gestures-v2/sync_ground_flex.lua` 现已固定读取正式关键源稿；重新生成的两个身体图集和 `_Mod/sprite.png` 已包含该源稿内容。
+- `BuildBro.ps1` 已重新构建并部署到 `BroMaker_Storage/Aquabro`，本地与部署的 DLL、身体贴图和武器贴图哈希一致。
+- 本轮没有自动启动游戏；需要完全退出后由用户手动启动 Broforce，确认秀肌肉动作显示最新发型。
+
+此前已通过 MCP 定位并修复直升机状态下尺寸字段已经恢复、实际网格 UV 仍沿用旧图集格高的问题；对应记录见 [helicopter-texture-fix-deployment.json](archive/traversal-v2/helicopter-texture-fix-deployment.json)。
+
+## 2026-09-16：五组新增动作统一接入
+
+- 关键文件 `01_动作主稿` 新增 `death-v2`、`highfive-v2`、`roll-v2`、`waterwall-v2`、`chimney-flip-v2`，正式关键源文件总数由 15 增至 20。
+- 身体图集新增替换 4–5、17–22、51–63、145–152、203–214，共 41 格；五组均为空手完整身体，武器图集无需新增格。
+- `rebuild_key_sources.lua` 改为直接读取关键文件目录的动作、地形和图集，并验证 85 个常规身体格、36 个配对武器格、36 个攻击姿态与 86 帧地形源稿；最终图集另逐像素回对 41 个新增身体格和两张导出 PNG。
+- `BuildBro.ps1` 已构建并部署到 `BroMaker_Storage/Aquabro`。本地与部署的 DLL、身体贴图、武器贴图和飞行戟哈希全部一致；游戏内动作表现仍需启动游戏实测。
 
 ## 2026-09-15：直升机挂载时角色贴图异常
 
 - MCP 观测场景为 `Test Evan2`，玩家挂载于 `/MapController/Helicopter(Clone)/BM_Bro Template(Clone) [local]`。截图显示直升机下方角色使用了 Rambro 的身体和武器贴图。
 - 只读检查确认挂载实例的身体 `SpriteSM` 纹理为 `RAMBO_anim`，武器 `SpriteSM` 纹理为 `RAMBRO_gun_anim`。原因是原版直升机挂载逻辑覆盖了海王实例的自定义纹理。
 - 修复：`BroTemplate.Update()` 调用 `RestoreCustomTexturesAfterHelicopterReset()`，通过资源控制器取得 `sprite.png` 与 `gunSprite.png`，恢复两个 `SpriteSM` 的私有纹理并重新计算纹理区域。动作帧号、动作映射和攻击逻辑保持不变。
-- 构建部署：`BuildBro.ps1` 成功；DLL、身体贴图和武器贴图部署文件校验一致。攻击 390 项、水墙 16 项、移动动画 1856 项检查通过，完整文件哈希见 [helicopter-texture-fix-deployment.json](traversal-v2/helicopter-texture-fix-deployment.json)。
+- 构建部署：`BuildBro.ps1` 成功；DLL、身体贴图和武器贴图部署文件校验一致。攻击 390 项、水墙 16 项、移动动画 1856 项检查通过，完整文件哈希见 [helicopter-texture-fix-deployment.json](archive/traversal-v2/helicopter-texture-fix-deployment.json)。
 - 当前限制：修复后的游戏进程尚未重新启动，需重启后再次挂载直升机确认自定义贴图持续显示。MCP 的 `Game process died` 提示按约定忽略。
 
 ### 复测后追加修复
 
 - 用户复测仍能看到异常，说明仅恢复 `SpriteSM.texture` 不足以覆盖原版行为；直升机逻辑同时替换了身体和武器 `MeshRenderer.material`。
 - 已改为同时恢复材质的 `mainTexture`、`SpriteSM.texture`，并在 `LateUpdate()` 再执行一次恢复，覆盖本帧后段的原版写入。
-- `BuildBro.ps1` 已重新构建部署，最新 DLL SHA-256 为 `E1D662CA4BE75506DDA59AA342F0B70CF340474BEBBBB92310898EA0FA636E81`；三项自动测试仍全部通过。部署详情见 [helicopter-texture-fix-deployment.json](traversal-v2/helicopter-texture-fix-deployment.json)。
+- `BuildBro.ps1` 已重新构建部署，最新 DLL SHA-256 为 `E1D662CA4BE75506DDA59AA342F0B70CF340474BEBBBB92310898EA0FA636E81`；三项自动测试仍全部通过。部署详情见 [helicopter-texture-fix-deployment.json](archive/traversal-v2/helicopter-texture-fix-deployment.json)。
 - 复查发现 `texture` 是 `SpriteBase` 的私有基类字段，原查找方式无法取得该字段，导致恢复逻辑提前返回。现已改为沿 `SpriteSM` 继承层级查找并重新部署；最新 DLL SHA-256 为 `FEDFB7CD58774C26B72B8A07EFB329067275397AA69C5DEA2B9AFAF369017776`，三项自动测试通过。
 - 进一步根据 BroMaker 源码确认直升机覆盖的是角色材质引用；现已缓存 `sprite.png` 与 `gunSprite.png` 对应的自定义 `Material`，在 `Update()`／`LateUpdate()` 同时恢复 `sharedMaterial`、纹理字段和 UV。最新 DLL SHA-256 为 `4D9A52C7EE6F4D757EF6F55C38D8ABE4B17FF824D0654093983D430073907CA8`，三项自动测试通过。
 - 角色 `LateUpdate()` 仍可能早于直升机自身的乘客布置，因此新增 `WaitForEndOfFrame` 恢复循环，在每帧所有直升机逻辑完成后再次恢复材质、纹理字段和 UV。最新 DLL SHA-256 为 `7191F61FB133A8DD6956BE16AB07DB7F4779E578AF01C4D22207CA238B219B75`，三项自动测试通过。
@@ -145,7 +179,7 @@
 
 ## 2026-09-14：贴墙、悬挂、攀爬、爬梯、滑索 v2 整批接入
 
-- 源稿：使用 Aseprite MCP 制作 `haiwang_trident_traversal-v2.aseprite`，32×32、86 帧，仅含海王六个可编辑图层。五个标签分别为贴墙 1–10、悬挂 11–28、攀爬 29–48、爬梯 49–68、滑索 69–86，包含横移换手、单手停驻、抬身换脚、上下梯和进出梯过渡。新增 [五类总览与预览](traversal-v2/preview.png)。
+- 源稿：使用 Aseprite MCP 制作 `haiwang_trident_traversal-v2.aseprite`，32×32、86 帧，仅含海王六个可编辑图层。五个标签分别为贴墙 1–10、悬挂 11–28、攀爬 29–48、爬梯 49–68、滑索 69–86，包含横移换手、单手停驻、抬身换脚、上下梯和进出梯过渡。新增 [五类总览与预览](archive/traversal-v2/preview.png)。
 - 基准与保留：以 `tools` 根目录最新 held-v2 为站姿和外观基准，查看当前跑步 v2/v3、跳跃和蹲姿源稿。五份已有源稿的文件哈希均与备份一致，保留用户手调内容。进出梯第 63 帧与最新站姿一致，第 68 帧与上行第 49 帧一致；归档中的同名站姿保持旧参考用途。
 - 原版核对：直接反编译本机实际 `Assembly-CSharp.dll` 和 `BroMakerLib.dll`，确认刀攀 76–95、悬挂 107–124、爬梯 160–173 和过渡 192–197。BetterAnimation 已开启新版刀攀，但未设置新版爬梯和过渡开关；代码现明确开启三项对应开关。登沿的主分发路径仍接 `AnimateRunning()`，蹬墙翻转 203–214 及原有跑跳落地保持原样。方法、DLL 哈希和抓附点记录在 [native-animation-map.json](traversal-v2/native-animation-map.json)。
 - 图集与显示：同步 76 个身体格和 684 个配套武器格，两张图集均扩展为 1024×1024。滑索从原本与悬挂共用的格号重定向到 512–529；原版滑行及火花效果保留。悬挂的身体 `y=-2` 偏移同步到武器；原版隐藏枪械的换手、攀爬和爬梯分支由有效配对帧恢复武器层。原身体未接管的 454 格、武器 0–72 格均保留。
@@ -153,7 +187,7 @@
 - 素材验证：正式源稿重开后确认尺寸、86 帧、六层、五个 UTF-8 中文标签完整；86 组身体与武器合成逐像素匹配源稿，手掌与戟杆相连，无游离武器像素、无 1–4 像素封闭透明接缝，持戟武器不与头部、鳞甲、裤靴交叉。保存的 Aseprite 图集、正式 PNG 与核对版本一致。详见 [asset-checks.json](archive/traversal-initial/asset-checks.json)。
 - 代码验证：`tests/Test-Trident.ps1` 通过攻击 7 组／390 次断言、水墙 6 组／16 次断言、移动动画 7 组／2766 次检查。新增覆盖全部地形武器姿态、区域边界、滑索重定向、爬梯旧帧回退、蓄力释放和恢复握点；原有落地时序、取消及不同帧率检查继续通过。
 - 备份：`../backups/before-traversal-v2-20260914-222759/`，含代码、测试、已有源稿、图集、三份文档、完整 `_Mod` 及原部署 DLL／贴图。`baseline.json` 保存源文件哈希，`build-and-deploy.log` 保存本次构建部署输出。
-- 构建部署：`BuildBro.ps1` 编译并部署成功，23:41:14 确认 DLL、`sprite.png`、`gunSprite.png` 的本地与部署 SHA-256 分别一致。DLL：`0284c6435bf38801ad25d837aa2c11739e0740ef2bb5e0dc4ed4ab5f30a7cd23`；身体 PNG：`8b51576f31371f0863af1836bce47c743d39f6c14acee8ee2a5f2323c8f8562e`；武器 PNG：`81bcd9a4835591493d82fbc6c85bc87bc8fb4152414acd6c383ccff77ff384ef`。完整部署记录见 [deployment.json](traversal-v2/deployment.json)。确认部署后更新 README、设计文档和本记录。
+- 构建部署：`BuildBro.ps1` 编译并部署成功，23:41:14 确认 DLL、`sprite.png`、`gunSprite.png` 的本地与部署 SHA-256 分别一致。DLL：`0284c6435bf38801ad25d837aa2c11739e0740ef2bb5e0dc4ed4ab5f30a7cd23`；身体 PNG：`8b51576f31371f0863af1836bce47c743d39f6c14acee8ee2a5f2323c8f8562e`；武器 PNG：`81bcd9a4835591493d82fbc6c85bc87bc8fb4152414acd6c383ccff77ff384ef`。完整部署记录见 [deployment.json](archive/traversal-v2/deployment.json)。确认部署后更新 README、设计文档和本记录。
 - 待游戏实测：本批尚未确认运行时实际表现。重启加载新 DLL 与贴图后，验证左右墙抓附、连续攀爬和登沿，悬挂横移／停止，上下梯与离梯，滑索逆行／滑行，以及各状态的蓄力投掷、近战、受伤中断和恢复持戟；重点观察抓附点、地形遮挡、握点和身体偏移。联机与复杂地形表现仍待验证。
 
 ## 2026-09-15：地形动作改为空手，滑索保留持戟
@@ -161,7 +195,7 @@
 - 按用户要求，贴墙、悬挂、攀爬、爬梯的 68 帧源稿移除三叉戟，58 个身体格包含完整双臂；进梯首帧收拢原来包住戟杆的指尖。第六层改名为“活动手臂”，四组 GIF 和总览同步更新。
 - 代码在这些身体格中关闭武器层，持火时保持空手，离开后恢复普通武器显示。清空原武器格 73–594；滑索源稿 69–86、身体 512–529、武器 595–756 保持一致。攻击时序和伤害参数保留。
 - 检查通过：86 帧源稿与游戏图集匹配，双臂完整，无游离像素或半透明像素；五份站跑跳蹲源稿哈希保留。攻击 390、水墙 16、移动动画 1856 次检查通过。
-- 修改前备份：`../backups/before-unarmed-traversal-20260915-000557/`。本次构建部署结果及三项文件校验见 [deployment.json](traversal-v2/deployment.json)；游戏内表现待重启确认。
+- 修改前备份：`../backups/before-unarmed-traversal-20260915-000557/`。本次构建部署结果及三项文件校验见 [deployment.json](archive/traversal-v2/deployment.json)；游戏内表现待重启确认。
 
 ## 2026-09-15：贴墙、悬挂、攀爬按 Rambro 像素修正比例
 
@@ -192,5 +226,5 @@
 - 来源：采用 08:01:34 保存的总稿，原文件 SHA-256 为 `34c287d0b2598e6cca6c88864e765267224cdc621bacb1799bdde6d8a27eadaa`，源文件内容保留。
 - 独立稿：重新生成贴墙 10 帧、悬挂 18 帧、攀爬 20 帧、爬梯 20 帧、滑索 18 帧；保留 32×32、六层、中文标签、原帧时长与像素。
 - 同步：更新身体及武器图集和两张本地 PNG；86 组配对逐像素匹配总稿，516 个图层帧与独立文件一致。修正同步脚本对旧 cel 备注中残缺分隔符的兼容，帧映射表恢复有效 UTF-8 与正确列数。
-- 部署：`BuildBro.ps1` 构建部署成功，DLL、`sprite.png`、`gunSprite.png` 的本地与部署 SHA-256 分别一致。未进行游戏实测，重启游戏后查看最新动作。检查与部署记录见 [user-sync-checks.json](traversal-v2/user-sync-checks.json)、[deployment.json](traversal-v2/deployment.json)。
+- 部署：`BuildBro.ps1` 构建部署成功，DLL、`sprite.png`、`gunSprite.png` 的本地与部署 SHA-256 分别一致。未进行游戏实测，重启游戏后查看最新动作。检查与部署记录见 [user-sync-checks.json](archive/traversal-v2/user-sync-checks.json)、[deployment.json](archive/traversal-v2/deployment.json)。
 - 备份：`../backups/before-user-traversal-sync-20260915-080559/`，包含同步前的源稿、独立文件、图集、本地及原部署资源、文档和构建输出。

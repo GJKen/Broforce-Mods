@@ -1,0 +1,268 @@
+{
+  "sourceSha256": "BC810854FC2DFAA3D101265193803B8B453DCB8F6C1E4A3271D44B34DAB67C4C",
+  "exports": {
+    "gifs": [
+      {
+        "durations": [
+          30,
+          40,
+          30,
+          30,
+          40,
+          30,
+          30,
+          30,
+          40,
+          30,
+          30,
+          40
+        ],
+        "frames": 12,
+        "height": 192,
+        "name": "normal",
+        "pixelMismatches": 0,
+        "totalMs": 400,
+        "width": 192
+      },
+      {
+        "durations": [
+          130,
+          130,
+          140,
+          130,
+          130,
+          130,
+          130,
+          140,
+          130,
+          130,
+          130,
+          130
+        ],
+        "frames": 12,
+        "height": 192,
+        "name": "slow",
+        "pixelMismatches": 0,
+        "totalMs": 1580,
+        "width": 192
+      }
+    ],
+    "mirrorMismatches": 0,
+    "paletteMismatches": 0,
+    "rawOutsideCanvas": 0,
+    "rawSemiTransparent": 0,
+    "sheetMismatches": 0
+  },
+  "note": "对本轮开始时的源稿检查：仅鳞甲颜色修改，其他图层/透明度/帧时长不变。旧原版对照报告属于此前初稿，保存在本轮临时备份。",
+  "revision": {
+    "alphaChanges": 0,
+    "changedArmorPixels": 261,
+    "changedPerFrame": [
+      12,
+      11,
+      13,
+      11,
+      24,
+      33,
+      44,
+      31,
+      16,
+      19,
+      24,
+      23
+    ],
+    "durationChanges": 0,
+    "otherLayerChanges": 0
+  },
+  "referenceHash": "A2AC69CD366EF5E8E2CEC1E592E9E170125B8C4CCB66CCE883BA270D912B17F4",
+  "source": "haiwang_trident_chimney-flip-v2.aseprite",
+  "sourceInfo": {
+    "durations": {
+      "normal": [
+        30,
+        40,
+        30,
+        30,
+        40,
+        30,
+        30,
+        30,
+        40,
+        30,
+        30,
+        40
+      ],
+      "slow": [
+        130,
+        130,
+        140,
+        130,
+        130,
+        130,
+        130,
+        140,
+        130,
+        130,
+        130,
+        130
+      ]
+    },
+    "frames": 12,
+    "height": 32,
+    "layers": [
+      {
+        "editable": true,
+        "name": "后侧手臂",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          14,
+          16,
+          15,
+          3,
+          5,
+          3,
+          4,
+          1,
+          10,
+          7,
+          13,
+          15
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "绿色裤靴",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          30,
+          32,
+          116,
+          56,
+          45,
+          35,
+          24,
+          20,
+          16,
+          10,
+          24,
+          33
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "金色鳞甲与颈部",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          60,
+          51,
+          38,
+          40,
+          39,
+          67,
+          74,
+          60,
+          38,
+          30,
+          39,
+          47
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "金发与脸部",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          22,
+          25,
+          24,
+          27,
+          34,
+          23,
+          33,
+          33,
+          41,
+          34,
+          37,
+          43
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "前侧手臂",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          31,
+          28,
+          40,
+          16,
+          12,
+          2,
+          14,
+          17,
+          19,
+          18,
+          16,
+          29
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "金色三叉戟（空手留空）",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": true
+      }
+    ],
+    "tags": [
+      {
+        "from": 1,
+        "name": "蹬墙翻转",
+        "to": 12
+      },
+      {
+        "from": 1,
+        "name": "蹬离",
+        "to": 2
+      },
+      {
+        "from": 3,
+        "name": "收身",
+        "to": 4
+      },
+      {
+        "from": 5,
+        "name": "倒置",
+        "to": 8
+      },
+      {
+        "from": 9,
+        "name": "展开",
+        "to": 11
+      },
+      {
+        "from": 12,
+        "name": "衔接跳跃或抓墙",
+        "to": 12
+      }
+    ],
+    "width": 32
+  }
+}

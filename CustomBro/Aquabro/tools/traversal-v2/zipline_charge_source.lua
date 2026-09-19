@@ -1,7 +1,7 @@
 -- 稳定滑行段第2/3/4帧是回拉起势、蓄力、蓄满的武器主稿。
 -- 返回画布坐标中的武器和手臂，供完整图集同步与单独部署共用。
 return function(root)
-  local source=app.open(root..'tools/haiwang_trident_zipline_charge.aseprite')
+  local source=app.open(root..'tools/海王_Aseprite关键文件/01_动作主稿/haiwang_trident_zipline_charge.aseprite')
   assert(source and source.width==32 and source.height==32 and #source.frames==12 and #source.layers==6,
     '绳索蓄力独立稿结构已变化')
   assert(source.layers[5].name=='金色三叉戟' and source.layers[6].name=='活动手臂',

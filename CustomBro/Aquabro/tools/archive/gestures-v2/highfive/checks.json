@@ -1,0 +1,495 @@
+{
+  "source": {
+    "durations": {
+      "normal": [
+        30,
+        40,
+        660,
+        40,
+        60,
+        70
+      ],
+      "slow": [
+        130,
+        140,
+        2660,
+        140,
+        260,
+        270
+      ]
+    },
+    "frames": 6,
+    "height": 32,
+    "layers": [
+      {
+        "editable": true,
+        "name": "后侧手臂",
+        "pixels": [
+          13,
+          12,
+          12,
+          16,
+          14,
+          14
+        ]
+      },
+      {
+        "editable": true,
+        "name": "绿色裤靴",
+        "pixels": [
+          33,
+          31,
+          31,
+          33,
+          31,
+          31
+        ]
+      },
+      {
+        "editable": true,
+        "name": "金色鳞甲与颈部",
+        "pixels": [
+          67,
+          67,
+          67,
+          46,
+          55,
+          55
+        ]
+      },
+      {
+        "editable": true,
+        "name": "金发与脸部",
+        "pixels": [
+          42,
+          42,
+          42,
+          35,
+          47,
+          47
+        ]
+      },
+      {
+        "editable": true,
+        "name": "前侧手臂",
+        "pixels": [
+          17,
+          16,
+          20,
+          32,
+          26,
+          24
+        ]
+      },
+      {
+        "editable": true,
+        "name": "金色三叉戟（空手留空）",
+        "pixels": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "tags": [
+      {
+        "from": 1,
+        "name": "击掌起手",
+        "to": 2
+      },
+      {
+        "from": 3,
+        "name": "松手或成功击掌释放",
+        "to": 6
+      },
+      {
+        "from": 3,
+        "name": "等待击掌（持续保持）",
+        "to": 3
+      },
+      {
+        "from": 5,
+        "name": "成功击掌效果触发",
+        "to": 5
+      }
+    ],
+    "width": 32
+  },
+  "preservation": {
+    "changed": [],
+    "count": 217
+  },
+  "exports": {
+    "gifs": [
+      {
+        "durations": [
+          30,
+          40,
+          660,
+          40,
+          60,
+          70
+        ],
+        "frames": 6,
+        "height": 192,
+        "name": "normal",
+        "pixelMismatches": 0,
+        "totalMs": 900,
+        "width": 192
+      },
+      {
+        "durations": [
+          130,
+          140,
+          2660,
+          140,
+          260,
+          270
+        ],
+        "frames": 6,
+        "height": 192,
+        "name": "slow",
+        "pixelMismatches": 0,
+        "totalMs": 3600,
+        "width": 192
+      }
+    ],
+    "mirrorMismatches": 0,
+    "paletteMismatches": 0,
+    "rawOutsideCanvas": 0,
+    "rawSemiTransparent": 0,
+    "sheetMismatches": 0
+  },
+  "pixels": {
+    "frames": [
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          5,
+          12,
+          21,
+          30
+        ],
+        "cell": 17,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          172
+        ],
+        "durationMs": 33,
+        "frame": 1,
+        "holes": [],
+        "pixels": 172,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 7,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 8,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 8,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          5,
+          12,
+          21,
+          30
+        ],
+        "cell": 18,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          168
+        ],
+        "durationMs": 33,
+        "frame": 2,
+        "holes": [],
+        "pixels": 168,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 7,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 8,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 7,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 8,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          3,
+          12,
+          20,
+          30
+        ],
+        "cell": 19,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          172
+        ],
+        "durationMs": 67,
+        "frame": 3,
+        "holes": [],
+        "pixels": 172,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 7,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 5,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 6,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 7,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 5,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 6,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          4,
+          10,
+          20,
+          30
+        ],
+        "cell": 20,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          162
+        ],
+        "durationMs": 33,
+        "frame": 4,
+        "holes": [],
+        "pixels": 162,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 9,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 10,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 7,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 8,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 9,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 10,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 8,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          11,
+          11,
+          25,
+          30
+        ],
+        "cell": 21,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          173
+        ],
+        "durationMs": 67,
+        "frame": 5,
+        "holes": [
+          {
+            "x": 21,
+            "y": 15
+          }
+        ],
+        "pixels": 173,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 13,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 11,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 12,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 9,
+            "y": 16
+          },
+          {
+            "color": "C20000",
+            "x": 10,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 13,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 11,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 12,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          10,
+          12,
+          24,
+          30
+        ],
+        "cell": 22,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          171
+        ],
+        "durationMs": 67,
+        "frame": 6,
+        "holes": [
+          {
+            "x": 20,
+            "y": 15
+          }
+        ],
+        "pixels": 171,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 12,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 11,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 12,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 10,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 12,
+            "y": 16
+          },
+          {
+            "color": "C20000",
+            "x": 9,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 11,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 10,
+            "y": 18
+          }
+        ],
+        "semiTransparent": 0
+      }
+    ],
+    "issues": [],
+    "method": "原版逐像素换装"
+  },
+  "sourceHash": "A65A75B2C9C43C6E6B310B84FCCF41DA66A84E3F7549D53951FE7B777C8EFD7D"
+}

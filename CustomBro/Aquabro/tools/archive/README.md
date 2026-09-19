@@ -4,6 +4,18 @@
 
 当前可编辑源稿见 [tools/README.md](../README.md)。本表的“原位置”均相对于 `tools/`。
 
+## 2026-09-18 当前工作目录整理
+
+本次整理后，正式 Aseprite 全部位于 [海王_Aseprite关键文件](../海王_Aseprite关键文件/Readme.md)，共 22 个；`tools` 根目录不再保留 Aseprite。根目录原有的 22 个副本及临时预览移到 [root-working-sources-20260918](root-working-sources-20260918/)，其中根目录身体图集是旧版本，不能覆盖正式关键图集。
+
+| 归档目录 | 内容 |
+| --- | --- |
+| [root-working-sources-20260918](root-working-sources-20260918/) | 根目录 Aseprite 副本、临时 PNG 和预览脚本。 |
+| [gestures-v2](gestures-v2/) | 地面秀肌肉的旧生成脚本、预览、逐帧图和审计记录。 |
+| [gibs-v2](gibs-v2/) | 角色死亡后实体碎块的预览、检查数据、旧生成脚本和同步前备份；正式源稿已移到关键目录 `04_死亡碎块`。 |
+| [traversal-v2](traversal-v2/) | 地形与滑索的预览、部署记录、检查数据和历史 CSV。 |
+| [chimney-flip-v2](chimney-flip-v2/)、[death-v2](death-v2/)、[roll-v2](roll-v2/)、[waterwall-v2](waterwall-v2/) | 四组已完成动作的 handoff、预览和验收资料。 |
+
 | 分组 | 数量 | 内容 |
 | --- | ---: | --- |
 | [旧版跑步](legacy-run/) | 2 | 旧版独立跑步及配套说明 |
