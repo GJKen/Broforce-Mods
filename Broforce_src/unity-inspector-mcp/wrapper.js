@@ -6,13 +6,15 @@
 import { spawn } from 'child_process';
 import { appendFileSync, openSync, closeSync } from 'fs';
 import { fileURLToPath } from 'url';
+import { tmpdir } from 'os';
 import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SERVER_PATH = path.join(__dirname, 'index.js');
 const NODE_PATH = process.execPath;
-const LOG_FILE = `/tmp/mcp-wrapper-${process.pid}.log`;
+// Windows 兼容:不能用 "/tmp"(会被解析为当前盘符根目录下不存在的 E:\tmp),改用系统临时目录
+const LOG_FILE = path.join(tmpdir(), `mcp-wrapper-${process.pid}.log`);
 
 const RESTART_TOOL = {
   name: "restart_server",

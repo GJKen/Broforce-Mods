@@ -1,0 +1,30 @@
+{
+  "action": "异形寄生死亡",
+  "atlas_cells": [235, 236, 237, 238, 239, 240, 241, 242],
+  "source_frames": [1, 2, 3, 4, 5, 6, 7, 8],
+  "atlas_origin": {"x": 352, "y": 224, "cell_width": 32, "cell_height": 32},
+  "timing_ms": [33, 33, 33, 33, 33, 33, 33, 33],
+  "weapon_layer": "武器或道具（空手留空）",
+  "checks": {
+    "atlas_changed_inside_target_total": 1156,
+    "atlas_changed_outside_target_total": 0,
+    "pixel_diff_total": 0,
+    "mask_diff_total": 0,
+    "skin_position_diff_total": 0,
+    "partial_alpha_total": 0,
+    "out_of_contour_added_total": 0,
+    "missing_pixel_total": 0,
+    "cropped_total": 0,
+    "free_pixel_total": 0
+  },
+  "frames": [
+    {"source_frame": 1, "atlas_cell": 235, "bbox": [7, 22, 25, 30], "opaque_pixels": 146, "skin_pixels": 36, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0},
+    {"source_frame": 2, "atlas_cell": 236, "bbox": [7, 21, 25, 30], "opaque_pixels": 153, "skin_pixels": 36, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0},
+    {"source_frame": 3, "atlas_cell": 237, "bbox": [7, 20, 25, 30], "opaque_pixels": 163, "skin_pixels": 36, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0},
+    {"source_frame": 4, "atlas_cell": 238, "bbox": [7, 18, 25, 30], "opaque_pixels": 168, "skin_pixels": 41, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0},
+    {"source_frame": 5, "atlas_cell": 239, "bbox": [7, 17, 25, 30], "opaque_pixels": 175, "skin_pixels": 42, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0},
+    {"source_frame": 6, "atlas_cell": 240, "bbox": [6, 16, 25, 30], "opaque_pixels": 197, "skin_pixels": 37, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0},
+    {"source_frame": 7, "atlas_cell": 241, "bbox": [6, 15, 25, 30], "opaque_pixels": 213, "skin_pixels": 33, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0},
+    {"source_frame": 8, "atlas_cell": 242, "bbox": [6, 14, 25, 30], "opaque_pixels": 232, "skin_pixels": 31, "pixel_diff": 0, "mask_diff": 0, "skin_position_diff": 0}
+  ]
+}

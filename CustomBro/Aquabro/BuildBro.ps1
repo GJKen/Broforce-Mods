@@ -132,6 +132,11 @@ if ($SkipDeploy) {
 # including subfolders such as projectiles\.
 $deployPath = Join-Path $broMakerStoragePath $broStorageFolderName
 New-Item -ItemType Directory -Force -Path $deployPath | Out-Null
+$assemblyCacheFiles = @(Get-ChildItem -LiteralPath $deployPath -File -Filter "$assemblyFileName*.cache" -ErrorAction SilentlyContinue)
+foreach ($assemblyCacheFile in $assemblyCacheFiles) {
+    Remove-Item -LiteralPath $assemblyCacheFile.FullName -Force
+    Write-Host "Removed stale assembly cache $($assemblyCacheFile.Name)"
+}
 Get-ChildItem -LiteralPath $modContentPath -Recurse -File | ForEach-Object {
     $relativePath = $_.FullName.Substring($modContentPath.Length).TrimStart('\', '/')
     $destinationFile = Join-Path $deployPath $relativePath

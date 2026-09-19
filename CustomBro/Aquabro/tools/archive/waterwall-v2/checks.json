@@ -1,0 +1,663 @@
+{
+  "preserved": {
+    "changed": [],
+    "checkedFiles": 199
+  },
+  "runtime": {
+    "durations": [
+      30,
+      40,
+      30,
+      30,
+      40,
+      30
+    ],
+    "frames": 6,
+    "pixelMismatches": 0,
+    "totalMs": 200
+  },
+  "exports": {
+    "gifs": [
+      {
+        "durations": [
+          30,
+          40,
+          30,
+          30,
+          40,
+          30,
+          30,
+          30
+        ],
+        "frames": 8,
+        "height": 192,
+        "name": "normal",
+        "pixelMismatches": 0,
+        "totalMs": 260,
+        "width": 192
+      },
+      {
+        "durations": [
+          130,
+          130,
+          140,
+          130,
+          130,
+          130,
+          130,
+          140
+        ],
+        "frames": 8,
+        "height": 192,
+        "name": "slow",
+        "pixelMismatches": 0,
+        "totalMs": 1060,
+        "width": 192
+      }
+    ],
+    "mirrorMismatches": 0,
+    "paletteMismatches": 0,
+    "rawOutsideCanvas": 0,
+    "rawSemiTransparent": 0,
+    "sheetMismatches": 0
+  },
+  "source": {
+    "durations": {
+      "normal": [
+        30,
+        40,
+        30,
+        30,
+        40,
+        30,
+        30,
+        30
+      ],
+      "slow": [
+        130,
+        130,
+        140,
+        130,
+        130,
+        130,
+        130,
+        140
+      ]
+    },
+    "frames": 8,
+    "height": 32,
+    "layers": [
+      {
+        "editable": true,
+        "name": "后侧手臂",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          16,
+          13,
+          14,
+          18,
+          5,
+          9,
+          4,
+          10
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "绿色裤靴",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          30,
+          31,
+          30,
+          32,
+          32,
+          32,
+          33,
+          32
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "金色鳞甲与颈部",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          48,
+          56,
+          59,
+          66,
+          63,
+          52,
+          49,
+          54
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "金发与脸部",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          42,
+          40,
+          37,
+          37,
+          24,
+          36,
+          38,
+          37
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "前侧手臂",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          24,
+          20,
+          19,
+          24,
+          25,
+          16,
+          23,
+          18
+        ],
+        "visible": true
+      },
+      {
+        "editable": true,
+        "name": "金色三叉戟（空手留空）",
+        "opacity": 255,
+        "pixelsPerFrame": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": true
+      }
+    ],
+    "tags": [
+      {
+        "from": 1,
+        "name": "水墙特技施放",
+        "to": 8
+      },
+      {
+        "from": 1,
+        "name": "起手聚势",
+        "to": 3
+      },
+      {
+        "from": 4,
+        "name": "抬臂引水",
+        "to": 4
+      },
+      {
+        "from": 5,
+        "name": "施放水墙（触发）",
+        "to": 5
+      },
+      {
+        "from": 6,
+        "name": "收势",
+        "to": 7
+      },
+      {
+        "from": 8,
+        "name": "衔接占位（游戏立即切回）",
+        "to": 8
+      }
+    ],
+    "width": 32
+  },
+  "pixels": {
+    "frames": [
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          8,
+          12,
+          21,
+          30
+        ],
+        "cell": 145,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          160
+        ],
+        "durationMs": 33,
+        "frame": 1,
+        "holes": [],
+        "pixels": 160,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 7,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 10,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 8,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 9,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 10,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 8,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 9,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          5,
+          12,
+          21,
+          30
+        ],
+        "cell": 146,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          160
+        ],
+        "durationMs": 33,
+        "frame": 2,
+        "holes": [],
+        "pixels": 160,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 5,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 8,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 6,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 7,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 8,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 6,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 7,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          5,
+          12,
+          22,
+          30
+        ],
+        "cell": 147,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          159
+        ],
+        "durationMs": 33,
+        "frame": 3,
+        "holes": [],
+        "pixels": 159,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 8,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 9,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 10,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 7,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 9,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 10,
+            "y": 16
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          11,
+          11,
+          26,
+          30
+        ],
+        "cell": 148,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          177
+        ],
+        "durationMs": 33,
+        "frame": 4,
+        "holes": [],
+        "pixels": 177,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 11,
+            "y": 15
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          11,
+          12,
+          24,
+          30
+        ],
+        "cell": 149,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          149
+        ],
+        "durationMs": 33,
+        "frame": 5,
+        "holes": [],
+        "pixels": 149,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 13,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 17,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 14,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 15,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 16,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 15,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 16,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 14,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          11,
+          12,
+          25,
+          30
+        ],
+        "cell": 150,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          145
+        ],
+        "durationMs": 33,
+        "frame": 6,
+        "holes": [],
+        "pixels": 145,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 15,
+            "y": 13
+          },
+          {
+            "color": "C20000",
+            "x": 16,
+            "y": 13
+          },
+          {
+            "color": "C20000",
+            "x": 17,
+            "y": 14
+          },
+          {
+            "color": "870000",
+            "x": 14,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 17,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 15,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 16,
+            "y": 16
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          11,
+          12,
+          23,
+          30
+        ],
+        "cell": 151,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          147
+        ],
+        "durationMs": 33,
+        "frame": 7,
+        "holes": [],
+        "pixels": 147,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 12,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 15,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 13,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 14,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 15,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 13,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 14,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      },
+      {
+        "addedOutsideNative": 0,
+        "borderPixels": 0,
+        "bounds": [
+          11,
+          12,
+          23,
+          30
+        ],
+        "cell": 152,
+        "changedNativeSkinPixels": 0,
+        "components": [
+          151
+        ],
+        "durationMs": 33,
+        "frame": 8,
+        "holes": [],
+        "pixels": 151,
+        "removed": [
+          {
+            "color": "C20000",
+            "x": 12,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 13,
+            "y": 14
+          },
+          {
+            "color": "C20000",
+            "x": 10,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 11,
+            "y": 15
+          },
+          {
+            "color": "C20000",
+            "x": 14,
+            "y": 15
+          },
+          {
+            "color": "870000",
+            "x": 13,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 14,
+            "y": 16
+          },
+          {
+            "color": "870000",
+            "x": 11,
+            "y": 17
+          },
+          {
+            "color": "870000",
+            "x": 12,
+            "y": 17
+          }
+        ],
+        "semiTransparent": 0
+      }
+    ],
+    "issues": [],
+    "method": "原版逐像素换装"
+  }
+}

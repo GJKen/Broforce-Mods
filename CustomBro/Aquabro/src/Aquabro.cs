@@ -20,6 +20,7 @@ namespace Aquabro
         private float weaponOffsetY;
         private float bodyVisualOffsetX;
         private float bodyVisualOffsetY;
+        private float groundVisualOffsetY;
         private bool weaponUsesBodyCoordinates;
         private bool weaponHiddenForTraversal;
         private bool landingStartedThisUpdate;
@@ -138,7 +139,19 @@ namespace Aquabro
         {
             this.bodyVisualOffsetX = xOffset;
             this.bodyVisualOffsetY = yOffset;
-            base.SetSpriteOffset(xOffset, yOffset);
+            base.SetSpriteOffset(xOffset, yOffset + this.groundVisualOffsetY);
+        }
+
+        private void UpdateGroundVisualOffset()
+        {
+            bool grounded = this.health > 0 && !this.isOnHelicopter && IsOnGround() &&
+                (this.actionState == ActionState.Idle || this.actionState == ActionState.Running);
+            float offset = grounded
+                ? TridentMovementAnimation.GroundBodyOffsetY(CurrentBodyFrame()) : 0f;
+            if (offset == this.groundVisualOffsetY) return;
+            this.groundVisualOffsetY = offset;
+            // 只调整绘制位置；离地或切换其他动作时恢复原来的锚点。
+            base.SetSpriteOffset(this.bodyVisualOffsetX, this.bodyVisualOffsetY + offset);
         }
 
         protected override void AnimateZipline()
@@ -146,6 +159,18 @@ namespace Aquabro
             base.AnimateZipline();
             SetBodyFrame(TridentMovementAnimation.ZiplineBodyFrame(CurrentBodyFrame()));
             RenderTrident();
+        }
+
+        protected override void AnimateGesture()
+        {
+            bool wasFlexing = this.currentGesture == GestureElement.Gestures.Flex;
+            base.AnimateGesture();
+            if (wasFlexing)
+            {
+                // The base method selects Rambro's gesture row. Keep its timing and
+                // event logic, then redirect the rendered body to Aquabro's flex cells.
+                SetBodyFrame(352 + Mathf.Clamp(this.frame, 0, 23));
+            }
         }
 
         private static FieldInfo FindSpriteTextureField()
@@ -165,9 +190,14 @@ namespace Aquabro
         protected override void AnimateClimbingLadder()
         {
             base.AnimateClimbingLadder();
-            if (this.useNewLadderClimbingFrames && IsNearbyLadder(this.transform.localScale.x * 6f, 22f))
+            int bodyFrame = CurrentBodyFrame();
+            // 沿用原版梯子时序和武器显隐，只替换旧图集的四个身体格。
+            if (!this.useNewLadderClimbingFrames && bodyFrame >= 0 && bodyFrame <= 3)
             {
-                int bodyFrame = CurrentBodyFrame();
+                SetBodyFrame(TridentMovementAnimation.LegacyLadderBodyFrame(bodyFrame));
+            }
+            else if (this.useNewLadderClimbingFrames && IsNearbyLadder(this.transform.localScale.x * 6f, 22f))
+            {
                 int restingFrame = TridentMovementAnimation.LadderRestBodyFrame(bodyFrame, this.frame);
                 if (restingFrame != bodyFrame)
                 {
@@ -185,7 +215,7 @@ namespace Aquabro
                 this.tridentAttack.Pose == TridentPose.Thrust ? 9f : 0f;
             // 配对帧跟随身体偏移；突刺肩点已在图集中回移，保留原来的 +9 前伸。
             base.SetGunPosition(this.weaponUsesBodyCoordinates ? this.bodyVisualOffsetX + extension : this.weaponOffsetX + extension,
-                this.weaponUsesBodyCoordinates ? this.bodyVisualOffsetY : this.weaponOffsetY);
+                (this.weaponUsesBodyCoordinates ? this.bodyVisualOffsetY : this.weaponOffsetY) + this.groundVisualOffsetY);
         }
 
         private int CurrentBodyFrame()
@@ -463,6 +493,7 @@ namespace Aquabro
             if (this.health <= 0 && this.tridentAttack != null)
                 this.tridentAttack.Cancel(this.fire);
             UpdateLandingAnimation();
+            UpdateGroundVisualOffset();
             // 原版可能先改武器再改身体；在本帧动画结束后按实际身体格重新同步。
             RenderTrident();
         }

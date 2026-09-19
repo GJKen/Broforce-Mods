@@ -2,8 +2,9 @@
 -- 输出到工作目录，核对后再替换本地图集与PNG。
 local root='E:/Study/C#/Broforce-Mods/CustomBro/Aquabro/'
 local work=app.params['work'] or 'C:/Users/5700G/AppData/Local/Temp/haiwang-zipline-charge-integration-20260915/'
+local keyRoot=root..'tools/海王_Aseprite关键文件/'
 local poses=dofile(root..'tools/traversal-v2/zipline_charge_source.lua')(root)
-local atlas=app.open(root..'tools/haiwang_trident_gun_atlas.aseprite')
+local atlas=app.open(keyRoot..'03_游戏图集/haiwang_trident_gun_atlas.aseprite')
 assert(atlas and atlas.width==1024 and atlas.height==1024 and #atlas.frames==1,'武器图集尺寸已变化')
 local cells={}
 for body=524,529 do for pose=1,3 do cells[#cells+1]=595+(body-512)*9+pose end end

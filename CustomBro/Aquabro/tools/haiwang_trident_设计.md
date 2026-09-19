@@ -1,5 +1,15 @@
 # 海王三叉戟：投掷与近战
 
+2026-09-19 寄生死亡换装接入：正式源稿 `海王_Aseprite关键文件/01_动作主稿/haiwang_trident_insemination-death-v3.aseprite`（32×32、8 帧×33ms、六层、空手），对应身体格 235–242（第 8 行，取帧顺序 235→242）。以 Rambro `RAMBO_anim_1024x512.png` 的 235–242 为逐像素底稿换装：背部大包→橙金鳞甲、裤棕→绿裤靴、异形红按已验收死亡格 4–5 的同位置映射处理（亮红→脸肤色、暗红→金发色），轮廓掩码零差异。鳞甲条纹按"肚子膨胀"分三种走线：帧 1–3 近直条、帧 4–6 极点同心弧、帧 7–8 轮廓平行弧线（弧度随膨胀递增）。`rebuild_key_sources.lua` 已加入 `bodyOnly('insemination-death-v3', 8, 235)`；身体图集与 `_Mod/sprite.png` 已同步（图集哈希 `ACEBB9512D93447F6F39A0046AE4D682A2F92300711B13CCE5BCFB7E49D652C0`），DLL 已构建部署。换装依据、逐帧对照和机器核对见 `tools/_rambro235242/验收说明.md`。
+
+2026-09-18 实体破裂碎块换装：本轮处理的是 `GibHolderBro` 的实体碎块取样区，不是普通身体动画帧。参考 `Broforce_src/GameAssets/hero/RAMBO_anim_1024x512.png`，以 `海王_Aseprite关键文件/01_动作主稿/haiwang_trident_held-v2.aseprite` 为外观主稿，在身体图集四个原坐标内逐像素换装：头部 `(320,17)`／`16×16`、躯干 `(320,30)`／`16×16`、双臂 `(341,13)`／`8×8`、双腿 `(341,27)`／`8×8`。源稿帧 1 只作为 Aseprite 编辑帧，游戏仍由 `BodyHead`、`BodyTorso`、`BodyArm1/2`、`BodyLeg1/2` 独立取样。
+
+- 原版四个取样矩形和透明关系继续作为动作底稿；用户本次微调在头部新增图集像素 `(325,10)`、`(332,10)`、`(324,11)`、`(324,12)`，另有 3 个皮肤像素和 3 个血液像素改色。没有半透明像素，四个取样区外变化为 `0`。
+- 交付源稿为 [海王_Aseprite关键文件/04_死亡碎块/haiwang_trident_death_gibs-v1.aseprite](海王_Aseprite关键文件/04_死亡碎块/haiwang_trident_death_gibs-v1.aseprite)，对照、正常／慢速预览和验收记录见 [archive/gibs-v2/handoff.md](archive/gibs-v2/handoff.md) 与 [archive/gibs-v2/checks.json](archive/gibs-v2/checks.json)。正式图集和 `_Mod/sprite.png` 均已同步，`BuildBro.ps1` 已重新构建并部署 DLL 与贴图。
+- 本轮未改变 `Aquabro.cs`、武器图集或普通死亡身体格 4–5。同步前备份为 `archive/gibs-v2/before-source-refresh-20260918-040440/`；后续碎块源稿同步应使用 [sync_gibs_from_source.lua](gibs-v2/sync_gibs_from_source.lua)，避免归档中的 `create_gibs.lua` 重生成并覆盖用户微调。
+
+2026-09-16 新增五组已确认动作并纳入统一图集重建：普通死亡 4–5、击掌 17–22、落地翻滚 51–63、水墙特技施放 145–152、蹬墙翻转 203–214，共 41 个身体格。五组动作均包含完整双臂且三叉戟层为空，继续沿用原版 `AnimateDeath`、击掌、`AnimateRolling`、`AnimateSpecial` 和 `AnimateChimneyFlip` 的取帧逻辑，无需新增动作重定向代码。源稿位于关键文件目录 `01_动作主稿`，身体图集由该目录全部源稿统一重建；DLL 与贴图已构建部署，详见 [部署记录](archive/traversal-v2/extra-actions-deployment.json)。
+
 2026-09-16 直升机挂载贴图修复：原版直升机挂载逻辑会把身体、武器的 `SpriteSM` 和 `MeshRenderer` 材质重置为 `RAMBO_anim`／`RAMBRO_gun_anim`。换回 1024×1024 自定义贴图时，`RecalcTexture()` 不会清除旧图集留下的归一化格高；MCP 实测身体网格仍按 64 像素高取样，武器网格仍按 512 像素高取样。`SetPixelDimensions(32, 32)` 只把尺寸字段和 `tempUV` 改为 32×32／`0.03125`，不会更新现有网格顶点。当前由 `Helicopter.SetBrosPositions()` 的 Harmony 后置补丁恢复 `sprite.png`／`gunSprite.png`，随后设置 32×32 尺寸，并调用 `CalcUVs()` 与 `UpdateUVs()` 重算和提交网格 UV。关键源文件检查确认站姿身体层与武器层拆分正确，武器格没有完整身体。角色上的重复帧尾、`LateUpdate`、渲染回调和重复的 `Helicopter.Update()` 后置补丁已删除；动作格号、动作映射和攻击逻辑不变。
 
 当前代码边界：保留自定义材质、私有纹理字段、`RecalcTexture()`、32×32 尺寸、`CalcUVs()`／`UpdateUVs()` 和 `Helicopter.SetBrosPositions()` 后置入口，它们共同构成完整恢复链。角色 `Update()`／`LateUpdate()` 恢复、帧尾协程、独立恢复组件、`OnWillRenderObject`／`OnRenderObject` 及重复的 `Helicopter.Update()` 后置入口均已从源码删除。`tempUV` 只表示计算尺寸，不能证明网格已更新；运行时验收必须读取 `SpriteSM.uvs`。完整误判过程见 [反馈记录](haiwang_trident_反馈记录.md#本轮误判与过时修复复盘)。
@@ -12,7 +22,7 @@
 
 2026-09-15 最新素材修正：贴墙 10 帧、悬挂 18 帧、攀爬 20 帧已按 Rambro 对应格的动作像素重画，沿用当前 held-v2 外观。独立稿、总稿前 48 帧、身体图集与本地 PNG 已同步；本轮未重新构建或部署。下方构建记录属于此前接入版本，最新素材检查见 [rambro-refit-checks.json](archive/rambro-refit/rambro-refit-checks.json)。
 
-当前内容：三叉戟投掷、近战、新版站立、跑步、跳跃、落地、蹲持、蹲走，以及贴墙、悬挂、攀爬、爬梯和滑索。上述 v2 动作均已同步到身体、武器图集和取帧代码，最新一批已于 2026-09-14 23:41 构建部署并确认三项运行文件的哈希一致。验证与部署记录见 [反馈记录](haiwang_trident_反馈记录.md)。五类地形动作的游戏内表现尚待重启实测。
+当前内容：三叉戟投掷、近战、新版站立、跑步、跳跃、落地、蹲持、蹲走、普通死亡、击掌、落地翻滚、水墙施放、蹬墙翻转，以及贴墙、悬挂、攀爬、爬梯和滑索。上述动作均已同步到身体或武器图集；新增五组继续使用原版取帧入口。验证与部署记录见 [反馈记录](haiwang_trident_反馈记录.md)。
 
 持戟跑步 v2（2026-09-14）共八帧，包含用户手调姿势及新的武器前倾节奏；完整兰博对照和预览同步保留。
 
@@ -64,18 +74,24 @@
 | 身体图集格号 | 当前内容 |
 | --- | --- |
 | 0 | 最新 held-v2 站姿主稿的身体部分，与跳跃稿第 18 帧一致 |
+| 4–5 | 普通空中死亡与死亡倒地；状态切换姿势，空手完整身体 |
 | 6 | 蹲姿 v2 第 1 帧的蹲持身体 |
+| 17–22 | 新版击掌起手、等待和释放；原版新版击掌逻辑取帧 |
 | 32–39 | 持戟跑步 v3 的八帧身体，80 毫秒/帧 |
 | 40–47 | 蹲姿 v2 第 2–9 帧的八帧蹲走，游戏沿用原版 25 毫秒帧间隔 |
 | 48–50 | 前进落地，接触、缓冲、恢复跑步，60/80/100 毫秒 |
+| 51–63 | 高处落地翻滚十三帧，25 毫秒/帧 |
 | 64–69 | 前进跳跃，上升三帧、下落三帧 |
 | 70–75 | 原地跳跃，上升三帧、下落三帧 |
 | 76–95 | 新版贴墙、刀攀与预抓附；两组交替抓握阶段由原版 `knifeHand` 与高度选取 |
 | 96–103 | 冲刺复用跑步 v3 的八帧身体 |
 | 104–106 | 原地落地，接触、缓冲、恢复站立，60/80/100 毫秒 |
 | 107–124 | 悬挂横移十二帧、停驻收势六帧 |
+| 145–152 | 水墙特技施放八帧；原版新版投掷分支在 149 格触发技能 |
 | 160–173 | 爬梯上行八帧、下滑三帧、停驻三帧 |
 | 192–197 | 进出梯六帧过渡，按原版计数正向／反向播放 |
+| 203–214 | 蹬墙翻转十二帧，33 毫秒/帧 |
+| 235–242 | 寄生死亡（胸口爆裂）八帧，33 毫秒/帧，空手 |
 | 512–529 | 独立滑索十二帧逆行换手、六帧滑行收势 |
 | 其余格号 | 继续使用项目原有身体动作 |
 
@@ -198,7 +214,7 @@
 
 本机 BroMaker 的 `BetterAnimation=true` 已开启 `useNewFrames`、`useNewKnifeClimbingFrames`、`useNewLedgeGrappleFrames` 等，但没有设置新版爬梯及进出梯开关。`Start()` 现明确设置 `useNewKnifeClimbingFrames=true`、`useNewLadderClimbingFrames=false`、`useLadderClimbingTransition=false`；保留已有 `useNewDuckingFrames=true`。悬挂和滑索没有独立的 `useNew*Frames` 开关。
 
-登沿的主体分发路径是 `ChangeFrame()` 中的 `ledgeGrapple → AnimateRunning()`，继续接现有跑步；不能仅因 `useNewLedgeGrappleFrames=true` 就把图集 76–89 认作本机常规登沿的独立时序。蹬墙翻转的原 203–214 格及现有跑跳、落地衔接均保留。
+登沿的主体分发路径是 `ChangeFrame()` 中的 `ledgeGrapple → AnimateRunning()`，继续接现有跑步；不能仅因 `useNewLedgeGrappleFrames=true` 就把图集 76–89 认作本机常规登沿的独立时序。蹬墙翻转继续使用原版 203–214 取帧逻辑，但格内素材已替换为新版海王；现有跑跳和落地衔接保留。
 
 悬挂按原版轮廓统一上移 1 像素，横移掌心中心为 `x=22.5,22.5,21.5,18.5,14.5,10.5`，重复两组，`y=8.5`；停驻掌心中心为 `(20.5,8.5)`。滑索继续使用原有 `x=22,22,21,18,14,10`、`y=9` 及停驻 `(20,9)` 的描点参数，保留握杆与倾角变化。抓附点、活动手可见接缝中心、手掌点及参考格保存在 cel 数据与 [traversal-manifest.csv](traversal-v2/traversal-manifest.csv)；被遮住的活动手以 `0,0` 标记。
 
@@ -233,7 +249,7 @@
 - 总稿只合入第 49–86 帧，按保存时最新版本保留前 48 帧的 288 个 cel。身体写入 160–173、192–197、512–529，共 38 格；武器写入 595–756，共 162 格。配对攻击贴图沿用已有同步规则，按新的活动肩点导出；取帧、攻击时序及 DLL 保留。
 - 已导出本地 `_Mod/sprite.png`、`_Mod/gunSprite.png`。38 组身体与普通持戟合成均逐像素匹配源稿；其余 986 个身体格、862 个武器格保留。38 帧均为单个连通图像，没有半透明像素，颜色来自当前 held-v2。站姿、跑步 v2/v3、跳跃与蹲姿源文件哈希保留。
 
-本轮帧表见 [ladder-zipline-manifest.csv](traversal-v2/ladder-zipline-manifest.csv)，绘制依据见 [pixel-reference-map.json](traversal-v2/pixel-reference-map.json)，保存与预览检查见 [ladder-zipline-pixel-checks.json](archive/ladder-zipline-pixels/ladder-zipline-pixel-checks.json)。修改前备份为 `archive/before-ladder-zipline-pixels-20260915-065315/`，其中 `latest-before-sync` 还保存了合入前的最新总稿和图集。
+本轮帧表见 [ladder-zipline-manifest.csv](archive/traversal-v2/ladder-zipline-manifest.csv)，绘制依据见 [pixel-reference-map.json](traversal-v2/pixel-reference-map.json)，保存与预览检查见 [ladder-zipline-pixel-checks.json](archive/ladder-zipline-pixels/ladder-zipline-pixel-checks.json)。修改前备份为 `archive/before-ladder-zipline-pixels-20260915-065315/`，其中 `latest-before-sync` 还保存了合入前的最新总稿和图集。
 
 本轮完成素材与本地图集同步，未构建、部署或进行游戏实测；`deployment.json` 仍表示此前的部署结果。下列格号与代码对应关系继续适用。
 
@@ -267,7 +283,7 @@
 | 192–197 | 52–57 | 空手；原 541–594 已清空 |
 | 512–529 | 58–75 | 595–756 |
 
-仅滑索使用配对公式 `595 + (身体格 - 512) * 9 + TridentPose`，共 162 格。九种姿态依次为持戟、抬手、蓄力、蓄满、离手、收手、突刺准备、突刺、突刺收手。离手格保留活动手臂，收招恢复同一滑索身体格对应的握点；突刺仍前伸 9 像素。详见 [attack-audit.csv](traversal-v2/attack-audit.csv)。
+仅滑索使用配对公式 `595 + (身体格 - 512) * 9 + TridentPose`，共 162 格。九种姿态依次为持戟、抬手、蓄力、蓄满、离手、收手、突刺准备、突刺、突刺收手。离手格保留活动手臂，收招恢复同一滑索身体格对应的握点；突刺仍前伸 9 像素。详见 [attack-audit.csv](archive/traversal-v2/attack-audit.csv)。
 
 2026-09-15 绳索蓄力手臂修订：按住攻击时，原版滑索取帧进入身体 524–529。它们的姿态 1／2／3 共 18 个武器格现读取 `haiwang_trident_zipline_charge.aseprite` 第 2／3／4 帧，使用 Predabro 的前臂与独立长矛图块中的手指像素，握点为 `(8.5,16.5)`；回拉起势、蓄力与蓄满保持同一手臂，蓄满只增加水光。`traversal-v2/sync_zipline_charge.lua` 可单独同步这 18 格，完整同步脚本也通过 `zipline_charge_source.lua` 读取同一主稿。后续微调武器以这三帧为主，随后重新导出图集与 PNG；其余滑索姿态沿用原稿。
 
@@ -303,7 +319,7 @@ _Mod/projectiles/Trident.png 为 64×32，左格普通、右格蓄力。SpriteSM
 
 素材检查通过：86 帧、六层、五个中文标签完整，身体与武器输出匹配当前源稿；前 68 帧不含三叉戟、双臂完整，无游离像素、半透明像素或小型封闭透明接缝。滑索的 18 帧源稿、身体格及 162 个武器格均与修改前一致；站跑跳蹲五份源稿与武器 0–72 格保留。详见 [asset-checks.json](archive/traversal-initial/asset-checks.json)。
 
-本次使用 `BuildBro.ps1` 构建并部署配套 DLL 与贴图；执行结果、文件哈希和部署目录见 [deployment.json](traversal-v2/deployment.json)。
+本次使用 `BuildBro.ps1` 构建并部署配套 DLL 与贴图；执行结果、文件哈希和部署目录见 [deployment.json](archive/traversal-v2/deployment.json)。
 
 在项目目录执行：
 
