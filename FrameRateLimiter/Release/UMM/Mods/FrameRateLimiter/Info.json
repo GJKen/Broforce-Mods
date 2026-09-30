@@ -1,0 +1,8 @@
+{
+  "Id": "FrameRateLimiter",
+  "DisplayName": "Frame Rate Limiter",
+  "Author": "GJKen",
+  "Version": "1.1.1",
+  "AssemblyName": "FrameRateLimiter.dll",
+  "EntryMethod": "FrameRateLimiter.Plugin.Load"
+}
