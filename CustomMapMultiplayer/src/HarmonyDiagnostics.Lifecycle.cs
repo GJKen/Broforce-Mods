@@ -416,6 +416,14 @@ namespace CustomMapMultiplayer
 
         private static bool HasInjectedWorkshopRuntimeState()
         {
+            // Native custom-campaign selection sets currentWorkshopLevel before
+            // the asynchronous campaign callback sets currentCampaign. Preserve
+            // that pending selection instead of treating it as stale injection.
+            if (HasNativeCustomCampaignSelection())
+            {
+                return false;
+            }
+
             if (_injectedForSession || _sessionWorkshopIdentityAdopted)
             {
                 return true;
@@ -434,6 +442,23 @@ namespace CustomMapMultiplayer
                 : (settings.WorkshopId ?? string.Empty).Trim();
             return !string.IsNullOrEmpty(customLevelId) &&
                 string.Equals(customLevelId, savedWorkshopId, StringComparison.Ordinal);
+        }
+
+        private static bool HasNativeCustomCampaignSelection()
+        {
+            if (!Connect.IsOffline)
+            {
+                return false;
+            }
+
+            if (LevelSelectionController.currentWorkshopLevel != null)
+            {
+                return true;
+            }
+
+            return LevelSelectionController.loadCustomCampaign &&
+                (LevelSelectionController.currentCampaign != null ||
+                 !string.IsNullOrEmpty(LevelSelectionController.campaignToLoad));
         }
 
         internal static void PrepareFrpDirectRoomExit(string trigger)
@@ -1284,6 +1309,19 @@ namespace CustomMapMultiplayer
                 if (state == null)
                 {
                     DiagnosticLog.Warning("Workshop injection skipped: GameState.Instance is null.");
+                    return;
+                }
+
+                // A native custom campaign has already selected its own Workshop
+                // content. Preserve that selection instead of replacing it with
+                // the configured online injection target.
+                if (GetBoolFieldOrProperty(state, "loadCustomCampaign"))
+                {
+                    var existingCustomLevelId =
+                        GetStringFieldOrProperty(state, "customLevelID").Trim();
+                    DiagnosticLog.InfoFileOnly(
+                        "Skipped Workshop injection because a native custom campaign is already selected: " +
+                        "customLevelID=" + existingCustomLevelId + ".");
                     return;
                 }
 

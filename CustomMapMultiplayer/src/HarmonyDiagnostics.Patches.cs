@@ -614,7 +614,13 @@ namespace CustomMapMultiplayer
                     return false;
                 }
 
-                if (_skipDuplicateWorkshopSceneLoad &&
+                var workshopOnlineSession = IsWorkshopOnlineSession();
+                if (!workshopOnlineSession && _skipDuplicateWorkshopSceneLoad)
+                {
+                    ClearDuplicateWorkshopLoadSuppression();
+                }
+
+                if (workshopOnlineSession && _skipDuplicateWorkshopSceneLoad &&
                     DateTime.UtcNow <= _skipDuplicateWorkshopSceneLoadUntilUtc &&
                     !string.IsNullOrEmpty(nextScene) &&
                     string.Equals(nextScene, GetConfiguredWorkshopSceneName(), StringComparison.Ordinal))
