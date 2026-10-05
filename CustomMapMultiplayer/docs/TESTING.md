@@ -22,6 +22,18 @@
 
 不得仅凭单端画面或日志断定网络根因。若只能取得部分证据，先核对 `buildHash`，并在结论中明确缺失的证据。提交日志前删除用户名、地址、端口、绝对路径和无关环境信息。
 
+## 一键进入已设置三方图
+
+日常快速回归不需要逐步操作菜单。游戏已经通过桌面 `Broforce.url` 启动、Unity Inspector Mod 已加载、Workshop 地图已订阅时，在房主端一次调用外部 MCP 测试脚本：
+
+```text
+mcp__unity_inspector__execute_script(
+    path="D:\\Study\\C#\\Broforce-Mods\\Broforce_src\\unity-inspector-mcp\\scripts\\csharp\\quick-online-workshop.cs",
+    args={workshopId:"3715087178", playerLimit:"3"})
+```
+
+脚本读取 Mod 的 Workshop 注入配置，复用原生街机 Normal、Online、创建房间、`newJoin` 和 `AddLocalPlayer` 流程；地图由 Mod 在联机状态切换时注入，不再打开原生 Workshop 地图列表。已有线上房主会话时只继续原生进入地图流程。调用结束后只检查一次 `game_state`，验收 `scene=Test Evan2`、`playerCount>=1`，必要时再截图。脚本属于 Unity Inspector 测试辅助，不进入 Mod DLL；只有脚本失败或需要定位中间状态时，才使用下方的逐步 MCP 观测流程。
+
 ## MCP 受控观测
 
 `Broforce_src/unity-inspector-mcp` 用于单次检查和持续复现观测。默认同时连接本次参与会话的房主与加入方；端点不可用时只报告实际错误，不扩展成端口或配置扫描。`Game process died` 需用同一端点 `ping`，必要时用 `game_state` 复核，不能单独作为退出或崩溃结论。

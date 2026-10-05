@@ -10,17 +10,87 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import net from 'net';
 import os from 'os';
-import { exec, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 const CSHARP_SCRIPTS_DIR = path.join(SCRIPTS_DIR, 'csharp');
+const WINDOWS_GAME_PROCESS_NAMES = ['Broforce_beta.exe', 'Broforce.exe'];
+
+function runIgnoredProcess(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.once('error', reject);
+    child.once('close', (code, signal) => resolve({ code, signal }));
+  });
+}
+
+async function isBroforceRunning() {
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], {
+        windowsHide: true,
+      });
+      return WINDOWS_GAME_PROCESS_NAMES.some((name) => stdout.includes(`"${name}"`));
+    } catch (error) {
+      return error.code === 'ENOENT' ? null : false;
+    }
+  }
+
+  for (const processName of ['Broforce.x86_64', 'Broforce']) {
+    try {
+      await execFileAsync('pgrep', ['-x', processName]);
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      // Try the next known process name.
+    }
+  }
+
+  try {
+    await execFileAsync('pgrep', ['-f', 'Broforce_beta.exe']);
+    return true;
+  } catch (error) {
+    return error.code === 'ENOENT' ? null : false;
+  }
+}
+
+async function terminateBroforce() {
+  if (process.platform === 'win32') {
+    for (const processName of WINDOWS_GAME_PROCESS_NAMES) {
+      try {
+        await runIgnoredProcess('taskkill', ['/F', '/T', '/IM', processName]);
+      } catch {
+        // The process may already be stopped.
+      }
+    }
+    return;
+  }
+
+  for (const processName of ['Broforce.x86_64', 'Broforce']) {
+    try {
+      await runIgnoredProcess('pkill', ['-9', '-x', processName]);
+    } catch {
+      // The process may already be stopped.
+    }
+  }
+
+  try {
+    await runIgnoredProcess('pkill', ['-9', '-f', 'Broforce_beta.exe']);
+  } catch {
+    // The process may already be stopped.
+  }
+}
 
 // UMM log file tracking
 const configuredLogPath = process.env.UNITY_INSPECTOR_UMM_LOG_PATH?.trim();
@@ -223,6 +293,7 @@ class UnityInspectorClient {
 
       let processCheckInterval = null;
       let timeoutHandle = null;
+      let processCheckInFlight = false;
 
       const cleanup = () => {
         if (processCheckInterval) clearInterval(processCheckInterval);
@@ -302,13 +373,19 @@ class UnityInspectorClient {
 
       // Poll for game process death while waiting (faster crash detection)
       processCheckInterval = setInterval(async () => {
+        if (processCheckInFlight || settled) return;
+        processCheckInFlight = true;
         try {
-          await execAsync("pgrep -x 'Broforce.x86_64' || pgrep -x Broforce || pgrep -f 'Broforce_beta.exe'");
+          if (await isBroforceRunning() === false) {
+            settle(() => {
+              this.connected = false;
+              reject(new Error('Game process died — the command likely caused a crash'));
+            });
+          }
         } catch {
-          settle(() => {
-            this.connected = false;
-            reject(new Error('Game process died — the command likely caused a crash'));
-          });
+          // Do not infer a game crash when process inspection itself fails.
+        } finally {
+          processCheckInFlight = false;
         }
       }, 500);
 
@@ -1533,10 +1610,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (gameRunning && args.restart) {
           // Stop the game first
           unityClient.disconnect();
-          const kill = spawn("sh", ["-c", "pkill -9 -x 'Broforce.x86_64' 2>/dev/null || pkill -9 -x Broforce 2>/dev/null || pkill -9 -f 'Broforce_beta.exe' 2>/dev/null || true"], {
-            stdio: "ignore",
-          });
-          await new Promise((resolve) => kill.on("close", resolve));
+          await terminateBroforce();
           // Brief wait for process to fully exit
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
@@ -1547,6 +1621,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const bfProcess = spawn("bf", bfArgs, {
             detached: true,
             stdio: "ignore",
+            windowsHide: true,
+          });
+          await new Promise((resolve, reject) => {
+            bfProcess.once('error', reject);
+            bfProcess.once('spawn', resolve);
           });
           bfProcess.unref();
 
@@ -1589,11 +1668,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Disconnect TCP first
         unityClient.disconnect();
         try {
-          // Use spawn with ignored stdio to avoid corrupting MCP transport
-          const kill = spawn("sh", ["-c", "pkill -9 -x 'Broforce.x86_64' 2>/dev/null || pkill -9 -x Broforce 2>/dev/null || pkill -9 -f 'Broforce_beta.exe' 2>/dev/null || true"], {
-            stdio: "ignore",
-          });
-          await new Promise((resolve) => kill.on("close", resolve));
+          await terminateBroforce();
           result = { success: true, message: "Game stopped" };
         } catch {
           result = { success: true, message: "Game may already be stopped" };
