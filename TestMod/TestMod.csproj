@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TestMod</RootNamespace>
+    <AssemblyName>TestMod</AssemblyName>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <PackageModPath>$(MSBuildProjectDirectory)\Release\UMM\Mods\TestMod</PackageModPath>
+    <OutputPath>$(PackageModPath)\</OutputPath>
+  </PropertyGroup>
+
+  <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityModManager">
+      <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(BroforceManagedPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="src\Plugin.cs" />
+    <Compile Include="src\TestModBehaviour.cs" />
+    <Compile Include="src\TestModSettings.cs" />
+  </ItemGroup>
+
+  <Target Name="CopyTestModMetadata" AfterTargets="Build">
+    <MakeDir Directories="$(PackageModPath)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\Info.json" DestinationFiles="$(PackageModPath)\Info.json" />
+  </Target>
+</Project>
