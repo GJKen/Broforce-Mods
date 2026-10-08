@@ -65,3 +65,10 @@ Scripts can directly access private fields and methods on game types — no refl
 ## Temporary Scripts
 
 Scripts outside this directory can be executed via absolute path. They won't appear in `list_scripts` or the catalog resource.
+
+## Workshop Online Flows
+
+- `quick-online-workshop.cs`: host an Online room and enter the configured Workshop map. For the default test, execute it once with `workshopId=3715087178` and `playerLimit=3`.
+- `quick-join-workshop-lobby.cs`: join an existing host's Steam Lobby and wait for its Workshop map. Read the host's current `SteamLayer.Instance.LobbySteamId` first, then execute the script once on the joining client with only `lobbyId`; it defaults to Workshop `3715087178` and scene `Test Evan2`.
+
+Both scripts create asynchronous runners. A successful `execute_script` response means the runner was submitted, not that map loading is complete. Wait about 8–12 seconds, then make one final `game_state` check.
