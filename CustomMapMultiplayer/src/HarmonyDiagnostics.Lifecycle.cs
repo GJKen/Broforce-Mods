@@ -1319,9 +1319,26 @@ namespace CustomMapMultiplayer
                 {
                     var existingCustomLevelId =
                         GetStringFieldOrProperty(state, "customLevelID").Trim();
-                    DiagnosticLog.InfoFileOnly(
-                        "Skipped Workshop injection because a native custom campaign is already selected: " +
-                        "customLevelID=" + existingCustomLevelId + ".");
+                    if (!requireHost &&
+                        _lateJoinPending &&
+                        !IsOnlineHost() &&
+                        string.Equals(existingCustomLevelId, workshopId, StringComparison.Ordinal))
+                    {
+                        // The native custom-campaign path already selected the host's map.
+                        // Reuse it, but let the late-join completion callback resume the
+                        // asynchronous campaign load and start the local player flow.
+                        _injectedForSession = true;
+                        _workshopCompletionHandledForSession = false;
+                        DiagnosticLog.Info(
+                            "Reused native custom campaign state for late Workshop join: " +
+                            "customLevelID=" + existingCustomLevelId + ".");
+                    }
+                    else
+                    {
+                        DiagnosticLog.InfoFileOnly(
+                            "Skipped Workshop injection because a native custom campaign is already selected: " +
+                            "customLevelID=" + existingCustomLevelId + ".");
+                    }
                     return;
                 }
 
