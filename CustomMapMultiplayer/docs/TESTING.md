@@ -24,7 +24,7 @@
 
 ## 一键进入已设置三方图
 
-日常快速回归不需要逐步操作菜单。游戏已经通过桌面 `Broforce.url` 启动、Unity Inspector Mod 已加载、Workshop 地图已订阅时，在房主端一次调用外部 MCP 测试脚本：
+日常快速回归不需要逐步操作菜单。目标端已经通过桌面 `Broforce.url` 启动、Unity Inspector Mod 已加载、Workshop 地图已订阅时，在对应端点一次调用外部 MCP 测试脚本：
 
 ```text
 mcp__unity_inspector__execute_script(
@@ -33,6 +33,21 @@ mcp__unity_inspector__execute_script(
 ```
 
 脚本读取 Mod 的 Workshop 注入配置，复用原生街机 Normal、Online、创建房间、`newJoin` 和 `AddLocalPlayer` 流程；地图由 Mod 在联机状态切换时注入，不再打开原生 Workshop 地图列表。已有线上房主会话时只继续原生进入地图流程。调用结束后只检查一次 `game_state`，验收 `scene=Test Evan2`、`playerCount>=1`，必要时再截图。脚本属于 Unity Inspector 测试辅助，不进入 Mod DLL；只有脚本失败或需要定位中间状态时，才使用下方的逐步 MCP 观测流程。
+
+## 本机一键加入已有三方图房间
+
+房主已经创建 Steam 房间并进入 Workshop 地图时，先在房主端读取本次动态 Lobby ID，再在本机端执行加入脚本。Lobby ID 每次建房都会变化，不得写死在脚本或文档中：
+
+```text
+mcp__unity_inspector_remote__execute_code(
+    code="SteamLayer.Instance.LobbySteamId.ToString()")
+
+mcp__unity_inspector__execute_script(
+    path="D:\\Study\\C#\\Broforce-Mods\\Broforce_src\\unity-inspector-mcp\\scripts\\csharp\\quick-join-workshop-lobby.cs",
+    args={lobbyId:"房主端刚读取的 Lobby ID"})
+```
+
+脚本默认校验 Workshop `3715087178` 和场景 `Test Evan2`；只有测试其它地图或需要额外限定房主时才传 `workshopId`、`sceneName` 或 `hostName`。脚本只用于 Steam Lobby，不用于 FRP Direct。它先从 Steam 读取目标 Lobby 的 Workshop ID、场景、版本、容量和可选房主名，校验通过后调用原生 `SteamLayer.JoinLobby`；Workshop 晚加入加载和本地角色生成继续由 CustomMapMultiplayer 处理。`execute_script` 成功只表示异步 runner 已提交；通常等待约 8–12 秒后检查一次本机 `game_state`，目标为 `scene=Test Evan2`、`isInGame=true`、`playerCount>=2`，并确认一个玩家带 `[local]`。最后在房主端检查一次 `game_state`，确认双方都看到相同玩家数。
 
 ## MCP 受控观测
 
@@ -124,3 +139,15 @@ handoff=正式源码文件、构建哈希和后续验收要求
 | 其它 Mod | Swap Bros 2.1.5 的 Always spawn as chosen bro 已通过离线和 Steam 联机测试；用户确认离线和联机房间均按锁定角色生成，地图强制角色优先仍按 `ignoreForcedBros` 设置执行 |
 | FRP Direct | 三机基础联机和静态 `1` 人房满员提示已通过；代码支持地图内动态设置 `1` 至 `4` 人上限并保留现有成员；四机、`2` 至 `4` 人容量边界、降额后重入、多地图、高延迟、长期稳定性和主机迁移仍未专项验收 |
 | 原生崩溃 | 异常与崩溃时间接近不能单独证明因果，必须结合双方诊断和游戏日志 |
+### 优化后的实际时序
+
+`quick-online-workshop.cs` 是异步 runner。`execute_script` 返回 `success=true` 时，只表示 runner 已提交，不表示地图已经完成加载。推荐固定使用以下最短流程：
+
+1. 目标为 5700G 内网端时使用 `mcp__unity_inspector_remote__*`；目标为本机时使用 `mcp__unity_inspector__*`，同一轮不要混用端点。
+2. 目标端未运行时启动一次，等待 Inspector 就绪。
+3. 只调用一次 `quick-online-workshop.cs`。
+4. 脚本提交后不要逐菜单调用接口，也不要高频轮询 `game_state`、`list_enemies` 或截图。当前环境通常需要约 8-12 秒完成地图过渡，这段时间由游戏和 Mod 自己运行。
+5. 地图加载时间结束后只读取一次 `game_state`，目标为 `scene=Test Evan2`、`isInGame=true`、`playerCount>=1`。
+6. 需要清敌时不要把 MCP 调用放在地图进入关键路径：已启用的 `TestMod` 会在游戏内自动清除当前屏幕敌人。只有用户明确要求手动补杀或验证接口时，才执行一次 `TestMod.Plugin.KillVisibleEnemiesNow()`。
+
+不要把脚本返回后的 `MissionScreenVietnam` 或 `newJoin` 过渡状态立即判定为失败；也不要在过渡期间连续发起 MCP 查询。若最终一次检查仍未到达目标场景，报告实际状态，只有用户要求继续等待或排查时才进入逐步观测流程。
