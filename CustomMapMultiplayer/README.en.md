@@ -144,7 +144,7 @@ The project targets .NET Framework 3.5. Before building or deploying, read the p
 
 - `BroforceManagedPath`: the local Broforce `Managed` directory.
 - `UnityModManagerPath`: the local UMM core directory.
-- `TestDeployModPath`: the local test-machine deployment directory; an empty value explicitly disables the extra test deployment.
+- `TestDeployModPath`: the local test-machine deployment directory; an empty value explicitly disables the extra test deployment. When the test machine's LAN IP can change, use its Windows host name in the UNC path instead of a fixed IP.
 
 This file contains machine-specific paths and is only used for building or deploying. It must not be written to public files, commit messages, log excerpts, or external replies. For first-time setup, copy `LocalBroforcePath.props.example` to `LocalBroforcePath.props`, fill in the local paths, and run the following command from the project directory:
 
@@ -152,7 +152,7 @@ This file contains machine-specific paths and is only used for building or deplo
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
-The standard script reads and keeps `Release\UMM\Mods\CustomMapMultiplayer\Info.json`, creates `Release\CustomMapMultiplayer.zip`, and deploys it to the local UMM directory while calculating and embedding the SHA-256 `buildHash`. Deployment overwrites the DLL and `Info.json` so that the name, version, and entry point match the current build; the DLL assembly version is generated from the version in that `Info.json`. An optional test deployment directory is read only from the uncommitted `LocalBroforcePath.props`; do not write test-machine addresses, shared paths, or usernames to the repository. If a configured deployment path cannot be accessed, directory creation fails, or the DLL cannot be copied, the build is considered failed and two-sided testing must not continue. Do not replace a standard-script-verified build with an unverified IDE or manual build; such a build is recorded as `UNBUILT`.
+The standard script reads and keeps `Release\UMM\Mods\CustomMapMultiplayer\Info.json`, creates `Release\CustomMapMultiplayer.zip`, and deploys it to the local UMM directory while calculating and embedding the SHA-256 `buildHash`. Deployment overwrites the DLL and `Info.json` so that the name, version, and entry point match the current build; the DLL assembly version is generated from the version in that `Info.json`. An optional test deployment directory is read only from the uncommitted `LocalBroforcePath.props`; do not write test-machine addresses, shared paths, or usernames to the repository. UNC test deployment targets are checked by host name over SMB (TCP 445) first; an unreachable target is skipped, while an accessible target that fails directory creation or DLL copying still fails the build. Do not replace a standard-script-verified build with an unverified IDE or manual build; such a build is recorded as `UNBUILT`.
 
 ## Project Structure and Documentation
 

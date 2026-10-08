@@ -8,7 +8,7 @@
 
 1. `BroforceManagedPath` 是本机 Broforce `Broforce_beta_Data/Managed` 目录，其中必须含 `UnityEngine.TextRenderingModule.dll`、`UnityEngine.UI.dll` 和 `UnityEngine.PhysicsModule.dll`；聊天 viewport 和字数显示使用前两者，源码中的碰撞器类型使用后者。上述 DLL 是游戏运行库，不复制到 UMM 插件目录或安装包。
 2. `UnityModManagerPath` 是含 `UnityModManager.dll` 和 `0Harmony.dll` 的本机 UMM 核心目录。
-3. `TestDeployModPath` 是本机测试机部署目录；值为空表示明确关闭额外测试部署。
+3. `TestDeployModPath` 是本机测试机部署目录；值为空表示明确关闭额外测试部署。对于会变动 IP 的内网测试机，应在 UNC 路径中填写 Windows 主机名，不要填写固定 IP。
 4. 该文件包含本机专用路径，只允许用于执行构建或部署，不得写入公开文件、提交信息、日志摘录或对外回复。
 5. 使用兼容 .NET Framework 3.5 的 `csc.exe`；不要直接使用 v4 编译器。
 
@@ -31,7 +31,7 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Rel
 <本机 UMM_PROFILE_DIR>\Mods\GJKen-CustomMapMultiplayer\CustomMapMultiplayer\CustomMapMultiplayer.dll
 ```
 
-脚本读取并保留 `Release\UMM\Mods\CustomMapMultiplayer\Info.json`，输出 `Release\CustomMapMultiplayer.zip` 并嵌入 `Build hash`，覆盖同一目录下的 DLL；项目安装包固定包含顶层 `manifest.json`、`README.md`、`icon.png`，以及 UMM 子目录中的 `Info.json`。部署目标的 `Info.json` 每次均从该构建元数据文件同步，DLL 程序集版本也从该文件的版本生成。若配置了可选测试部署目标，目录创建或复制失败时整个部署失败，不得继续双端测试。
+脚本读取并保留 `Release\UMM\Mods\CustomMapMultiplayer\Info.json`，输出 `Release\CustomMapMultiplayer.zip` 并嵌入 `Build hash`，覆盖同一目录下的 DLL；项目安装包固定包含顶层 `manifest.json`、`README.md`、`icon.png`，以及 UMM 子目录中的 `Info.json`。部署目标的 `Info.json` 每次均从该构建元数据文件同步，DLL 程序集版本也从该文件的版本生成。对于 UNC 测试部署目标，脚本先按主机名检查 TCP 445；目标机器不通时只跳过该远端部署并继续完成构建和本机部署，目标机器可达但目录创建或复制失败时仍视为部署失败，不得继续双端测试。
 
 `CustomMapMultiplayer.csproj` 的 `OutputPath` 也指向 `Release\UMM\Mods\CustomMapMultiplayer`；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
 

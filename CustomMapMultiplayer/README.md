@@ -144,7 +144,7 @@ FRP 房间列表显示人数已满时，加入方点击房间会直接在屏幕�
 
 - `BroforceManagedPath`：本机 Broforce `Managed` 目录。
 - `UnityModManagerPath`：本机 UMM 核心目录。
-- `TestDeployModPath`：本机测试机部署目录；值为空表示明确关闭额外测试部署。
+- `TestDeployModPath`：本机测试机部署目录；值为空表示明确关闭额外测试部署。内网测试机 IP 会变化时，请在 UNC 路径中使用 Windows 主机名，不要写固定 IP。
 
 该文件包含本机专用路径，只用于执行构建或部署，不得写入公开文件、提交信息、日志摘录或对外回复。首次使用时，复制 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props` 并填写本机路径，然后从项目根目录运行：
 
@@ -152,7 +152,7 @@ FRP 房间列表显示人数已满时，加入方点击房间会直接在屏幕�
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
-标准脚本会读取并保留 `Release\UMM\Mods\CustomMapMultiplayer\Info.json`，生成 `Release\CustomMapMultiplayer.zip` 并部署到本机 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署时会同步覆盖 DLL 和 `Info.json`，使名称、版本和入口与当前构建一致；DLL 程序集版本从该 `Info.json` 的版本自动生成。可选测试部署目录仅从未提交的 `LocalBroforcePath.props` 读取；不要把测试机地址、共享路径或用户名写入仓库。已配置的部署路径不可访问、目录创建失败或 DLL 复制失败时，构建视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
+标准脚本会读取并保留 `Release\UMM\Mods\CustomMapMultiplayer\Info.json`，生成 `Release\CustomMapMultiplayer.zip` 并部署到本机 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署时会同步覆盖 DLL 和 `Info.json`，使名称、版本和入口与当前构建一致；DLL 程序集版本从该 `Info.json` 的版本自动生成。可选测试部署目录仅从未提交的 `LocalBroforcePath.props` 读取；不要把测试机地址、共享路径或用户名写入仓库。UNC 测试部署目标会先按主机名检查 SMB（TCP 445），目标机器不通时自动跳过远端部署；目标机器可达但目录创建或 DLL 复制失败时，构建仍视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
 
 ## 项目结构与文档
 

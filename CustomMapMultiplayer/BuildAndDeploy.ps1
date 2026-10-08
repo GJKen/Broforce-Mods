@@ -100,6 +100,23 @@ function Get-Sha256Hex([string]$path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToUpperInvariant()
 }
 
+function Test-RemoteDeploymentTarget([string]$path) {
+    if ($path -notmatch '^\\\\(?<computerName>[^\\]+)\\') {
+        return $true
+    }
+
+    $computerName = $Matches['computerName']
+    $smbReachable = Test-NetConnection -ComputerName $computerName -Port 445 `
+        -InformationLevel Quiet -WarningAction SilentlyContinue
+    if (-not $smbReachable) {
+        Write-Warning "Skipping remote deployment because $computerName is not reachable over SMB (TCP 445)."
+        return $false
+    }
+
+    Write-Host "Remote deployment target $computerName is reachable over SMB."
+    return $true
+}
+
 $manifestLines = New-Object System.Collections.Generic.List[string]
 foreach ($sourceFile in $sourceFiles) {
     $sourceItem = Get-Item -LiteralPath $sourceFile
@@ -201,6 +218,10 @@ else {
     }
     $deploymentPaths = @($deploymentPaths | Select-Object -Unique)
     foreach ($deploymentPath in $deploymentPaths) {
+        if (-not (Test-RemoteDeploymentTarget $deploymentPath)) {
+            continue
+        }
+
         New-Item -ItemType Directory -Force -Path $deploymentPath | Out-Null
         $destinationPath = Join-Path $deploymentPath 'CustomMapMultiplayer.dll'
         Copy-Item -LiteralPath $outputPath -Destination $destinationPath -Force
