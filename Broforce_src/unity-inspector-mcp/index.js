@@ -23,6 +23,37 @@ const __dirname = path.dirname(__filename);
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 const CSHARP_SCRIPTS_DIR = path.join(SCRIPTS_DIR, 'csharp');
 const WINDOWS_GAME_PROCESS_NAMES = ['Broforce_beta.exe', 'Broforce.exe'];
+const remoteLaunchHost = process.env.UNITY_INSPECTOR_REMOTE_LAUNCH_HOST?.trim();
+const remoteLaunchUser = process.env.UNITY_INSPECTOR_REMOTE_LAUNCH_USER?.trim();
+const remoteLaunchPassword = process.env.UNITY_INSPECTOR_REMOTE_LAUNCH_PASSWORD;
+const remoteLaunchTask = process.env.UNITY_INSPECTOR_REMOTE_LAUNCH_TASK?.trim();
+const remoteProcessScope = process.env.UNITY_INSPECTOR_PROCESS_SCOPE?.trim().toLowerCase() === 'remote';
+const launchGameDescription = isRemoteLaunchConfigured()
+  ? 'Launch Broforce on the configured remote Windows machine through schtasks.exe. Never launches a local game process.'
+  : 'Launch Broforce locally using the bf command. Waits for the game to become responsive.';
+
+function isRemoteLaunchConfigured() {
+  return Boolean(remoteLaunchHost && remoteLaunchTask);
+}
+
+async function triggerRemoteLaunch() {
+  const schtasksArgs = ['/Run', '/S', remoteLaunchHost, '/TN', remoteLaunchTask];
+
+  // By default schtasks uses the current Windows credentials. If the caller
+  // explicitly supplies remote credentials, pass them to schtasks as well.
+  // This keeps the normal LAN setup free of SSH and avoids an interactive
+  // password prompt that would block the MCP process.
+  if (remoteLaunchUser && remoteLaunchPassword !== undefined) {
+    schtasksArgs.push('/U', remoteLaunchUser, '/P', remoteLaunchPassword);
+  }
+
+  try {
+    await execFileAsync('schtasks.exe', schtasksArgs, { windowsHide: true });
+  } catch (error) {
+    const detail = error.stderr?.trim() || error.message;
+    throw new Error(`远程启动任务失败（${remoteLaunchHost}，${remoteLaunchTask}）：${detail}`);
+  }
+}
 
 function runIgnoredProcess(command, args) {
   return new Promise((resolve, reject) => {
@@ -36,6 +67,10 @@ function runIgnoredProcess(command, args) {
 }
 
 async function isBroforceRunning() {
+  if (remoteProcessScope) {
+    return null;
+  }
+
   if (process.platform === 'win32') {
     try {
       const { stdout } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], {
@@ -1191,7 +1226,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "launch_game",
-        description: "Launch Broforce using the bf command. Waits for the game to become responsive. Returns a warning if the game is already running unless restart is true.",
+          description: launchGameDescription + ' Returns a warning if the game is already running unless restart is true.',
         inputSchema: {
           type: "object",
           properties: {
@@ -1608,6 +1643,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (gameRunning && args.restart) {
+          if (isRemoteLaunchConfigured()) {
+            throw new Error('Remote restart is not configured; stop the remote game before launching it again.');
+          }
+
           // Stop the game first
           unityClient.disconnect();
           await terminateBroforce();
@@ -1616,18 +1655,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         try {
-          // Launch bf in background with stdio detached to avoid corrupting MCP's stdio transport
-          const bfArgs = args.vanilla ? ["--vanilla"] : [];
-          const bfProcess = spawn("bf", bfArgs, {
-            detached: true,
-            stdio: "ignore",
-            windowsHide: true,
-          });
-          await new Promise((resolve, reject) => {
-            bfProcess.once('error', reject);
-            bfProcess.once('spawn', resolve);
-          });
-          bfProcess.unref();
+          if (isRemoteLaunchConfigured()) {
+            if (args.vanilla) {
+              throw new Error('Remote launch does not support vanilla mode.');
+            }
+
+            await triggerRemoteLaunch();
+          } else {
+            // Launch bf in background with stdio detached to avoid corrupting MCP's stdio transport
+            const bfArgs = args.vanilla ? ["--vanilla"] : [];
+            const bfProcess = spawn("bf", bfArgs, {
+              detached: true,
+              stdio: "ignore",
+              windowsHide: true,
+            });
+            await new Promise((resolve, reject) => {
+              bfProcess.once('error', reject);
+              bfProcess.once('spawn', resolve);
+            });
+            bfProcess.unref();
+          }
 
           // Wait for the game to become responsive
           const launchTimeout = 60000;
