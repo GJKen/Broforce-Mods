@@ -28,3 +28,13 @@ $movementTestExe = Join-Path $testPath 'TridentMovementAnimationTests.exe'
 if ($LASTEXITCODE -ne 0) { throw 'Movement animation test compilation failed.' }
 & $movementTestExe
 if ($LASTEXITCODE -ne 0) { throw 'Movement animation tests failed.' }
+
+& (Join-Path $PSScriptRoot 'Test-LegacyLadderAtlas.ps1')
+
+$groundTestExe = Join-Path $testPath 'GroundVisualAlignmentTests.exe'
+& $compilerPath /nologo /target:exe /reference:System.Drawing.dll "/out:$groundTestExe" `
+    (Join-Path $projectPath 'src\TridentMovementAnimation.cs') `
+    (Join-Path $PSScriptRoot 'GroundVisualAlignmentTests.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Ground visual alignment test compilation failed.' }
+& $groundTestExe (Join-Path $projectPath '_Mod\sprite.png')
+if ($LASTEXITCODE -ne 0) { throw 'Ground visual alignment tests failed.' }

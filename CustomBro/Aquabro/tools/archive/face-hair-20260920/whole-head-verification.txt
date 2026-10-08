@@ -1,0 +1,1 @@
+PASS: frame 1, other layers, frame count and durations unchanged; heads present in all 8 frames.

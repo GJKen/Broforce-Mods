@@ -1,0 +1,10 @@
+{
+  "name": "FrameRateLimiter",
+  "author": "GJKen",
+  "version_number": "1.1.1",
+  "website_url": "https://github.com/GJKen/Broforce-Mods/blob/main/FrameRateLimiter",
+  "description": "A Unity Mod Manager plugin that limits the local Broforce rendering frame rate through Application.targetFrameRate.",
+  "dependencies": [
+    "UMM-UMM-1.1.0"
+  ]
+}

@@ -6,6 +6,7 @@ namespace Aquabro
         internal const int TraversalWeaponStart = 73;
         internal const int TraversalPoseCount = 9;
         internal const int TraversalBodyCount = 76;
+        internal const int LegacyLadderUpBodyStart = 184;
 
         private bool landing;
         private bool movingLanding;
@@ -22,6 +23,15 @@ namespace Aquabro
         internal static bool IsLandingBodyFrame(int frame)
         {
             return (frame >= 48 && frame <= 50) || (frame >= 104 && frame <= 106);
+        }
+
+        internal static float GroundBodyOffsetY(int frame)
+        {
+            // 原版 32x32 精灵中心偏移为 15，鞋底应到第 30 行（从 0 起算）。
+            // 这些地面姿态的鞋底在第 29 行；四个跑步接触帧已经到第 30 行。
+            if (frame == 34 || frame == 38 || frame == 98 || frame == 102) return 0f;
+            return frame == 0 || frame == 6 || (frame >= 32 && frame <= 50) ||
+                (frame >= 96 && frame <= 106) ? -1f : 0f;
         }
 
         internal static int WeaponCellForBody(int bodyFrame)
@@ -47,6 +57,14 @@ namespace Aquabro
         internal static bool IsUnarmedTraversalBodyFrame(int bodyFrame)
         {
             return IsTraversalBodyFrame(bodyFrame) && bodyFrame < 512;
+        }
+
+        internal static int LegacyLadderBodyFrame(int animationFrame)
+        {
+            int phase = (animationFrame % 4 + 4) % 4;
+            // Rambro's disabled new-ladder mode uses the same 0-3 body phase
+            // for climbing up, climbing down, and horizontal ladder input.
+            return LegacyLadderUpBodyStart + phase;
         }
 
         // 悬挂和滑索原本共用 107–124；滑索重定向到扩展行，保留原版取帧与火花。

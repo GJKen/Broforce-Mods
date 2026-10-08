@@ -138,6 +138,20 @@ internal static class TridentMovementAnimationTests
         }
     }
 
+    private static void LegacyLadderMapping()
+    {
+        Check(TridentMovementAnimation.LegacyLadderBodyFrame(0) == 184,
+            "Legacy ladder up phase 0 lost its Aquabro cell");
+        Check(TridentMovementAnimation.LegacyLadderBodyFrame(3) == 187,
+            "Legacy ladder up phase 3 lost its Aquabro cell");
+        Check(TridentMovementAnimation.LegacyLadderBodyFrame(7) == 187,
+            "Legacy ladder up phase did not wrap at four cells");
+        Check(TridentMovementAnimation.LegacyLadderBodyFrame(-1) == 187,
+            "Legacy ladder up negative phase did not wrap safely");
+        Check(TridentMovementAnimation.LegacyLadderBodyFrame(4) == 184,
+            "Legacy ladder down phase did not wrap at four cells");
+    }
+
     private static void LandingTimeline()
     {
         TridentMovementAnimation animation = new TridentMovementAnimation();
@@ -207,6 +221,7 @@ internal static class TridentMovementAnimationTests
         Mapping();
         TraversalCoverageAndIsolation();
         TraversalTransitions();
+        LegacyLadderMapping();
         TraversalAttackRecovery();
         LandingTimeline();
         CancellationAndLongFrames();

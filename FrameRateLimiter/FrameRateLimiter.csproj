@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>FrameRateLimiter</RootNamespace>
+    <AssemblyName>FrameRateLimiter</AssemblyName>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <PackageModPath>$(MSBuildProjectDirectory)\Release</PackageModPath>
+    <PackageUmmModPath>$(PackageModPath)\UMM\Mods\FrameRateLimiter</PackageUmmModPath>
+    <OutputPath>$(PackageUmmModPath)\</OutputPath>
+  </PropertyGroup>
+
+  <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
+
+  <PropertyGroup>
+    <LocalBroforceModPath Condition="'$(UnityModManagerPath)' != ''">$(UnityModManagerPath)\..\Mods\GJKen-FrameRateLimiter</LocalBroforceModPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityModManager">
+      <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Compile Include="src\Plugin.cs" />
+    <Compile Include="src\FrameRateLimiterSettings.cs" />
+    <Compile Include="src\TooltipOverlay.cs" />
+  </ItemGroup>
+
+  <Target Name="DeployFrameRateLimiter" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
+    <MakeDir Directories="$(PackageModPath);$(PackageUmmModPath);$(LocalBroforceModPath)\FrameRateLimiter" />
+    <ItemGroup>
+      <DeployFrameRateLimiterPath Include="$(LocalBroforceModPath)\FrameRateLimiter" Condition="'$(LocalBroforceModPath)' != ''" />
+      <DeployFrameRateLimiterPath Include="$(TestDeployModPath)" Condition="'$(TestDeployModPath)' != ''" />
+    </ItemGroup>
+    <MakeDir Directories="@(DeployFrameRateLimiterPath)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="%(DeployFrameRateLimiterPath.Identity)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(PackageUmmModPath)\Info.json" DestinationFiles="%(DeployFrameRateLimiterPath.Identity)\Info.json" Condition="Exists('$(PackageUmmModPath)\Info.json')" />
+  </Target>
+</Project>
