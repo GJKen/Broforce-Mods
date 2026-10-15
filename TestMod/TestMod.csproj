@@ -26,8 +26,16 @@
       <HintPath>$(BroforceManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityModManager">
       <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(UnityModManagerPath)\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
@@ -40,6 +48,8 @@
     <Compile Include="src\Plugin.cs" />
     <Compile Include="src\TestModBehaviour.cs" />
     <Compile Include="src\TestModSettings.cs" />
+    <Compile Include="src\GameSpeedController.cs" />
+    <Compile Include="src\SettingsUI.cs" />
   </ItemGroup>
 
   <Target Name="CopyTestModMetadata" AfterTargets="Build">

@@ -2,7 +2,7 @@
   "Id": "TestMod",
   "DisplayName": "Test Mod",
   "Author": "GJKen",
-  "Version": "0.2.0",
+  "Version": "0.3.3",
   "AssemblyName": "TestMod.dll",
   "EntryMethod": "TestMod.Plugin.Load"
 }

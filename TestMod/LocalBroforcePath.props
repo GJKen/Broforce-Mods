@@ -1,0 +1,3 @@
+<Project>
+  <Import Project="..\CustomMapMultiplayer\LocalBroforcePath.props" Condition="Exists('..\CustomMapMultiplayer\LocalBroforcePath.props')" />
+</Project>

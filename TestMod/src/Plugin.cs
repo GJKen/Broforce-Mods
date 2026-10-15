@@ -1,12 +1,85 @@
 using System;
+using HarmonyLib;
 using UnityModManagerNet;
 using UnityEngine;
 
 namespace TestMod
 {
-    public static class Plugin
+    public static partial class Plugin
     {
         private static TestModBehaviour _behaviour;
+        private static GameSpeedController _speedController;
+        private static Harmony _harmony;
+        private static int _bindingTarget;
+        private static int _ignoreHotkeysThroughFrame;
+
+        internal static bool CapturingHotkey
+        {
+            get { return _bindingTarget != 0 || Time.frameCount <= _ignoreHotkeysThroughFrame; }
+        }
+
+        public static bool IsGameSpeedEnabled
+        {
+            get { return _speedController != null && Settings.EnableGameSpeed; }
+        }
+
+        public static float GameSpeed
+        {
+            get { return Settings == null ? 1f : Settings.GameSpeed; }
+        }
+
+        public static bool IsGamePaused
+        {
+            get { return _speedController != null && _speedController.IsPaused; }
+        }
+
+        internal static bool IsGameFrameFrozen
+        {
+            get { return _speedController != null && _speedController.IsFrozen; }
+        }
+
+        public static int SteppedFrames
+        {
+            get { return _speedController == null ? 0 : _speedController.SteppedFrames; }
+        }
+
+        public static void SetGameSpeedEnabled(bool enabled)
+        {
+            if (Settings == null) return;
+            Settings.EnableGameSpeed = enabled;
+            if (_speedController != null) _speedController.ApplySettings();
+            SaveSettings(ModEntry);
+        }
+
+        public static void SetGameSpeed(float speed)
+        {
+            if (float.IsNaN(speed) || float.IsInfinity(speed) || speed < 0f || speed > 4f)
+                throw new ArgumentOutOfRangeException("speed", "Use a speed between 0 and 4.");
+            if (Settings == null) return;
+            Settings.EnableGameSpeed = true;
+            if (speed > 0f) Settings.GameSpeed = Mathf.Max(0.01f, speed);
+            if (_speedController != null) _speedController.SetPaused(speed == 0f);
+            SaveSettings(ModEntry);
+        }
+
+        public static void SetGamePaused(bool paused)
+        {
+            if (Settings == null || _speedController == null) return;
+            Settings.EnableGameSpeed = true;
+            _speedController.SetPaused(paused);
+            SaveSettings(ModEntry);
+        }
+
+        public static bool StepOneFrame()
+        {
+            if (_speedController == null || PauseController.pauseStatus != PauseStatus.UnPaused)
+                return false;
+            Settings.EnableGameSpeed = true;
+            _speedController.ApplySettings();
+            var requested = _speedController.RequestFrameStep();
+            SaveSettings(ModEntry);
+            return requested;
+        }
 
         internal static UnityModManager.ModEntry ModEntry { get; private set; }
         internal static TestModSettings Settings { get; private set; }
@@ -89,6 +162,7 @@ namespace TestMod
         {
             SaveSettings(modEntry);
             Stop();
+            ReleaseSettingsUI();
             Settings = null;
             ModEntry = null;
             return true;
@@ -106,55 +180,7 @@ namespace TestMod
                 return;
             }
 
-            var chinese = IsChinese();
-            GUILayout.Label(chinese ? "测试 Mod" : "Test Mod");
-            GUILayout.Label(chinese ? "测试用：清除当前屏幕内属于本机的敌人。" :
-                "Test tool: kills enemies currently visible to this game instance.");
-
-            GUILayout.Label(chinese ? "语言 / Language" : "Language / 语言");
-            var languageIndex = GetLanguageIndex(Settings.Language);
-            var nextLanguageIndex = GUILayout.SelectionGrid(
-                languageIndex,
-                new[] { chinese ? "跟随系统" : "Follow System", "English", "中文" },
-                3);
-            if (nextLanguageIndex != languageIndex)
-            {
-                Settings.Language = nextLanguageIndex == 1 ? "en" :
-                    nextLanguageIndex == 2 ? "zh" : "system";
-                SaveSettings(modEntry);
-                chinese = IsChinese();
-            }
-
-            var nextEnabled = GUILayout.Toggle(
-                Settings.EnableAutoKill,
-                chinese ? "启用自动击杀" : "Enable automatic killing");
-            if (nextEnabled != Settings.EnableAutoKill)
-            {
-                Settings.EnableAutoKill = nextEnabled;
-                if (_behaviour != null)
-                {
-                    _behaviour.OnAutoKillSettingChanged();
-                }
-
-                SaveSettings(modEntry);
-            }
-
-            GUILayout.Label(Settings.EnableAutoKill
-                ? (chinese ? "状态：自动击杀已启用" : "Status: automatic killing enabled")
-                : (chinese ? "状态：自动击杀已禁用" : "Status: automatic killing disabled"));
-
-            GUI.enabled = Settings.EnableAutoKill && _behaviour != null;
-            if (GUILayout.Button(chinese ? "立即清除当前屏幕敌人" : "Kill visible enemies now"))
-            {
-                KillVisibleEnemiesNow();
-            }
-
-            GUI.enabled = true;
-            if (_behaviour != null)
-            {
-                GUILayout.Label((chinese ? "上次清除数量：" : "Last kill count: ") +
-                    _behaviour.LastKillCount);
-            }
+            DrawSettingsUI(modEntry);
         }
 
         private static void Start()
@@ -162,11 +188,28 @@ namespace TestMod
             if (_behaviour == null)
             {
                 _behaviour = TestModBehaviour.Create();
+                _behaviour.gameObject.tag = "Unpausable";
+                _harmony = new Harmony("GJKen.TestMod.GameSpeed");
+                _harmony.PatchAll(typeof(Plugin).Assembly);
+                _speedController = _behaviour.gameObject.AddComponent<GameSpeedController>();
+                _speedController.ApplySettings();
             }
         }
 
         private static void Stop()
         {
+            _bindingTarget = 0;
+            if (_speedController != null)
+            {
+                _speedController.ReleaseTime();
+                _speedController.enabled = false;
+                _speedController = null;
+            }
+            if (_harmony != null)
+            {
+                _harmony.UnpatchAll(_harmony.Id);
+                _harmony = null;
+            }
             if (_behaviour != null)
             {
                 _behaviour.Stop();
@@ -176,6 +219,15 @@ namespace TestMod
 
         private static void NormalizeSettings()
         {
+            if (Settings.SettingsPanel != "speed" && Settings.SettingsPanel != "enemies" &&
+                Settings.SettingsPanel != "language") Settings.SettingsPanel = "speed";
+            if (float.IsNaN(Settings.GameSpeed) || float.IsInfinity(Settings.GameSpeed))
+                Settings.GameSpeed = 1f;
+            Settings.GameSpeed = Mathf.Clamp(Settings.GameSpeed, 0.01f, 4f);
+            Settings.FrameStepRepeatRate = Mathf.Clamp(Settings.FrameStepRepeatRate, 1, 60);
+            if (!Enum.IsDefined(typeof(KeyCode), Settings.PauseKey)) Settings.PauseKey = KeyCode.None;
+            if (!Enum.IsDefined(typeof(KeyCode), Settings.FrameStepKey) ||
+                Settings.FrameStepKey == Settings.PauseKey) Settings.FrameStepKey = KeyCode.None;
             if (!string.Equals(Settings.Language, "en", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(Settings.Language, "zh", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(Settings.Language, "system", StringComparison.OrdinalIgnoreCase))
