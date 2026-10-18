@@ -1,1 +1,0 @@
-PASS: v4 frames 1-8 match atlas/runtime cells 235-242; all other pixels preserved.

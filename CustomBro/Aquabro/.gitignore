@@ -1,0 +1,60 @@
+# 本机路径、编译依赖与生成目录。
+LocalBuild.json
+LocalBroforcePath.props
+.aquabro-buildrefs/
+.aseprite-export/
+.layer-probe/
+bin/
+obj/
+backups/
+aseprite-build.log
+.debug-*.png
+.diag-*.png
+_debug_*.png
+**/__pycache__/
+*.py[cod]
+
+# 当前制作过程及可重新生成的测试图集，不影响归档中保留的旧源稿。
+aseprite-source/**/_work/
+tools/_work/
+archive/skill-regression/previews/
+
+# 只发布正式角色 DLL，排除历史备份、缓存与临时程序。
+*.dll
+!_Mod/Aquabro.dll
+*.bak
+*.cache
+*.exe
+*.pdb
+*.zip
+*.7z
+
+# 仅保留本地的原版动作、水特效参考和废弃分稿目录。
+/aseprite-source/01_动作主稿/cankao/
+/aseprite-source/01_动作主稿/predabro*
+/aseprite-source/01_动作主稿/rambro*
+/aseprite-source/01_动作主稿/shengshuo/
+/aseprite-source/01_动作主稿/skill/
+
+# 当前发布范围之外的本地归档、参考稿和辅助工具。
+/archive/
+/aseprite-source/01_动作主稿/haiwang_trident_jump-in-place-v1.aseprite
+/aseprite-source/02_地形独立稿/haiwang_trident_climbing-v2.aseprite
+/aseprite-source/02_地形独立稿/haiwang_trident_hanging-v2.aseprite
+/aseprite-source/02_地形独立稿/haiwang_trident_ladder-v2.aseprite
+/aseprite-source/02_地形独立稿/haiwang_trident_wall-v2.aseprite
+/aseprite-source/02_地形独立稿/haiwang_trident_zipline-charge-blue-flow-v2.aseprite
+/aseprite-source/02_地形独立稿/haiwang_trident_zipline-v2.aseprite
+/tests/Inspect-*.cs
+/tests/Probe-*.cs
+/tests/Verify-*.cs
+/tools/aquabro_build_environment.py
+/tools/assemble_water_rocket_source.lua
+/tools/build_water_rocket_source.py
+/tools/create_maelstrom_sway.lua
+/tools/create_stationary_shark_warning.lua
+/tools/create_tidal_maelstrom_dissolve.py
+/tools/generate_legacy_ladder_source.lua
+/tools/import_tidal_reference.py
+/tools/inspect_water_palette.lua
+/tools/unify_water_palette.lua
