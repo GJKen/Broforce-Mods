@@ -1,0 +1,61 @@
+// Generated from the visible Aseprite composites by export_skill_effects.lua.
+using System;
+
+namespace AquabroMod
+{
+    internal static class SpringPixelMask
+    {
+        private static readonly byte[][] Frames = {
+@FRAMES@
+        };
+
+        // Exact pixel-square to rectangle distance, including collider edges.
+        internal static bool IntersectsRect(int frame, float left, float top, float right, float bottom, float margin)
+        {
+            if (frame < 0 || frame >= Frames.Length) return false;
+            if (left > right) { float swap=left;left=right;right=swap; }
+            if (top > bottom) { float swap=top;top=bottom;bottom=swap; }
+            int minX=System.Math.Max(0,(int)System.Math.Floor(left-margin)-1);
+            int maxX=System.Math.Min(127,(int)System.Math.Floor(right+margin));
+            int minY=System.Math.Max(0,(int)System.Math.Floor(top-margin)-1);
+            int maxY=System.Math.Min(127,(int)System.Math.Floor(bottom+margin));
+            byte[] mask=Frames[frame];
+            for (int py=minY;py<=maxY;py++)
+            {
+                float dy=System.Math.Max(0f,System.Math.Max(py-bottom,top-(py+1)));
+                for (int px=minX;px<=maxX;px++)
+                {
+                    int bit=py*128+px;
+                    if ((mask[bit/8] & (1<<(bit%8)))==0) continue;
+                    float dx=System.Math.Max(0f,System.Math.Max(px-right,left-(px+1)));
+                    if (dx*dx+dy*dy<=margin*margin) return true;
+                }
+            }
+            return false;
+        }
+
+        // Coordinates are in source pixels. Distance is measured to the pixel
+        // square, so the caller can keep an exact five game-pixel outer margin.
+        internal static bool Contains(int frame, float x, float y, float margin)
+        {
+            if (frame < 0 || frame >= Frames.Length) return false;
+            byte[] mask = Frames[frame];
+            int left = System.Math.Max(0, (int)System.Math.Floor(x - margin) - 1);
+            int right = System.Math.Min(127, (int)System.Math.Floor(x + margin));
+            int top = System.Math.Max(0, (int)System.Math.Floor(y - margin) - 1);
+            int bottom = System.Math.Min(127, (int)System.Math.Floor(y + margin));
+            for (int py = top; py <= bottom; py++)
+            {
+                float dy = System.Math.Max(0f, System.Math.Max(py - y, y - (py + 1)));
+                for (int px = left; px <= right; px++)
+                {
+                    int bit = py * 128 + px;
+                    if ((mask[bit / 8] & (1 << (bit % 8))) == 0) continue;
+                    float dx = System.Math.Max(0f, System.Math.Max(px - x, x - (px + 1)));
+                    if (dx * dx + dy * dy <= margin * margin) return true;
+                }
+            }
+            return false;
+        }
+    }
+}
