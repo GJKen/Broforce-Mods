@@ -1,143 +1,65 @@
 # JSON 参数与变量参考
 
-来源: [Parameters](https://github.com/Gorzontrok/Bro-Maker/wiki/Parameters) / [Variables](https://github.com/Gorzontrok/Bro-Maker/wiki/Variables)
+来源：[Bro-Maker Wiki - Parameters](https://github.com/Gorzontrok/Bro-Maker/wiki/Parameters) / [Variables](https://github.com/Gorzontrok/Bro-Maker/wiki/Variables)。Wiki 表格是字段导航，不保证适用于所有 BroMaker 版本；实际支持字段与序列化方式应对照当前使用的 `BroMakerLib.dll`。
 
----
+## 角色 JSON 的区域
 
-## ⚠️ 使用前必读:本文是 wiki 转录,未经本机核实
+- `parameters`：贴图和角色界面资源，例如 `Sprite`、`GunSprite`、`Avatar`、`SpecialIcons`、偏移和动画选项。
+- `beforeAwake`、`afterAwake`、`beforeStart`、`afterStart`：在相应生命周期阶段给角色对象字段赋值。可用字段取决于角色类及其基类。
+- `cutscene`：出场动画资料；具体结构参考当前 BroMaker 文档和已加载角色定义。
 
-**本文内容是从 Bro-Maker wiki 抄录的,没有逐条对着本机的 BroMaker 2.6.2 验证过。** 两处已知风险:
+本地 BroMaker 源码的 `CustomBroforceObjectInfo` 在每个阶段调用 `DynamicFieldsValueSetter`，传入对应阶段的字典。未提供的键不会由这段赋值逻辑主动写成零值；但最终值仍取决于所选 `HeroType` 复制的预制体、Unity 初始化及角色 `Awake` / `Start` 自身逻辑。因此，不要把某个旧角色出现的零值现象推广成“所有留空字段都会清零”，也不要假定空对象必然保留想要的预制体值。重要参数应显式配置，并在运行时核对最终值。
 
-### 1. 下面的"默认值"表与实测结论冲突 —— **以 10 文档为准**
-
-本文列的默认值(如 `"fireRate": 0.0334`、`"speed": 110.0` 等)是 wiki 上的说法。
-但 [10 文档](10-实战笔记-Broseidon一二三期踩坑.md) 第一节的**实测**结论是:
-
-> **JSON 变量节留空 ≠ 继承原版 bro 默认值** —— `beforeAwake` 留空时 `fireRate` 落到 **0**,表现为**每帧开枪**(攻速爆表)。
-
-**规则:凡是在乎的数值字段,一律显式写,不要依赖"空 = 默认"。** 表格只当字段清单用,数值不要当真。
-
-### 2. `specialGrenade` / `projectile` 名单未核实
-
-文末那两个名单在本机的 `Assembly-CSharp.dll` 和 `BroMakerLib.dll` 里**用字符串检索对不上**(projectile 51 个里约 18 个、specialGrenade 20 个里约 6 个搜不到)。
-⚠️ **这不能断定名单是错的** —— 检索方式本身有假阴性(方法自检时 `CustomHero` 也搜不到,因为它在 BroMakerLib 而不是 Assembly-CSharp)。
-准确说法是**未能核实**。要用某个名字时,先在小工程里试通再写进正式 bro。
-
-## parameters 节(贴图/UI 类)
-
-| 变量 | 类型 | 用途 |
-|---|---|---|
-| `Sprite` | string | 主角色贴图路径 |
-| `GunSprite` | string | 枪贴图路径 |
-| `SpecialIcons` | string | 特技图标 spritesheet |
-| `SpecialIconOffset` | Vector2 | 特技图标偏移 |
-| `SpecialIconSpacing` | float | 特技图标水平间距 |
-| `Avatar` | string | 头像贴图 |
-| `GunSpriteOffset` | Vector2 | 枪精灵偏移(死亡画面枪位置同样用它) |
-| `BetterAnimation` | bool | true 启用大量动画变量 |
-| `Halo` | bool | 加 Broffy 的光环 |
-| `JetPackSprite` | bool | 补上 bro 使用喷气包时缺失的贴图 |
-
-注意:`sprite`、`gunSprite`、`Avatar`、`SpecialIcons` 等**贴图类字段必须放 parameters**;
-`disarmedGunMaterial` 等其他贴图是 bro 类的普通字段,放 `before/afterAwake/Start` 节。
-
-### 变体(Variants)
-
-parameters 里多个字段支持**数组**实现多变体,spawn 时经 `GetVariant()` 随机选一个:
-
-- 支持变体的:`Sprite`、`GunSprite`、`Avatar`、`SpecialIcons`、`GunSpriteOffset`、`SpecialIconOffset`、`SpecialIconSpacing`
-- 变体数量 = 数组中最大长度;单值字段所有变体共用。
-- **数组长度必须一致**(或为 1):4 个 sprite 就不能配 2 个 gun sprite(可重复补齐到 4)。
-- `SwitchVariant(int)` 运行时切换(变身类角色用,如 R.J. Brocready 人/怪物形态)。
-
-```json
-"Sprite":  ["sprite.png", "variants/sprite_2.png", "variants/sprite_3.png", "variants/sprite_4.png"],
-"Avatar":  ["avatar.png", "variants/avatar_2.png", "variants/avatar_3.png", "variants/avatar_4.png"],
-"GunSprite": "gunSprite.png"
-```
-
-### SpecialIcons 多弹药图标(特有格式)
-
-- 单图标:`"SpecialIcons": "special.png"`
-- 多弹药槽各自图标(单变体):`["ammo1.png", "ammo2.png", "ammo3.png"]`
-- 多变体 × 多弹药槽:**必须嵌套数组**,外层每项 = 一个变体,内层 = 该变体各弹药槽图标:
-  ```json
-  "SpecialIcons": [["ammo1.png", "ammo2.png"], ["alt_ammo1.png", "alt_ammo2.png"]]
-  ```
-  只有单图标的多变体也要嵌套:`[["special.png"], ["thingSpecial.png"]]`(扁平数组会被解释为单变体的两个弹药槽)。
-
-过场也支持变体(wiki 的 Cutscenes 页)。
-
-## before/afterAwake / before/afterStart 节(变量类)
-
-按 wiki Variables 页,默认值如下(部分只对敌人有效)。
-
-> ⚠️ **下面这些数值是 wiki 转录,未经核实,且与 [10 文档](10-实战笔记-Broseidon一二三期踩坑.md) 的实测冲突**
-> —— 实测结论是"留空 → 落 0"(`fireRate` 落 0 = 每帧开枪)。**只当字段清单看,数值不要当真,在乎的字段一律显式写。**
-
-### 全局
+最小示例：
 
 ```json
 {
-  "canBeCoveredInAcid": true, "meltDuration": 0.7,
-  "canAirdash": false, "airdashMaxTime": 0.5, "defaultAirdashDelay": 0.15,
-  "canDoIndependentMeleeAnimation": false, "doRollOnLand": false,
-  "useDashFrames": false, "useNewFrames": false, "useNewKnifingFrames": false,
-  "useNewLedgeGrappleFrames": false, "useNewThrowingFrames": false,
-  "useNewPushingFrames": false, "useNewHighFivingFrames": false,
-  "hasNewAirFlexFrames": false, "useNewKnifeClimbingFrames": false,
-  "useNewLadderClimbingFrames": false, "useLadderClimbingTransition": false,
-  "useDuckingFrames": true, "useNewDuckingFrames": false,
-  "highFiveBoostTime": 3.7, "highFiveBoostM": 1.4,
-  "immuneToOutOfBounds": false,
-  "canDash": true, "dashSpeedM": 1.0,
-  "canGib": true, "bloodColor": "Red", "bloodCountAmount": 80,
-  "deathSoundVolume": 0.4, "willComeBackToLife": false, "reviveZombieTime": 2.0, "canDisembowel": false,
-  "JUMP_TIME": 0.123, "speed": 110.0, "maxFallSpeed": -400.0, "_jumpForce": 260.0, "quicksandChokeCounter": 2.0,
-  "bypassNewVoicesOnThisBro": false, "pitchShiftAmount": 1.0,
-  "specialGrenade": "Grenade", "originalSpecialAmmo": 3,
-  "turnAroundWhileUsingSpecials": true, "specialAttackYIBoost": 0.0, "specialAttackXIBoost": 0.0,
-  "projectile": "Rambro", "rumbleAmountPerShot": 0.3,
-  "fireRate": 0.0334, "fireDelay": 0.0, "breakDoorsOpen": false,
-  "canWallClimb": true, "canPushBlocks": true, "canLedgeGrapple": false, "canUnFreeze": false,
-  "canBeStrungUp": false, "maxHealth": 1,
-  "canCeilingHang": true, "hangGraceTime": 0.3,
-  "cancelMeleeOnChangeDirection": false, "meleeType": "Knife", "knifeClimbStabHeight": 18.0,
-  "maxWallClimbYI": 100.0, "usePrimaryAvatar": true
+  "parameters": {
+    "BetterAnimation": true,
+    "Sprite": "sprite.png",
+    "GunSprite": "gunSprite.png",
+    "Avatar": "avatar.png",
+    "SpecialIcons": "special.png"
+  },
+  "beforeAwake": {
+    "fireRate": 0.1,
+    "originalSpecialAmmo": 1
+  },
+  "afterAwake": {},
+  "beforeStart": {},
+  "afterStart": {}
 }
 ```
 
-### 贴图类(放 awake/start 节的)
+`parameters` 中常见贴图键：
+
+| 字段 | 用途 |
+|---|---|
+| `Sprite` | 角色动作图集 |
+| `GunSprite` | 枪动作图集 |
+| `Avatar` | 角色头像图 |
+| `SpecialIcons` | 特技弹药图标 |
+| `SpecialIconOffset`、`SpecialIconSpacing` | 特技图标布局 |
+| `GunSpriteOffset` | 枪图偏移 |
+| `BetterAnimation` | 启用 BroMaker 扩展动画配置；仍需核对各 `useNew*Frames` 字段 |
+| `Halo`、`JetPackSprite` | 可选外观行为，确认当前版本支持后再设置 |
+
+## 贴图变体
+
+部分贴图参数支持数组，供 BroMaker 的角色变体逻辑选取。数组可用性及长度规则应以当前版本 `Parameters` 页面或源码为准；不要仅凭字段名推断所有键都可变体化。
+
+`SpecialIcons` 还承载多弹药槽结构：单图标可用字符串；单角色的多个弹药图标可用一维数组。需要同时表示多个角色变体和多个弹药槽时，使用嵌套数组，并在目标版本确认解析顺序：
 
 ```json
-{ "disarmedGunMaterial": "filename.png" }
+"SpecialIcons": [["ammo1.png", "ammo2.png"], ["alt1.png", "alt2.png"]]
 ```
 
-各 bro 专属贴图示例(Brominator 的 `metalBrominator/humanBrominator/metalGunBrominator/humanGunBrominator/brominatorHumanAvatar/brominatorRobotAvatar`,Ash Brolliams 的 `bloodyAvatar`,Seth Brondle 的 `teleportInAnimation/teleportOutAnimation/coveredInBloodMaterial/openMouthMaterial/openMouthBloodyMaterial`)。
+## 字段清单怎么用
 
-### 原版 bro 专属调参字段(示例)
+旧版 wiki 的全局默认值、逐角色专有字段和 `projectile` / `specialGrenade` 名称列表未在所有目标版本逐项核实，因此本页不继续复制整份默认值表或把字符串检索结果当作有效性证明。需要查找字段时：
 
-| Bro | 字段 |
-|---|---|
-| Bro Ceasar / Brominator | `miniGunFireDelay: 1.25`, `pushBackForceM: 1.0` |
-| Brochete | `knifeSpeed: 270`, `knifeSpraySpeed: 320`, `knifeSprayCount: 12` |
-| Broden | `sliceVolume: 0.3`, `maxElectricShocks: 4`, `lightningRange: 50`, `chainLightningRange: 40`, `zapperXOffset: -16`, `zapperYOffset: -12` |
-| Bro Dredd | `remoteProjectileSpeed: 90` |
-| Bro Gummer | `remoteProjectileSpeed: 800`, `extraFireDelay: 0.3`, `scanningRange: 10`, `specialCooldownDelay: 0.13` |
-| Bromando | `barageCount: 4` |
-| Bronnar Jensen | `shootGrenadeSpeedY: 60`, `shootGrenadeSpeedX: 300` |
-| Brove Heart | `groundSwordDamage: 10`, `enemySwordDamage: 8`, `sliceVolume: 0.7`, `wallHitVolume: 0.6` |
-| Robocop | `scanningRange: 10`, `chargeTimePerBulletFired: 0.075`, `specialCooldownDelay: 0.13` |
-| Seth Brondle | `checkCeilingForHangRadius: 6` |
+1. 在项目当前使用的 `BroMakerLib.dll` / 源码中查角色字段和 JSON 解析入口。
+2. 对 `Assembly-CSharp.dll` 中的游戏字段、枚举和方法签名，用反编译源码核对。
+3. 在小型测试角色中验证字段写入时机和运行效果，再将配置纳入正式角色。
 
-### specialGrenade 可用名称
-
-> ⚠️ 名单转录自 wiki,**未能核实**(本机 DLL 字符串检索对不上约 6/20)。用哪个先在测试工程里试通再用。
-
-`Grenade, Default, Martini, TearGas, FlameWave, AirStrike, FlashBang, Hologram, Cluster, Sticky, GrenadeTollBroad, SummonTank, Molotove, HolyWater, Freeze, MechDrop, AlienPheromones, EvilSmall, EvilBig, EvilBigShortLife`
-
-### projectile 可用名称
-
-> ⚠️ 名单转录自 wiki,**未能核实**(本机 DLL 字符串检索对不上约 18/51)。用哪个先在测试工程里试通再用。
-
-`Default, Bullet, Rambro, Rocket, DrunkRocket, ShotgunAdjusted, ThrowingKnife, ShockWave, Turkey, SachelPack, NoisyCricket, BroboCop, RocketRemote, BulletSeeking, IndianaBrones, Shotgun, Machete, MacheteSpray, Plasma, TimeBro, BroniversalSoldier, KnifeSpray, GrenadeSticky, Sniper, ShotgunFlame, Boomerang, Silence, PredabroCanon, SpearCharged, Spear, Vomit, Sword, RocketBig, Arrow, Stake, SachelPackSmall, DemolitionBomb, Huge, MookMiniGun, RocketHuge, ShellHeavy, BabyDog, SlimeVomit, Airstrike, RocketSeeking, RocketSeekingBig, FireBall, FireBallBombardment, WarlockPortalGuided, ShellMedium, ShellHeavyEvil`
+可运行的字段实例参考 [Aquabro 角色 JSON](../CustomBro/Aquabro/_Mod/Aquabro.json)；其中数值只描述该角色，不构成通用默认值。

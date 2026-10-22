@@ -1,11 +1,32 @@
 # alexneargarder 仓库六 bro 源码地图
 
-来源:`E:\Study\C#\alexneargarder-BroforceMods\`。以下行数与重写清单来自全仓 grep 扫描。
+来源：[alexneargarder/BroforceMods](https://github.com/alexneargarder/BroforceMods)。以下行数与重写清单来自 2026-10-14 核对的源码快照。
 
-> 本机另有一份 `E:\Study\C#\CustomBros\`(**Gorzontrok** 的作品:Bronobi / SantaBraus / TonyBrotana,以及 BroTemplate),**与本文这 6 个 bro 不是同一作者**,别混。
+2026-10-14 补充核对：以下六个角色全部具有本地源码工程、`_ModContent` 角色定义和 `Releases` 发布 ZIP；mod 版本与对应 manifest 一致。本文原有行数与玩法解析保留，新增版本与文件入口如下。
+
+> [Gorzontrok/CustomBros](https://github.com/Gorzontrok/CustomBros) 中的 Bronobi / SantaBraus / TonyBrotana 与本文六个角色不是同一作者作品，源码入口见 [14 文档](14-Gorzontrok三bro源码地图.md)；Vojkan 的两个角色见 [08 文档](08-VojkanSE87源码解析.md)。
 > 两边都值得看,但引用时要说清出处 —— 早期版本的本节曾把这两批误写成同一作者。
 
 ## 总览
+
+### 本地工程与发布包
+
+路径相对上游 `alexneargarder/BroforceMods` 仓库根目录。该核对快照中工程 / 内容目录常见格式为 `<目录名>/<目录名>/`、`<目录名>/<目录名>/_ModContent/`，每个工程目录有同名 `.csproj`；发布包位于 `Releases/<目录名>/`。
+
+| 发布名称 | 本地目录名 | 主类入口 | mod / manifest 版本 | 发布 ZIP |
+|---|---|---|---|---|
+| `Furibrosa` | `Furibrosa` | [Furibrosa.cs](../../alexneargarder-BroforceMods/Furibrosa/Furibrosa/Furibrosa.cs) | `1.1.1` | `AlexN-Furibrosa-1.1.1.zip` |
+| `RJBrocready` | `RJBrocready` | [RJBrocready.cs](../../alexneargarder-BroforceMods/RJBrocready/RJBrocready/RJBrocready.cs) | `1.1.1` | `AlexN-RJBrocready-1.1.1.zip` |
+| `Drunken_Broster` | `Drunken Broster` | [DrunkenBroster.cs](../../alexneargarder-BroforceMods/Drunken%20Broster/Drunken%20Broster/DrunkenBroster.cs) | `1.0.1` | `AlexN-Drunken_Broster-1.0.1.zip` |
+| `Brostbuster` | `Brostbuster` | [Brostbuster.cs](../../alexneargarder-BroforceMods/Brostbuster/Brostbuster/Brostbuster.cs) | `1.1.0` | `AlexN-Brostbuster-1.1.0.zip` |
+| `Mission_Impossibro` | `Mission Impossibro` | [MissionImpossibro.cs](../../alexneargarder-BroforceMods/Mission%20Impossibro/Mission%20Impossibro/MissionImpossibro.cs) | `1.1.0` | `AlexN-Mission_Impossibro-1.1.0.zip` |
+| `Captain_Ameribro` | `Captain Ameribro` | [CaptainAmeribro.cs](../../alexneargarder-BroforceMods/Captain%20Ameribro/Captain%20Ameribro/CaptainAmeribro.cs) | `1.1.0` | `AlexN-Captain_Ameribro-1.1.0.zip` |
+
+注意：`RJBrocready.cs` 的 `[HeroPreset]` 字符串为 **`R.J. Brocready`**，不要用发布包名替代它。其余五个 preset 使用本地目录名中的空格形式。发布文件名与 preset 是不同标识。
+
+结合 Bronobi（CustomBros）和 Cobro / Jack Broton（Vojkan 仓库），这六个组成用户列出的九角色清单，统一入口见 [README](README.md#三个参考仓库的九个已发布角色)。本次仅核对本地材料，未编译或运行游戏。
+
+### 玩法与重写方法
 
 | Bro | 主类行数 | 基类/原型 | 特色玩法 | 值得抄的手法 |
 |---|---|---|---|---|
@@ -32,7 +53,7 @@
 ## 每个 bro 的独门技巧(速查)
 
 - **Brostbuster**:持续光束 = 每帧 SpawnProjectileLocally 短寿命弹 + 持续循环音效(04 文档);`GhostTrap.cs` 独立交互物;`HarmonyPatches.cs` 补原版行为缺口。
-- **Captain Ameribro**:唯一的 **SwordHero** 实例(近战为主就继承它);盾牌 = 射出去的弹 + `PockettedShield` 回收后挂回角色跟随;空中冲刺重写 `RunLeftAirDash/RunRightAirDash`。
+- **Captain Ameribro**:本文六个角色中唯一的 **SwordHero** 实例（Gorzontrok 的 Bronobi 也使用它，见 [14](14-Gorzontrok三bro源码地图.md)）；盾牌 = 射出去的弹 + `PockettedShield` 回收后挂回角色跟随；空中冲刺重写 `RunLeftAirDash/RunRightAirDash`。
 - **Drunken Broster**:**HeroPreset 可不带 HeroType**;改原版动画(跑步/待机)直接重写 `AnimateActualIdleFrames/AnimateActualNewRunningFrames`(配 useNewFrames);翻滚 = `AnimateRolling/RollOnLand/CanDoRollOnLand`;近战捡到不同武器 = MeleeItems 目录下每个武器一个 Projectile 类。
 - **Furibrosa**:**驾驶敌人** = `PilotUnit/CanPilotUnit/PilotUnitRPC`;召唤大型载具 = 独立 Action 类 + `ExecuteAction`;`RecallBro` 召回。
 - **Mission Impossibro**:潜行 = 自定义 `IsInStealthMode` 状态 + 敌人 AI 不索敌;`ThrowBackMook` 抓起敌人扔回;`AirJump` 二段跳。

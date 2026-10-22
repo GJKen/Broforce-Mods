@@ -33,6 +33,9 @@ $unityModManagerPath = [string]$propertyGroup.UnityModManagerPath
 $rocketLibPath = [string]$propertyGroup.RocketLibPath
 $broMakerLibPath = [string]$propertyGroup.BroMakerLibPath
 $newtonsoftJsonPath = [string]$propertyGroup.NewtonsoftJsonPath
+$additionalReferencePaths = @(([string]$propertyGroup.AdditionalReferencePaths -split ';') |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $broMakerStoragePath = [string]$propertyGroup.BroMakerStoragePath
 $broStorageFolderName = [string]$propertyGroup.BroStorageFolderName
 
@@ -50,12 +53,21 @@ if ($modFileCandidates.Count -ne 1) {
     throw "Expected exactly one .mod.json in $modContentPath, found $($modFileCandidates.Count)."
 }
 $modFilePath = $modFileCandidates[0].FullName
-$modFolderName = [IO.Path]::GetFileNameWithoutExtension([IO.Path]::GetFileNameWithoutExtension($modFilePath))
-$assemblyFileName = $modFolderName + '.dll'
-
+$modManifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $modFilePath | ConvertFrom-Json
+$assemblies = @($modManifest.Assemblies)
+if ($assemblies.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$assemblies[0])) {
+    throw 'Expected exactly one assembly path in the .mod.json Assemblies array.'
+}
+$assemblyRelativePath = [string]$assemblies[0]
+if ([IO.Path]::GetExtension($assemblyRelativePath) -ne '.dll' -or
+    [IO.Path]::IsPathRooted($assemblyRelativePath) -or
+    $assemblyRelativePath -match '(^|[\\/])\.\.([\\/]|$)') {
+    throw "Assemblies entry must be a relative DLL path inside _Mod: $assemblyRelativePath"
+}
 # BroMaker reads the assembly file names from the .mod.json's Assemblies array.
-# The compiled dll is written straight into _Mod so the content folder is always complete.
-$outputPath = Join-Path $modContentPath $assemblyFileName
+# The compiled dll is written to the path declared in Assemblies under _Mod.
+$outputPath = Join-Path $modContentPath $assemblyRelativePath
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $outputPath) | Out-Null
 
 $compiler = Join-Path $env:windir 'Microsoft.NET\Framework64\v3.5\csc.exe'
 $mscorlib = Join-Path $env:windir 'Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll'
@@ -88,6 +100,7 @@ if (-not [string]::IsNullOrWhiteSpace($rocketLibPath)) {
 if (-not [string]::IsNullOrWhiteSpace($newtonsoftJsonPath)) {
     $references += $newtonsoftJsonPath
 }
+$references += $additionalReferencePaths
 
 $requiredPaths = $references | Where-Object { $_ -like '*.dll' }
 foreach ($requiredPath in $requiredPaths) {
@@ -126,11 +139,19 @@ if ($SkipDeploy) {
     return
 }
 
+$gameProcesses = @(Get-Process -Name 'Broforce' -ErrorAction SilentlyContinue)
+if ($gameProcesses.Count -gt 0) {
+    throw 'Broforce is running. Close the game before deploying the mod.'
+}
+
 # Deploy the whole _Mod content folder (dll + .mod.json + bro json + sprites/sounds).
 $deployPath = Join-Path $broMakerStoragePath $broStorageFolderName
 New-Item -ItemType Directory -Force -Path $deployPath | Out-Null
-Get-ChildItem -LiteralPath $modContentPath -File | ForEach-Object {
-    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $deployPath $_.Name) -Force
+Get-ChildItem -LiteralPath $modContentPath -File -Recurse | ForEach-Object {
+    $relativePath = $_.FullName.Substring($modContentPath.Length).TrimStart([char[]](92, 47))
+    $destination = Join-Path $deployPath $relativePath
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+    Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
 }
 Write-Host "Deployed content to $deployPath"
 Write-Host 'Build and deployment completed.'

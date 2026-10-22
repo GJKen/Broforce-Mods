@@ -21,8 +21,7 @@ Broforce 的官方美术全在:
 
 用法
 ----
-    python ExportGameSprites.py                      # 默认导出 sharedtextures
-    python ExportGameSprites.py --bundle <path>      # 指定别的 bundle
+    python ExportGameSprites.py --bundle <path>      # 指定 sharedtextures.assetbundle
     python ExportGameSprites.py --all                # 不筛尺寸,全导出(含 4K 视差图,很占地方)
 
 注意
@@ -37,8 +36,6 @@ import re
 
 import UnityPy
 
-DEFAULT_BUNDLE = (r'E:\SteamLibrary\steamapps\common\Broforce'
-                  r'\Broforce_beta_Data\StreamingAssets\sharedtextures.assetbundle')
 # 默认落到仓库里的 Broforce_src\GameAssets\
 _HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.normpath(os.path.join(_HERE, '..', '..', 'Broforce_src', 'GameAssets'))
@@ -62,7 +59,7 @@ def classify(w, h, keep_all):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--bundle', default=DEFAULT_BUNDLE)
+    ap.add_argument('--bundle', required=True, help='sharedtextures.assetbundle 路径')
     ap.add_argument('--out', default=DEFAULT_OUT)
     ap.add_argument('--all', action='store_true', help='不筛尺寸,全部导出')
     args = ap.parse_args()
@@ -93,7 +90,8 @@ def main():
         path = os.path.join(sub, name + '.png')
         try:
             d.image.save(path)
-            rows.append((cls, d.m_Name, d.m_Width, d.m_Height, path))
+            rows.append((cls, d.m_Name, d.m_Width, d.m_Height,
+                         os.path.relpath(path, args.out)))
             ok += 1
         except Exception as ex:                      # 少数贴图格式 UnityPy 解不了
             fail += 1

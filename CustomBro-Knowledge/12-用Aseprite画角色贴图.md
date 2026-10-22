@@ -1,6 +1,6 @@
-# 画角色贴图:用 Aseprite MCP,不要用脚本生成
+# 角色贴图编辑与资源流水线
 
-**结论先行**:画像素画角色贴图走 **Aseprite MCP**(人/AI 直接操作像素级绘图工具),**不要**再写 Python 脚本去"生成"或"改造"贴图。本文记录工具怎么配、怎么用,以及脚本路线为什么被放弃。
+本文记录在需要逐帧保留特定原版动作时，如何用 Aseprite MCP 辅助像素级编辑。是否重绘骨架、沿用原帧、批量生成或自动导出，必须服从当前角色的美术需求；自动化导出、图集打包、遮罩生成和检查脚本都是合理的资源流水线工具。
 
 ---
 
@@ -10,39 +10,39 @@
 
 | 项 | 值 |
 |---|---|
-| MCP server 配置 | `~/.claude.json` → `mcpServers.aseprite`(用户级,非仓库级) |
-| 实现 | `E:\Study\Python\aseprite-mcp`(Python + uv) |
-| Aseprite 本体 | `E:\Program\Aseprite\Aseprite.exe`(1.3.18.1-x64,**非标准安装路径**) |
+| MCP server 配置 | 配置在当前 MCP host 支持的位置 |
+| 实现 | 由项目/用户环境提供的 Aseprite MCP server |
+| Aseprite 本体 | Aseprite 可执行文件；不要求安装在固定路径 |
 
 ### 必须配 `ASEPRITE_PATH`
 
-MCP 内部就一行(`aseprite_mcp/core/commands.py`):
+具体 server 通常通过环境变量或 `PATH` 定位 Aseprite。先检查所用 MCP server 的配置方式：
 
 ```python
 cmd = [os.getenv('ASEPRITE_PATH', 'aseprite')] + args
 ```
 
-Aseprite 不在 PATH 上,不设这个环境变量 → **任何真实操作都报 `[WinError 2] 系统找不到指定的文件`**。
+Aseprite 不在 `PATH` 且执行文件路径未配置时，实际文件操作无法启动。路径以本机安装为准。
 
-修法:在 `~/.claude.json` 的 `mcpServers.aseprite` 下加 `env`:
+例如，在 MCP host 的 server 配置中传入环境变量：
 
 ```json
-"env": { "ASEPRITE_PATH": "E:\\Program\\Aseprite\\Aseprite.exe" }
+"env": { "ASEPRITE_PATH": "<Aseprite 可执行文件路径>" }
 ```
 
-**改完必须重启 Claude Code 才生效**(MCP 进程在启动时就带着环境变量起来了)。
+配置何时生效取决于 host；通常需要重启对应 MCP server 或 host。用会读写真实文件的操作验证，不要只依赖静态帮助工具。
 
 ### ⚠️ 验证陷阱:别被 `list_palette_presets` 骗了
 
-`list_palette_presets`、`animation_workflow_guide` 这类工具返回的是**硬编码数据,根本不调用 Aseprite**。所以:
+有些工具只返回说明数据，并不调用 Aseprite。因此：
 
 - 环境变量没配好时,它们**照样返回正常结果**;
 - 拿它们做连通性测试 → 误判成"MCP 是好的"。
 
-**正确的验证**:调一个**碰真实文件**的工具,比如 `create_canvas`。或者直接模拟 MCP 的执行方式:
+验证时调一个会访问真实文件的工具，或直接用 Aseprite CLI 执行小型探针：
 
 ```bash
-export ASEPRITE_PATH="E:\\Program\\Aseprite\\Aseprite.exe"
+export ASEPRITE_PATH="<Aseprite 可执行文件路径>"
 "$ASEPRITE_PATH" --batch --script probe.lua        # probe.lua 里建 sprite 并 saveAs
 ```
 
@@ -53,9 +53,9 @@ export ASEPRITE_PATH="E:\\Program\\Aseprite\\Aseprite.exe"
 ## 画角色的正确流程(核心)
 制作【角色名】的【动作名称】，对应原版【参考角色】身体图集【起止格号】，共【帧数】帧。
 
-【最重要：这是原动作逐像素换装】
+【当本任务要求逐帧沿用原版动作时：这是原动作逐像素换装】
 我要保留参考角色的原版动作，把其外观替换为我的角色。
-“参考原版”在本任务中明确表示：以每一帧原版像素为底稿。
+“参考原版”在本任务中明确表示：以每一帧原版像素为身体骨架底稿, 还要注意区分服饰像素, 因为有的服饰像素会超出身体外部, 会影响身体骨架底稿。
 不要根据动作含义重新设计姿势，也不要重新画一套近似骨架。
 
 【必须保留】
@@ -110,7 +110,7 @@ export ASEPRITE_PATH="E:\\Program\\Aseprite\\Aseprite.exe"
 
 **帧号 = 行号 × 32 + 列号**,每个帧号播什么动作见 11 文档的对照表。
 
-> 官方角色的全套动作图已解包在 `Broforce_src/GameAssets/hero/`(95 张)。**画之前先打开对应角色看一眼**——动作怎么画、帧怎么排,看真人比读文档快。
+> 官方角色图可从当前导出结果 `Broforce_src/GameAssets/hero/` 中查找；数量随游戏版本和导出筛选变化。画之前先打开对应角色确认动作和帧布局。
 
 ## 未启用的动作格能否留空
 
@@ -133,7 +133,9 @@ export ASEPRITE_PATH="E:\\Program\\Aseprite\\Aseprite.exe"
 
 ### TonyBrotana 对照结论
 
-2026-09-18 按 32×32 格审计 `E:\Study\C#\CustomBros\TonyBrotana\_MOD\TonyBrotana_anim.png`：当前官方 Rambro 有 289 个非空身体格,TonyBrotana 有 216 个；Tony 少了官方的 89 个非空格,另有 16 个自己的非空格。其源码只是继承 `CustomHero`/Rambro 并修改射击,没有覆盖或删除动画逻辑,JSON 仍设置 `BetterAnimation=true`。
+2026-09-18 的历史审计曾按 32×32 格比较 TonyBrotana 与当时的 Rambro 图集，发现部分格子为空但动画逻辑仍可触发。统计只对应当时的本地素材快照，未在本次重新测量；案例源码入口见 [14 文档](14-Gorzontrok三bro源码地图.md#tony-brotana主攻击混合弹射物)。
+
+2026-10-14 补充源码入口：角色定义实际内联在 `TonyBrotana\_MOD\gz.tonybrotana.mod.json` 的 `CustomBros` 中，没有独立角色 JSON；主类、火箭循环与版本信息见 [14 文档](14-Gorzontrok三bro源码地图.md#tony-brotana主攻击混合弹射物)。本次整理未重新统计动作格，上述数字保留原审计日期。
 
 Tony 确实把大量非 Flex 手势素材留空,但它也缺少新版击掌末帧及 `FlexAirJump` 可触发的空中动作。因此它只能证明“图集允许透明格”,不能证明它省略的每一格都不会运行,也不能直接作为其他角色的安全删帧表。
 
