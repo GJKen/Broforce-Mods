@@ -1,10 +1,11 @@
-/target:library
+﻿/target:library
 /optimize+
 /debug-
 /out:"@OUTPUT_ROOT@\Aquabro.dll"
 /reference:"@REFERENCES_ROOT@\Assembly-CSharp.dll"
 /reference:"@REFERENCES_ROOT@\UnityEngine.dll"
 /reference:"@REFERENCES_ROOT@\UnityEngine.CoreModule.dll"
+/reference:"@REFERENCES_ROOT@\UnityEngine.ImageConversionModule.dll"
 /reference:"@REFERENCES_ROOT@\UnityEngine.PhysicsModule.dll"
 /reference:"@REFERENCES_ROOT@\0Harmony.dll"
 /reference:"@REFERENCES_ROOT@\BroMakerLib.dll"
@@ -13,6 +14,9 @@
 /reference:"@REFERENCES_ROOT@\UnityEngine.TextRenderingModule.dll"
 "@PROJECT_ROOT@\src\Aquabro.cs"
 "@PROJECT_ROOT@\src\AquabroSkills.cs"
+"@PROJECT_ROOT@\src\CollisionDamageTarget.cs"
+"@PROJECT_ROOT@\src\PixelMask.cs"
+"@PROJECT_ROOT@\src\SkillContactMask.cs"
 "@PROJECT_ROOT@\src\WaterProjectileBarrier.cs"
 "@GENERATED_ROOT@\TridentAtlas.cs"
 "@GENERATED_ROOT@\SpringPixelMask.cs"

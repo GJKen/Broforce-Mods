@@ -40,6 +40,10 @@ class Mathf {
 }
 enum HeroType { Predabro }
 class MonoBehaviour { }
+class Mook {
+    public bool Throwable = true;
+    public bool CanBeThrown() { return Throwable; }
+}
 class Renderer { public object gameObject; public bool enabled = true; }
 class Projectile : MonoBehaviour {
     public object gameObject = new object();
@@ -105,7 +109,9 @@ class AquabroProbe : SimulationBase {
     static SoundHolder tridentSoundHolder;
     public float chargeTime, throwDelay, throwCooldown, meleeElapsed, counter, X = 100f, Y = 50f;
     public int health = 1, frame, playerNum;
-    public bool fire, wasFire, doingMelee, meleeAttackEmitted, ducking, IsMine = true;
+    public bool fire, wasFire, doingMelee, meleeAttackEmitted, ducking, highFive, IsMine = true;
+    public Mook nearbyMook, ThrownMook;
+    public int KnifeHits, ThrowCalls;
     public bool isOnHelicopter, throwingHeldObject, hasBeenCoverInAcid, Incapacitated;
     public bool usingSpecial, usingPockettedSpecial, usingSpecial2, usingSpecial3, usingSpecial4;
     public bool PoseAllowed = true, GunVisible;
@@ -122,8 +128,9 @@ class AquabroProbe : SimulationBase {
     void SetGunPosition(float x, float y) { }
     void SetGunAtlasCell(int cell) { AtlasWrites++; }
     void SetGunSprite(int x, int y) { }
-    void PerformKnifeMeleeAttack(bool a, bool b) { }
+    void PerformKnifeMeleeAttack(bool a, bool b) { KnifeHits++; }
     void CancelMelee() { doingMelee = false; }
+    void ThrowBackMook(Mook mook) { ThrownMook = mook; ThrowCalls++; throwingHeldObject = true; }
     void ChangeFrame() { }
     void PlayAttackSound() { }
     public void Tick(bool held, float delta) { wasFire = fire; fire = held; t = delta; RunFiring(); }
@@ -165,6 +172,33 @@ class ChargeTests {
         p.Tick(false, 0.01f);
         Check(Near(p.chargeTime, 0f) && ProjectileController.Count == 0, "被打断后仍发射旧蓄力");
     }
+    static void MeleeThrow() {
+        // Feed the same nearby-mook/held-key state as native PressHighFiveMelee.
+        foreach (float delta in new float[] { 1f / 15f, 1f / 30f, 1f / 60f, 1f / 120f, .3f }) {
+            foreach (bool hold in new bool[] { false, true }) {
+                foreach (bool throwable in new bool[] { false, true }) {
+                    Mook enemy = new Mook { Throwable = throwable };
+                    var p = new AquabroProbe { doingMelee = true, highFive = hold, nearbyMook = enemy };
+                    for (int i = 0; i < 100 && p.doingMelee; i++) p.Tick(false, delta);
+                    bool shouldThrow = hold && throwable;
+                    Check(p.ThrowCalls == (shouldThrow ? 1 : 0), "长按近战丢兵次数错误");
+                    Check(p.KnifeHits == (shouldThrow ? 0 : 1), "丢兵同时刺伤目标，或普通前刺丢失");
+                    if (shouldThrow) {
+                        Check(object.ReferenceEquals(p.ThrownMook, enemy) && p.nearbyMook == null && p.throwingHeldObject,
+                            "没有转入原版丢兵流程或清理附近目标");
+                        p.Tick(false, delta);
+                        Check(p.ThrowCalls == 1 && p.KnifeHits == 0, "丢兵后重复出手");
+                    }
+                }
+            }
+            var empty = new AquabroProbe { doingMelee = true, highFive = true };
+            for (int i = 0; i < 100 && empty.doingMelee; i++) empty.Tick(false, delta);
+            Check(empty.KnifeHits == 1 && empty.ThrowCalls == 0, "无可丢目标时未正常前刺");
+        }
+        var paused = new AquabroProbe { doingMelee = true, highFive = true, nearbyMook = new Mook() };
+        paused.Tick(false, 0f);
+        Check(paused.ThrowCalls == 0 && paused.KnifeHits == 0, "暂停时仍丢兵或前刺");
+    }
     public static int Main() {
         try {
             for (int f = 0; f < 6; f++)
@@ -191,6 +225,7 @@ class ChargeTests {
             p.Tick(false, 0.01f);
             Check(ProjectileController.Count == count + 1, "连续投掷失败");
             for (int i = 0; i < 4; i++) Interrupted(i);
+            MeleeThrow();
             var terrain = new AquabroProbe { PoseAllowed = false };
             terrain.Tick(true, 0.5f);
             Check(!terrain.GunVisible && terrain.AtlasWrites == 0, "地形蓄力仍显示旧武器格");
@@ -219,7 +254,7 @@ class ChargeTests {
             var otherProjectile = new Projectile();
             AquabroProbe.Visual(otherProjectile, p);
             Check(otherProjectile.Sprite.meshRender.material == null, "修改了其他类型的投射物");
-            Console.WriteLine("PASS: 水球爆裂末6帧/600ms、普通水花时序、短按/满蓄力边界、原版长矛、方向/蹲姿/弹速、连续投掷、打断、拥有端、零时间步");
+            Console.WriteLine("PASS: 水花时序、蓄力/连续投掷/打断、原版长矛与外观、拥有端、零时间步；长按近战丢兵/短按前刺/不可丢目标/15-120 FPS及长帧");
             return 0;
         } catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
     }

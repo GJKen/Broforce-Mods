@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
@@ -33,8 +33,9 @@ internal static class SkillSharkTests
         Map.Targets.Add(target); return target;
     }
 
-    internal static void Run(Bitmap atlas)
+    internal static void Run(Bitmap composite, string atlasPath)
     {
+        Bitmap atlas = new Bitmap(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(atlasPath), "skill-shark-hunt-body.png"));
         Aquabro owner=new Aquabro();
         for (int i=0;i<4 && owner.SelectedSkill!=1;i++) owner.SetGestureAnimation(GestureElement.Gestures.Flex);
         Check(owner.SelectedSkill==1,"Cannot select shark");
@@ -50,7 +51,10 @@ internal static class SkillSharkTests
         Check(!owner.usingSpecial,"Zipline cast accepted");owner.attachedToZipline=null;
         CheckRunningCast(owner);
         CheckControlReturn();
+        CheckFlightPoses(atlas);
+        CheckEntryWaterFrames(composite,atlas,atlasPath);
         CheckBreachDash(owner);
+        CheckBreachWater(owner, atlas, atlasPath);
         CheckLadderCasts(owner);
         CheckLadderDropInput(owner);
         CheckSubmergedPanic(owner);
@@ -94,7 +98,7 @@ internal static class SkillSharkTests
         Check(!Active(owner).SharkControlled && owner.SpecialAmmo==0,"Second press did not breach without extra ammo");
         Call(owner,"TickSkillPreview",.3f);int breachFrame=SpriteSM.LastFrame;
         Call(owner,"PressSpecial");Call(owner,"TickSkillPreview",.05f);
-        Check(SpriteSM.LastFrame>breachFrame && Position(owner)>stopped && Position(owner)<=stopped+24.01f,"Repeated press restarted breach or dash distance is wrong");
+        Check(SpriteSM.LastFrame>breachFrame && Position(owner)>stopped && Position(owner)<=stopped+64.01f,"Repeated press restarted breach or dash distance is wrong");
         Call(owner,"TickSkillPreview",.8f);
         Check(Active(owner)==null && HeroController.CameraTarget==null && owner.sprite.meshRender.enabled,"Finish did not restore camera/hero");
         Reset();Launch(owner);Steer(owner,false,false);
@@ -117,15 +121,15 @@ internal static class SkillSharkTests
             int bodyX=-1,bodyY=0,waterX=-1,waterY=0;
             for (int py=0;py<128;py++) for (int px=0;px<128;px++)
             {
-                bool mask=SharkPixelMask.Contains(f,px+.5f,py+.5f,0);
+                bool mask=SharkPixelMask.Mask.Contains(f,px+.5f,py+.5f,0);
                 Check(!mask || atlas.GetPixel(f*128+px,py).A>0,"Shark hitbox has invisible pixels");
                 if (mask) {bodyCount++;bodyX=px;bodyY=py;}
-                if (atlas.GetPixel(f*128+px,py).A>0 && !SharkPixelMask.Contains(f,px+.5f,py+.5f,5))
+                if (composite.GetPixel(f*128+px,py).A>0 && !SharkPixelMask.Mask.Contains(f,px+.5f,py+.5f,5))
                 {waterCount++;waterX=px;waterY=py;}
             }
             foreach (float facing in new float[] {-1,1})
             {
-                Reset();HashSet<Unit> hits=new HashSet<Unit>();
+                Reset();HashSet<object> hits=new HashSet<object>();
                 Unit body=bodyX>=0 ? AtPixel(bodyX,bodyY,facing) : null;
                 Unit water=waterX>=0 ? AtPixel(waterX,waterY,facing) : null;
                 owner.SkillSharkBlast(0,0,facing,1,f,hits);
@@ -135,26 +139,29 @@ internal static class SkillSharkTests
                 owner.SkillSharkBlast(0,0,facing,1,f,hits);
                 Check(Map.TotalHits==expected,"Repeated shark damage");
                 Reset();if (body!=null) AtPixel(bodyX,bodyY,facing);
-                Physics.Blocked=true;owner.SkillSharkBlast(0,0,facing,1,f,new HashSet<Unit>());
+                Physics.Blocked=true;owner.SkillSharkBlast(0,0,facing,1,f,new HashSet<object>());
                 Check(Map.TotalHits==0 || (body!=null && Math.Abs(body.X)<8f),"Shark damages through walls");
                 Reset();if (body!=null) AtPixel(bodyX,bodyY,facing);
-                Physics.Blocked=false;owner.IsMine=false;owner.SkillSharkBlast(0,0,facing,1,f,new HashSet<Unit>());
+                Physics.Blocked=false;owner.IsMine=false;owner.SkillSharkBlast(0,0,facing,1,f,new HashSet<object>());
                 Check(Map.TotalHits==0,"Remote shark applied damage");owner.IsMine=true;
             }
         }
         Check(bodyCount>0 && waterCount>0,"Body/water masks were not separated");
-        Check(!SharkPixelMask.Contains(27,64,64,200),"Transparent final frame damages");
-        CheckObjects(owner,atlas);
+        Check(!SharkPixelMask.Mask.Contains(27,64,64,200),"Transparent final frame damages");
+        CheckObjects(owner,atlas,composite);
         CheckSupportFloor(owner);
         CheckGroundLayerProps(owner);
+        CheckLargeObjectSupport(owner);
         CheckElevatorFloor(owner);
         CheckElevatorMotion(owner);
         Check(HeroController.CameraAdds==HeroController.CameraRemoves,"Camera target leaked");
+        atlas.Dispose();
         Reset();Console.WriteLine("PASS shark: visible stationary hero; remote movement; Dredd duration; prop passthrough; unlimited 96/1024/1000000px drops; support floor preserved; second-press/timeout breach; camera/cleanup; body-only damage; mirror; pause; single hit; LOS/ownership");
     }
 
     private static void CheckControlReturn()
     {
+        Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkFloorY=0;
         FieldInfo delay=typeof(TestHero).GetField("controllingProjectileDelay",Hidden);
         foreach (bool timeout in new bool[] {false,true})
         foreach (float facing in new float[] {-1f,1f})
@@ -239,25 +246,166 @@ internal static class SkillSharkTests
         Console.WriteLine("PASS shark running cast: both facings; cast frame; wind-up; immediate release; stationary idle hero during steering");
     }
 
+    private static float Value(AquabroSkillVisual effect, string name)
+    { return (float)typeof(AquabroSkillVisual).GetField(name,Hidden).GetValue(effect); }
+
+    private static double[] Pose(Bitmap atlas, int frame)
+    {
+        double n=0,sx=0,sy=0,sxx=0,syy=0,sxy=0;
+        for(int y=0;y<128;y++)for(int x=0;x<128;x++)if(atlas.GetPixel(frame*128+x,y).A>0)
+        {
+            double px=x+.5,py=y+.5;n++;sx+=px;sy+=py;sxx+=px*px;syy+=py*py;sxy+=px*py;
+        }
+        Check(n>0,"Empty flight pose");double cx=sx/n,cy=sy/n;
+        return new double[]{cx,cy,.5*Math.Atan2(2*(sxy/n-cx*cy),(sxx-syy)/n-cx*cx+cy*cy)*180/Math.PI};
+    }
+
+    private static void CheckFlightPoses(Bitmap atlas)
+    {
+        Check(atlas.Width==AquabroSkillVisual.SharkBodyFrameCount*128,"Missing interpolated flight poses");
+        double[] before=null;
+        for(int i=0;i<AquabroSkillVisual.SharkFlightFrameCount;i++)
+        {
+            int frame=AquabroSkillVisual.SharkFlightFirstFrame+i;
+            for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+                Check(SharkPixelMask.Mask.Contains(frame,x+.5f,y+.5f,0)==(atlas.GetPixel(frame*128+x,y).A>0),
+                    "Flight pose/mask differ");
+            if(i<15)continue;
+            double[] pose=Pose(atlas,frame);
+            if(before!=null)
+            {
+                Check(Math.Abs(pose[1]-before[1])<.6,"Turn silhouette moves its rotation pivot vertically");
+                Check(Math.Abs(pose[0]-before[0])<1.5,"Turn silhouette jumps horizontally");
+                Check(pose[2]>=before[2]-.3 && pose[2]-before[2]<4.5,"Turn skips or reverses an angle");
+            }
+            before=pose;
+        }
+        for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+            Check(atlas.GetPixel((AquabroSkillVisual.SharkBodyFrameCount-1)*128+x,y)==atlas.GetPixel(19*128+x,y),
+                "Flight-to-entry handoff changes the calibrated body coordinates");
+        int entryBottom=0;
+        for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+            if(atlas.GetPixel(19*128+x,y).A>0)entryBottom=Math.Max(entryBottom,y+1);
+        Check(entryBottom==112,"Entry splash starts while the visible nose is still above the waterline: gap="+(112-entryBottom));
+        Console.WriteLine("PASS shark turn/contact: 60Hz intermediate poses; stable pivot; bounded angle steps; matching masks; exact entry handoff; visible nose touches waterline before splash");
+    }
+
+    private static void CheckEntryWaterFrames(Bitmap composite,Bitmap body,string atlasPath)
+    {
+        string directory=System.IO.Path.GetDirectoryName(atlasPath);
+        using(Bitmap back=new Bitmap(System.IO.Path.Combine(directory,"skill-shark-hunt-water-back.png")))
+        using(Bitmap front=new Bitmap(System.IO.Path.Combine(directory,"skill-shark-hunt-water-front.png")))
+        {
+            for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+            {
+                int px=19*128+x;
+                Check(composite.GetPixel(px,y)==body.GetPixel(px,y),"Contact frame still shows remote water strips before submergence");
+                Check(back.GetPixel(px,y).A==0 && front.GetPixel(px,y).A==0,"Contact frame still exports residual water");
+            }
+            int splash=0;
+            for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+                if(front.GetPixel(20*128+x,y).A>0)splash++;
+            Check(splash>0,"First submerged frame lost its full splash");
+        }
+        Console.WriteLine("PASS shark entry water: dry contact frame; no remote residual strips; complete splash starts with submergence");
+    }
+
     private static void CheckBreachDash(Aquabro owner)
     {
         foreach (float facing in new float[] {-1,1})
-        foreach (int fps in new int[] {30,60,120})
+        foreach (int fps in new int[] {15,30,60,120})
         {
-            Reset();Physics.SharkTerrainEnabled=true;Physics.SharkWallX=float.PositiveInfinity;
+            Reset();Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkFloorY=0;
+            Physics.SharkWallX=float.PositiveInfinity;
             AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);
             effect.BreachShark();
-            for(int i=0;i<fps*.6f;i++)effect.Tick(1f/fps);
-            Check(Math.Abs(effect.CameraTarget.position.x-facing*24)<.01f,"Shark breach does not advance exactly 24 pixels");
-            Check(effect.CameraTarget.position.y==48,"Breach changed its floor origin");
-            float x=effect.CameraTarget.position.x;effect.Tick(0);effect.BreachShark();effect.Tick(.05f);
-            Check(effect.CameraTarget.position.x==x,"Pause/repeated press restarts dash");effect.Dispose();
+            float time=0;
+            while(time<.3f-.00001f){float dt=Math.Min(1f/fps,.3f-time);Check(effect.Tick(dt),"Flight ended before apex");time+=dt;}
+            Check(Math.Abs(Value(effect,"y")-36)<.02f && Math.Abs(Value(effect,"x")-facing*32)<.02f,"Ballistic ascent/apex differs across FPS");
+            float oldY=Value(effect,"y");effect.Tick(0);Check(Value(effect,"y")==oldY,"Pause advanced gravity");
+            while(time<.62f-.00001f){float dt=Math.Min(1f/fps,.62f-time);effect.Tick(dt);time+=dt;}
+            Check(Value(effect,"sharkLandingElapsed")>=0 && Math.Abs(Value(effect,"y"))<.01f,"Flat flight did not land on original surface");
+            Check(Math.Abs(Value(effect,"x")-facing*64)<.9f,"Same-height flight no longer advances about 64 pixels");
+            float x=Value(effect,"x");effect.BreachShark();effect.Tick(.05f);
+            Check(Value(effect,"x")==x,"Repeated press restarts flight after landing");effect.Dispose();
             Physics.SharkWallX=facing*20;
             effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();effect.Tick(.5f);
-            Check(Math.Abs(effect.CameraTarget.position.x)<=12.01f,"Shark dash crosses wall");effect.Dispose();
+            Check(Math.Abs(Value(effect,"x"))<=12.01f,"Shark flight crosses wall");effect.Dispose();
+        }
+        foreach(float facing in new float[]{-1,1})
+        foreach(int fps in new int[]{15,30,60,120})
+        foreach(float depth in new float[]{16,96,1024,1000000})
+        {
+            Reset();Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkWallX=float.PositiveInfinity;Physics.SharkFloorY=0;
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();
+            effect.Tick(.1f);float oldY=Value(effect,"y");Physics.SharkFloorY=-depth;
+            effect.Tick(0);Check(Value(effect,"y")==oldY,"Paused flight drops");
+            effect.Tick(1f/fps);
+            Check(Value(effect,"y")>-1 && Value(effect,"y")>-depth,"Flight snapped down to a lower surface");
+            bool alive=true;float time=.1f+1f/fps;
+            while(alive && time<4.1f)
+            {
+                float before=Value(effect,"y");alive=effect.Tick(1f/fps);time+=1f/fps;
+                Check(Value(effect,"y")>=-depth-.01f,"Flight tunneled through landing surface");
+                Check(Math.Abs(Value(effect,"y")-before)<(240+800*time)/fps+1,"Flight teleported vertically");
+                if(Value(effect,"sharkLandingElapsed")>=0)break;
+            }
+            if(depth<=1024)
+            {
+                Check(Value(effect,"sharkLandingElapsed")>=0 && Math.Abs(Value(effect,"y")+depth)<.01f,"Flight did not reach actual lower surface");
+                Check(Math.Abs(Value(effect,"x"))>64,"Flight stopped horizontally over a pit");
+            }
+            else Check(!alive && Value(effect,"sharkLandingElapsed")<0 && Value(effect,"y")>-10000,"Bottomless flight snapped or failed to expire");
+            effect.Dispose();
         }
         Reset();Physics.SharkTerrainEnabled=false;Physics.SharkWallX=float.PositiveInfinity;
-        Console.WriteLine("PASS shark breach dash: +24 pixels over 0.45s; mirror/FPS; fixed floor origin; wall; pause/repeated press");
+        Console.WriteLine("PASS shark ballistics: ascent/gravity; continuous 16/96/1024px pit descent; bottomless expiry; about 64px flat flight; mirrors; 15/30/60/120 FPS; walls; pause/repeated press");
+    }
+
+    private static void CheckBreachWater(Aquabro owner, Bitmap atlas, string atlasPath)
+    {
+        Reset();Physics.SharkTerrainEnabled=false;
+        Collider left=new Collider(-64,-8,true);left.bounds.min=new Vector3(-128,-16,0);left.bounds.max=new Vector3(0,0,0);
+        Collider lower=new Collider(128,-104,true);lower.bounds.min=new Vector3(0,-112,0);lower.bounds.max=new Vector3(256,-96,0);
+        Physics.SceneTerrain=new Collider[]{left,lower};
+        string original=owner.Info.path;owner.Info.path=System.IO.Path.GetDirectoryName(atlasPath);
+        try
+        {
+            SharkSplashVisual water=new SharkSplashVisual(owner,0,0,1,1,6,19);
+            SpriteSM[] waterSprites=(SpriteSM[])typeof(SharkSplashVisual).GetField("sprites",Hidden).GetValue(water);
+            for(int i=0;i<2;i++)
+            {
+                string file="skill-shark-hunt-water-"+(i==0?"back":"front")+".png";
+                Check(waterSprites[i].meshRender.sharedMaterial.name==file,"Water material was replaced by a cropped frame");
+            }
+            water.Update(.2f);
+            Check(waterSprites[0].TestFrame==10 && waterSprites[1].TestFrame==10,"Splash no longer uses the complete atlas frame");
+            water.Dispose();
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,-8,0,1,12,0,1);effect.BreachShark();
+            object launch=typeof(AquabroSkillVisual).GetField("sharkLaunchWater",Hidden).GetValue(effect);
+            GameObject[] launchObjects=(GameObject[])launch.GetType().GetField("objects",Hidden).GetValue(launch);
+            effect.Tick(.4f);Check(Value(effect,"x")>20 && Value(effect,"y")>30,"Shark did not fly over ledge from original launch height");
+            Check(launchObjects[0].transform.position.x==-8 && launchObjects[0].transform.position.y==48,"Launch splash followed moving shark");
+            owner.transform.position=new Vector3(300,100,0);owner.transform.localScale=new Vector3(-1,1,1);effect.Tick(.05f);
+            Check(launchObjects[0].transform.position.x==-8 && launchObjects[1].transform.position.y==48,"Parent movement/turn dragged launch splash");
+            for(int i=0;i<50 && Value(effect,"sharkLandingElapsed")<0;i++)effect.Tick(.01f);
+            Check(Math.Abs(Value(effect,"y")+96)<.01f,"Shark did not enter actual lower surface");
+            SpriteSM entry=(SpriteSM)typeof(AquabroSkillVisual).GetField("sprite",Hidden).GetValue(effect);
+            Check(entry.meshRender.sharedMaterial.name=="skill-shark-hunt.png" && entry.TestFrame>=19 && entry.TestFrame<28,
+                "Entry no longer preserves the native tail/water/head layer stack");
+            float landX=Value(effect,"x"),landY=Value(effect,"y");
+            Collider obstacle=new Collider(landX,landY+48,false);
+            obstacle.bounds.min=new Vector3(landX-64,landY+1,0);obstacle.bounds.max=new Vector3(landX+64,landY+128,0);
+            Physics.Contacts=new Collider[]{obstacle};int objectHits=MapController.ObjectHits;
+            effect.Tick(.1f);
+            Check(obstacle.enabled && MapController.ObjectHits==objectHits,"Entry animation still destroys terrain");
+            Check(landX==Value(effect,"x") && effect.CameraTarget.position.x==landX && effect.CameraTarget.position.y==-48,
+                "Native landing water moved from actual impact surface");
+            Check(!launchObjects[0].activeInHierarchy && !launchObjects[1].activeInHierarchy,"Takeoff splash replayed re-entry at old origin");
+            effect.Dispose();
+        }
+        finally {owner.Info.path=original;owner.transform.position=new Vector3();owner.transform.localScale=new Vector3(1,1,1);Physics.SceneTerrain=new Collider[0];Reset();}
+        Console.WriteLine("PASS shark water: full unclipped takeoff frames; fixed origins; parent movement/turn; original entry layers and alignment; no entry terrain destruction");
     }
 
     private static void CheckLadderCasts(Aquabro owner)
@@ -401,6 +549,42 @@ internal static class SkillSharkTests
         Console.WriteLine("PASS shark Ground-layer props: crate/barrel/doodad passthrough; real wall behind props blocks; spawning ignores prop top");
     }
 
+    private static void CheckLargeObjectSupport(Aquabro owner)
+    {
+        Reset();Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkFloorY=296;
+        Physics.SharkWallX=float.PositiveInfinity;
+        Collider roof=new Collider(0,448,false);roof.TerrainMask=1;
+        roof.gameObject.SetComponent(new BossBlockPiece());
+        Bounds bounds=new Bounds();bounds.min=new Vector3(-24,440,0);bounds.max=new Vector3(24,456,0);
+        bounds.center=new Vector3(0,448,0);roof.bounds=bounds;
+        RaycastHit hit=new RaycastHit();hit.collider=roof;hit.point=new Vector3(-24,456,0);
+        Physics.SharkPropHits=new RaycastHit[] {hit};
+        owner.X=0;owner.Y=456;Launch(owner);Steer(owner,false,false);
+        Check(Active(owner).CameraTarget.position.y==504,"Shark fell through LargeObjects boss roof at spawn");
+        Call(owner,"TickSkillPreview",.1f);
+        Check(Active(owner).CameraTarget.position.y==504,"Idle shark fell through LargeObjects support");
+        foreach (float direction in new float[] {-1f,1f})
+        {
+            float x=0,y=456;owner.MoveShark(ref x,ref y,direction,.1f);
+            Check(Math.Abs(x-direction*9)<.01f && y==456,"Shark lost boss roof while steering");
+            x=0;y=456;owner.MoveShark(ref x,ref y,direction,.5f);
+            Check(Math.Abs(x-direction*45)<.01f && y==296,"Shark failed to descend after leaving boss roof");
+        }
+        // LargeObjects remains excluded from horizontal walls; keep the existing
+        // ability to swim past boss bodies and other large damageable objects.
+        Check(owner.MoveSkillHorizontally(-40,428,0)==0,"Boss body became a horizontal terrain wall");
+        roof.isTrigger=true;float tx=0,ty=456;owner.MoveShark(ref tx,ref ty,0,.1f);
+        Check(ty==296,"Trigger became solid shark support");roof.isTrigger=false;
+        roof.enabled=false;Call(owner,"TickSkillPreview",.1f);
+        Check(Active(owner).CameraTarget.position.y==344,"Disabled boss roof left shark suspended");
+        Call(owner,"ClearSkillPreview");roof.enabled=true;roof.ParentComponent=new BarrelBlock();
+        tx=0;ty=456;owner.MoveShark(ref tx,ref ty,0,.1f);
+        Check(ty==296,"LargeObjects prop became shark support");
+        owner.X=owner.Y=0;Physics.SharkPropHits=new RaycastHit[0];Physics.SharkFloorY=0;
+        Physics.SharkTerrainEnabled=false;
+        Console.WriteLine("PASS shark LargeObjects: boss roof spawn/idle/steering; edge descent; disabled/trigger/prop filtering; horizontal passthrough");
+    }
+
     private static void CheckElevatorFloor(Aquabro owner)
     {
         foreach (object elevator in new object[] {new Elevator(),new GiantElevator()})
@@ -489,7 +673,8 @@ internal static class SkillSharkTests
             owner.X=roof.bounds.center.x;owner.Y=roof.bounds.max.y;Launch(owner);Steer(owner,false,false);
             Call(owner,"PressSpecial");float breachY=Active(owner).CameraTarget.position.y;
             ShiftElevator(roof,10,40);Call(owner,"TickSkillPreview",dt);
-            Check(Active(owner).CameraTarget.position.y==breachY,"Breaching shark still attached to elevator");
+            Check(Math.Abs(Active(owner).CameraTarget.position.y-(breachY+240f*dt-400f*dt*dt))<.02f,
+                "Breaching shark followed elevator or snapped to lower ground instead of its own trajectory");
             Call(owner,"ClearSkillPreview");
         }
         owner.X=owner.Y=0;Physics.SharkPropHits=new RaycastHit[0];Physics.SharkTerrainEnabled=false;
@@ -510,13 +695,13 @@ internal static class SkillSharkTests
         }
     }
 
-    private static void CheckObjects(Aquabro owner,Bitmap atlas)
+    private static void CheckObjects(Aquabro owner,Bitmap atlas,Bitmap composite)
     {
         int bx=-1,by=0,wx=-1,wy=0;
         for (int y=0;y<128;y++) for (int x=0;x<128;x++)
         {
-            if (SharkPixelMask.Contains(10,x+.5f,y+.5f,0)) {bx=x;by=y;}
-            if (atlas.GetPixel(10*128+x,y).A>0 && !SharkPixelMask.IntersectsRect(10,x-.5f,y-.5f,x+1.5f,y+1.5f,5)) {wx=x;wy=y;}
+            if (SharkPixelMask.Mask.Contains(10,x+.5f,y+.5f,0)) {bx=x;by=y;}
+            if (composite.GetPixel(10*128+x,y).A>0 && !SharkPixelMask.Mask.IntersectsRect(10,x-.5f,y-.5f,x+1.5f,y+1.5f,5)) {wx=x;wy=y;}
         }
         Check(bx>=0 && wx>=0,"Need body/water object samples");
         foreach (float facing in new float[] {-1,1})

@@ -1,25 +1,82 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
+using UnityEngine;
 
 namespace AquabroMod
 {
+    // One state per water body, or per entire spring cast. A pool touching
+    // several columns is still one acid source for that cast.
+    internal sealed class WaterAcidState
+    {
+        internal int Stage { get; private set; }
+        private readonly HashSet<object> sources = new HashSet<object>();
+        private float colorLevel, colorTime;
+        internal void Absorb(object source)
+        { if (source != null && Stage < 2 && sources.Add(source)) Stage++; }
+        internal float AdvanceColor(float castTime, float delta)
+        {
+            float step = Mathf.Min(delta, Mathf.Max(0f, castTime - colorTime));
+            colorTime = Mathf.Max(colorTime, castTime);
+            colorLevel = AquabroSkillVisual.AdvanceAcidColor(colorLevel, Stage, step);
+            return colorLevel;
+        }
+    }
+
     // Check before projectile movement/hits, so fast shots cannot jump across
     // the water between hero updates. Damageable rockets and ordinary bullets
     // use the same interception path.
     internal sealed class WaterProjectileBarrier
     {
         private static readonly List<WaterProjectileBarrier> Active = new List<WaterProjectileBarrier>();
+        private static readonly List<SlimeGroundCover> AcidSlime = new List<SlimeGroundCover>();
         private readonly Aquabro owner;
         private readonly int kind;
-        private readonly float facing, scale;
+        private readonly float scale;
+        private float facing;
+        private readonly WaterAcidState acid;
+        internal int AcidStage { get { return acid.Stage; } }
+        internal void MoveFacing(float value) { facing = value; }
+        internal void Absorb(object source) { if (kind != 1) acid.Absorb(source); }
+        internal void AbsorbPools()
+        {
+            if (kind == 1 || !visible || !owner.IsMine || AcidStage >= 2) return;
+            foreach (DoodadBloodPool pool in DoodadBloodPool.bloodDoodads)
+                if (pool is DoodadAcidPool && pool.gameObject.activeInHierarchy && Intersects(pool.X, pool.Y, 0f, 0f, 4f)) Absorb(pool);
+            for (int i = AcidSlime.Count - 1; i >= 0 && AcidStage < 2; i--)
+            {
+                SlimeGroundCover slime = AcidSlime[i];
+                if (slime == null) { AcidSlime.RemoveAt(i); continue; }
+                if (!slime.gameObject.activeInHierarchy || slime.slimeColor != BloodColor.Green || slime.damage <= 0) continue;
+                Vector3 position = slime.transform.position;
+                float nx = slime.direction == DirectionEnum.Left ? -1f : slime.direction == DirectionEnum.Right ? 1f : 0f;
+                float ny = slime.direction == DirectionEnum.Down ? -1f : slime.direction == DirectionEnum.Up ? 1f : 0f;
+                if (nx == 0f && ny == 0f) continue;
+                // The object sits at the block centre; acid covers its exposed
+                // 16px face. Sample that face, not the centre inside the wall.
+                for (int offset = -4; offset <= 4; offset += 4)
+                    if (Intersects(position.x + nx * 8f + ny * offset,
+                        position.y + ny * 8f - nx * offset, 0f, 0f, 4f))
+                    { Absorb(slime); break; }
+            }
+        }
+
+        private static void RegisterSlime(SlimeGroundCover __instance)
+        {
+            if (__instance != null && !AcidSlime.Contains(__instance)) AcidSlime.Add(__instance);
+        }
         private float x, y, previousX, previousY;
         private int frame;
         private bool visible;
 
         internal WaterProjectileBarrier(Aquabro owner, int kind, float x, float y, float facing, float scale)
+            : this(owner, kind, x, y, facing, scale, null) {}
+
+        internal WaterProjectileBarrier(Aquabro owner, int kind, float x, float y, float facing, float scale,
+            WaterAcidState sharedAcid)
         {
+            acid = sharedAcid ?? new WaterAcidState();
             this.owner=owner;this.kind=kind;this.x=x;this.y=y;this.facing=facing;this.scale=scale;
             previousX=x;previousY=y;
             Active.Add(this);
@@ -37,6 +94,9 @@ namespace AquabroMod
 
         internal static void Install(Harmony harmony)
         {
+            harmony.Patch(typeof(SlimeGroundCover).GetMethod("Setup"), null,
+                new HarmonyMethod(typeof(WaterProjectileBarrier).GetMethod("RegisterSlime", BindingFlags.Static | BindingFlags.NonPublic)), null, null);
+            foreach (SlimeGroundCover slime in UnityEngine.Object.FindObjectsOfType<SlimeGroundCover>()) RegisterSlime(slime);
             HarmonyMethod prefix=new HarmonyMethod(typeof(WaterProjectileBarrier).GetMethod("BeforeRun",BindingFlags.Static|BindingFlags.NonPublic));
             foreach (Type type in typeof(Projectile).Assembly.GetTypes())
             {
@@ -57,13 +117,14 @@ namespace AquabroMod
             if (delta<=0f || projectile==null || !projectile.gameObject.activeInHierarchy) return false;
             foreach (WaterProjectileBarrier water in Active)
             {
-                if (!water.visible || water.owner==null || !water.owner.IsMine || water.owner.health<=0 ||
+                if (water.kind == 1 || !water.visible || water.owner==null || !water.owner.IsMine || water.owner.health<=0 ||
                     !water.owner.gameObject.activeInHierarchy ||
                     !GameModeController.DoesPlayerNumDamage(projectile.playerNum,water.owner.playerNum)) continue;
                 if (!water.Intersects(projectile.X,projectile.Y,projectile.xI*delta,projectile.yI*delta,
                     System.Math.Max(.5f,projectile.projectileSize))) continue;
                 // Douse the shot without invoking rocket Death/MakeEffects,
                 // which would explode at the player's feet.
+                if (projectile.damageType == DamageType.Acid) water.Absorb(projectile);
                 projectile.xI=projectile.yI=0f;
                 projectile.life=System.Math.Max(1f,projectile.life);
                 projectile.gameObject.SetActive(false);
@@ -76,6 +137,7 @@ namespace AquabroMod
 
         private bool Intersects(float px,float py,float dx,float dy,float radius)
         {
+            float startX=px,startY=py,travelX=dx,travelY=dy;
             // Sweep relative motion too: the moving wave can cross a slow shot.
             px+=x-previousX;py+=y-previousY;
             dx-=x-previousX;dy-=y-previousY;
@@ -84,15 +146,18 @@ namespace AquabroMod
                 !Clip(py,dy,y-16f*scale-margin,y+112f*scale+margin,ref near,ref far)) return false;
             float length=System.Math.Max(System.Math.Abs(dx),System.Math.Abs(dy))*(far-near);
             int steps=System.Math.Max(1,(int)System.Math.Ceiling(length/scale));
+            SkillContactMask mask = new SkillContactMask(kind, x, y, facing, scale, frame);
             for (int i=0;i<=steps;i++)
             {
                 float time=near+(far-near)*i/steps;
-                float sx=64f+(px+dx*time-x)*facing/scale;
-                float sy=112f-(py+dy*time-y)/scale;
-                bool hit=kind==2 ? MaelstromPixelMask.Contains(frame,sx,sy,margin/scale)
-                    : kind==0 ? TidalWavePixelMask.Contains(frame,sx,sy,margin/scale)
-                    : SpringPixelMask.Contains(frame,sx,sy,margin/scale);
-                if (hit) return true;
+                if (!mask.Contains(px + dx * time, py + dy * time, margin)) continue;
+                float contactX=startX+travelX*time,contactY=startY+travelY*time;
+                float waterX=previousX+(x-previousX)*time;
+                float waterY=previousY+(y-previousY)*time;
+                float sourceY=Mathf.Clamp(contactY,waterY+1f,waterY+112f*scale);
+                if (!Aquabro.WaterContactVisible(waterX,sourceY,contactX,contactY,null) ||
+                    !Aquabro.WaterContactVisible(startX,startY,contactX,contactY,null)) continue;
+                return true;
             }
             return false;
         }

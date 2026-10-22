@@ -36,7 +36,7 @@ namespace AquabroMod
         private float elapsed;
         private Aquabro impactOwner;
         private float impactXI;
-        private readonly HashSet<Unit> affectedUnits = new HashSet<Unit>();
+        private readonly HashSet<object> affectedUnits = new HashSet<object>();
         // 普通水花沿用原稿节奏；水球爆裂17–22帧以每帧100ms放慢播放，共600ms。
         private static readonly float[] ChargedFrameDurations = {
             .1f, .1f, .1f, .1f, .1f, .1f
@@ -71,7 +71,7 @@ namespace AquabroMod
             return effect;
         }
 
-        public void BeginBlast(Aquabro owner, float shotXI, int directDamage, Unit directTarget)
+        public void BeginBlast(Aquabro owner, float shotXI, int directDamage, object directTarget)
         {
             impactOwner = owner;
             impactXI = shotXI;
@@ -266,6 +266,10 @@ namespace AquabroMod
 
         private static bool FindTridentTerrainContact(float fromX, float fromY, float toX, float toY,
             out RaycastHit nearest)
+        { return FindTridentTerrainContactExcept(fromX, fromY, toX, toY, null, out nearest); }
+
+        private static bool FindTridentTerrainContactExcept(float fromX, float fromY, float toX, float toY,
+            Collider receiver, out RaycastHit nearest)
         {
             nearest = new RaycastHit();
             Vector3 path = new Vector3(toX - fromX, toY - fromY, 0f);
@@ -273,13 +277,17 @@ namespace AquabroMod
             float distance = float.PositiveInfinity;
             bool found = false;
             foreach (RaycastHit hit in Physics.RaycastAll(new Vector3(fromX, fromY, 0f), path.normalized,
-                path.magnitude, Map.groundLayer))
+                path.magnitude, Map.groundLayer | Map.groundAndDamageableObjects))
             {
                 Collider contact = hit.collider;
                 if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger ||
                     contact.GetComponentInParent<Unit>() != null) continue;
                 DamageRelay relay = contact.GetComponent<DamageRelay>();
                 if (relay != null && relay.unit != null) continue;
+                if (contact == receiver) continue;
+                CollisionDamageTarget obstacle = CollisionDamageTarget.Find(contact);
+                CollisionDamageTarget target = CollisionDamageTarget.Find(receiver);
+                if (obstacle != null && target != null && obstacle.Key == target.Key) continue;
                 if (hit.distance >= distance) continue;
                 distance = hit.distance;
                 nearest = hit;
@@ -302,10 +310,18 @@ namespace AquabroMod
             Aquabro owner = __instance.firedBy as Aquabro;
             if (owner == null) return true;
             if (__instance.GetComponent<AquabroWaterImpact>() != null) return false;
+            if (CollisionDamageTarget.Find(raycastHit.collider) != null)
+            {
+                ResolveWaterImpact(__instance, owner, raycastHit.point.x + raycastHit.normal.x * .05f,
+                    raycastHit.point.y + raycastHit.normal.y * .05f, raycastHit.collider);
+                return false;
+            }
             if (owner.IsMine && Mathf.Abs(__instance.xI) <= 500f)
                 MapController.DamageGround(__instance, __instance.damage, DamageType.Crush, 16f,
                     raycastHit.point.x + raycastHit.normal.x * 3f,
-                    raycastHit.point.y + raycastHit.normal.y * 3f, null, false);
+                    raycastHit.point.y + raycastHit.normal.y * 3f,
+                    CollisionDamageTarget.IgnoreForGround(raycastHit.point.x + raycastHit.normal.x * 3f,
+                        raycastHit.point.y + raycastHit.normal.y * 3f, 16f), false);
             // Start the splash just outside the struck face so its visibility
             // rays cannot begin inside the wall and miss that same obstacle.
             ResolveWaterHit(__instance, owner, raycastHit.point.x + raycastHit.normal.x * .05f,
@@ -327,6 +343,7 @@ namespace AquabroMod
             // spawn point already inside a nearby wall. Keep that splash on the
             // first visible face instead of starting its rays inside the wall.
             AquabroTridentFlight flight = shot.GetComponent<AquabroTridentFlight>();
+            object directContact = null;
             if (flight == null || !flight.hasPrevious)
             {
                 float fromX = GetTridentSweepStartX(owner.X, shot.X, Mathf.Sign(shot.xI), false, 0f);
@@ -335,12 +352,13 @@ namespace AquabroMod
                 {
                     x = wall.point.x + wall.normal.x * .05f;
                     y = wall.point.y + wall.normal.y * .05f;
+                    if (CollisionDamageTarget.Find(wall.collider) != null) directContact = wall.collider;
                 }
             }
-            ResolveWaterImpact(shot, owner, x, y, null);
+            ResolveWaterImpact(shot, owner, x, y, directContact);
         }
 
-        private static void ResolveWaterImpact(PredabroSpear shot, Aquabro owner, float x, float y, Unit directTarget)
+        private static void ResolveWaterImpact(PredabroSpear shot, Aquabro owner, float x, float y, object directTarget)
         {
             if (shot.GetComponent<AquabroWaterImpact>() != null) return;
             shot.gameObject.AddComponent<AquabroWaterImpact>();
@@ -355,10 +373,11 @@ namespace AquabroMod
                 // 与 Rocket.MakeEffects 相同的范围破土、场景物件和弹丸破坏调用。
                 if (charged)
                     MapController.DamageGround(shot, ValueOrchestrator.GetModifiedDamage(blastDamage, shot.playerNum),
-                        DamageType.Explosion, damageRadius, x, y, null, false);
-                bool hitImpenetrable;
-                Map.DamageDoodads(charged ? blastDamage : shot.damageInternal, charged ? DamageType.Explosion : shot.damageType, x, y,
-                    charged ? 0f : shot.xI, charged ? 0f : shot.yI, charged ? damageRadius * 0.6f : 8f, shot.playerNum, out hitImpenetrable, shot);
+                        DamageType.Explosion, damageRadius, x, y, CollisionDamageTarget.IgnoreForGround(x, y, damageRadius), false);
+                DamageWaterDoodads(shot, charged ? blastDamage : shot.damageInternal,
+                    charged ? DamageType.Explosion : shot.damageType, x, y,
+                    charged ? 0f : shot.xI, charged ? 0f : shot.yI,
+                    charged ? damageRadius * 0.6f : 8f);
                 if (charged)
                 {
                     // 原版 HitProjectiles 还会额外扩张弹体尺寸；改为严格圆形中心判定。
@@ -366,7 +385,8 @@ namespace AquabroMod
                     {
                         if (targetProjectile == null || !GameModeController.DoesPlayerNumDamage(shot.playerNum, targetProjectile.playerNum)) continue;
                         float px = targetProjectile.X - x, py = targetProjectile.Y - y;
-                        if (px * px + py * py <= damageRadius * damageRadius)
+                        if (px * px + py * py <= damageRadius * damageRadius &&
+                            WaterSceneContactVisible(x, y, targetProjectile.X, targetProjectile.Y, targetProjectile.gameObject))
                             Map.DamageProjectile(targetProjectile, blastDamage, DamageType.Explosion, 0f, 0f, 0.25f, shot.playerNum);
                     }
                     // 树木接口使用矩形判定，缩为圆的内接正方形。
@@ -375,7 +395,7 @@ namespace AquabroMod
                 }
                 if (charged) effect.BeginBlast(owner, shot.xI, shot.damageInternal, directTarget);
                 else ApplyWaterImpactUnits(owner, false, x, y, shot.xI, shot.damageInternal,
-                    directTarget, new HashSet<Unit>(), 0);
+                    directTarget, new HashSet<object>(), 0);
             }
             if (charged && owner.IsMine)
             {
@@ -386,10 +406,45 @@ namespace AquabroMod
             UnityEngine.Object.Destroy(shot.gameObject);
         }
 
+        private static bool WaterSceneContactVisible(float x, float y, float hitX, float hitY, GameObject receiver)
+        {
+            Vector3 path = new Vector3(hitX - x, hitY - y, 0f);
+            if (path.magnitude <= .00001f) return true;
+            foreach (RaycastHit hit in Physics.RaycastAll(new Vector3(x, y, 0f), path.normalized,
+                Mathf.Max(0f, path.magnitude - .01f), Map.groundLayer | Map.groundAndDamageableObjects))
+            {
+                Collider contact = hit.collider;
+                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger ||
+                    contact.GetComponentInParent<Unit>() != null) continue;
+                DamageRelay relay = contact.GetComponent<DamageRelay>();
+                if (relay != null && relay.unit != null) continue;
+                if (receiver != null && (contact.gameObject == receiver || contact.transform.IsChildOf(receiver.transform))) continue;
+                return false;
+            }
+            return true;
+        }
+
+        private static void DamageWaterDoodads(PredabroSpear shot, int damage, DamageType type,
+            float x, float y, float forceX, float forceY, float range)
+        {
+            // Preserve Map.DamageDoodads eligibility and native reactions, with
+            // a visibility check before the damage can reach scenery behind a wall.
+            for (int i = Map.destroyableDoodads.Count - 1; i >= 0; i--)
+            {
+                Doodad target = Map.destroyableDoodads[i];
+                if (target == null || (shot.playerNum < 0 ? !target.CanBeDamagedByMooks : target.immuneToHeroDamage) ||
+                    !target.IsPointInRange(x, y, range) ||
+                    !WaterSceneContactVisible(x, y, target.centerX, target.centerY, target.gameObject)) continue;
+                bool hit = false;
+                target.DamageOptional(new DamageObject(damage, type, forceX, forceY, x, y, shot), ref hit);
+            }
+        }
+
         internal static void ApplyWaterImpactUnits(Aquabro owner, bool charged, float x, float y,
-            float shotXI, int directDamage, Unit directTarget, HashSet<Unit> affected, int frame)
+            float shotXI, int directDamage, object directTarget, HashSet<object> affected, int frame)
         {
             if (owner == null || !owner.IsMine) return;
+            HashSet<object> partTargets = ApplyWaterImpactContacts(owner, charged, x, y, shotXI, directDamage, directTarget as Collider, affected, frame);
             float radius = charged ? WaterBlastRange : 12f;
             float damageRadius = charged ? ChargedWaterSize * .5f * WaterBlastDamageRatio : radius;
             int blastDamage = charged ? 14 : 8;
@@ -397,11 +452,13 @@ namespace AquabroMod
             List<Unit> targets = charged
                 ? (Map.units == null ? new List<Unit>() : new List<Unit>(Map.units))
                 : Map.GetUnitsInRange(radius, radius, x, y, false);
-            if (directTarget != null && !targets.Contains(directTarget)) targets.Add(directTarget);
+            Unit directUnit = directTarget as Unit;
+            if (directUnit != null && !targets.Contains(directUnit)) targets.Add(directUnit);
             foreach (Unit target in targets)
             {
                 if (target == null || target.health <= 0 || target.invulnerable ||
-                    !GameModeController.DoesPlayerNumDamage(owner.playerNum, target.playerNum) || affected.Contains(target)) continue;
+                    !GameModeController.DoesPlayerNumDamage(owner.playerNum, target.playerNum) ||
+                    affected.Contains(target) || partTargets.Contains(target)) continue;
                 float dx = target.X - x, dy = target.Y + 6f - y;
                 float distance = Mathf.Sqrt(dx * dx + dy * dy);
                 float contactDistance = distance;
@@ -429,15 +486,84 @@ namespace AquabroMod
             }
         }
 
+        private static HashSet<object> ApplyWaterImpactContacts(Aquabro owner, bool charged, float x, float y,
+            float shotXI, int directDamage, Collider direct, HashSet<object> affected, int frame)
+        {
+            List<Collider> contacts = new List<Collider>();
+            HashSet<object> partTargets = new HashSet<object>();
+            // Direct contact has priority over the splash and connected parts.
+            if (direct != null) contacts.Add(direct);
+            contacts.AddRange(Physics.OverlapSphere(new Vector3(x, y, 0f), charged ? 52f : 12f,
+                Map.groundLayer | Map.groundAndDamageableObjects));
+            foreach (Collider contact in contacts)
+            {
+                DamageType type = charged ? DamageType.Explosion : DamageType.Crush;
+                CollisionDamageTarget unitRoute = charged ? null : CollisionDamageTarget.Find(contact, DamageType.Melee);
+                CollisionDamageTarget boss;
+                if (unitRoute != null && unitRoute.UnitTarget != null) { boss = unitRoute; type = DamageType.Melee; }
+                else boss = CollisionDamageTarget.Find(contact, type);
+                if (boss != null && boss.UnitTarget != null) partTargets.Add(boss.UnitTarget);
+                if (boss == null || object.ReferenceEquals(boss.UnitTarget, owner) ||
+                    (boss.UnitTarget != null && boss.UnitTarget.health <= 0) ||
+                    !boss.CanDamage(owner.playerNum, type) || CollisionDamageTarget.AlreadyHit(boss.Key, affected)) continue;
+                Bounds bounds = contact.bounds;
+                float hitX = Mathf.Clamp(x, bounds.min.x, bounds.max.x);
+                float hitY = Mathf.Clamp(y, bounds.min.y, bounds.max.y);
+                float dx = hitX - x, dy = hitY - y;
+                float distance = Mathf.Sqrt(dx * dx + dy * dy);
+                bool directHit = contact == direct;
+                if (!directHit)
+                {
+                    if (charged)
+                    {
+                        if (!FindChargedWaterContactRect(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y,
+                            frame, x, y, contact, out distance)) continue;
+                    }
+                    else
+                    {
+                        RaycastHit wall;
+                        if (distance > 12f || FindTridentTerrainContactExcept(x, y, hitX, hitY, contact, out wall)) continue;
+                    }
+                }
+                int damage = charged ? (distance <= ChargedWaterSize * .5f * WaterBlastDamageRatio ? 14 : 0) : 8;
+                if (directHit) damage = System.Math.Max(directDamage, charged ? 14 : 8);
+                // Boss parts do not receive the infantry's outer-ring launch.
+                // A harmless outer-ring touch must not consume later inner contact.
+                if (damage <= 0 && boss.UnitTarget == null) continue;
+                CollisionDamageTarget.Register(boss.Key, affected);
+                float forceX = 0f, forceY = 0f;
+                if (boss.UnitTarget != null)
+                {
+                    // A unit reached through a relay keeps the same infantry
+                    // launch as the body pass; scene receivers receive no launch.
+                    float ux = boss.UnitTarget.X - x, uy = boss.UnitTarget.Y + 6f - y;
+                    float length = Mathf.Sqrt(ux * ux + uy * uy);
+                    float direction = ux == 0f ? Mathf.Sign(shotXI) : Mathf.Sign(ux);
+                    forceX = charged ? (length < .001f ? direction * 100f : ux / length * 400f) : direction * 110f;
+                    forceY = charged ? Mathf.Max((length < .001f ? 0f : uy / length * 400f) + 260f,
+                        Mathf.Max(260f, Mathf.Abs(forceX) + 40f)) : 90f;
+                }
+                MapController.Damage_Networked(owner, contact.gameObject,
+                    damage > 0 ? ValueOrchestrator.GetModifiedDamage(damage, owner.playerNum) : 0, type, forceX, forceY, hitX, hitY);
+            }
+            return partTargets;
+        }
+
         private static bool FindChargedWaterContact(Unit target, int frame, float x, float y, out float distance)
         {
-            distance = float.PositiveInfinity;
-            const float pixel = ChargedWaterSize / 64f;
-            float half = ChargedWaterSize * .5f;
             TestVanDammeAnim character = target as TestVanDammeAnim;
             float left = target.X - target.width * .5f, right = target.X + target.width * .5f;
             float bottom = target.Y;
             float top = character != null ? target.Y + character.headHeight : target.Y + target.height * 2f + 3f;
+            return FindChargedWaterContactRect(left, bottom, right, top, frame, x, y, null, out distance);
+        }
+
+        private static bool FindChargedWaterContactRect(float left, float bottom, float right, float top,
+            int frame, float x, float y, Collider receiver, out float distance)
+        {
+            distance = float.PositiveInfinity;
+            const float pixel = ChargedWaterSize / 64f;
+            float half = ChargedWaterSize * .5f;
             if (right < x - half || left > x + half || top < y - half || bottom > y + half) return false;
             int minX = System.Math.Max(0, (int)System.Math.Floor((left - x + half) / pixel) - 1);
             int maxX = System.Math.Min(63, (int)System.Math.Floor((right - x + half) / pixel));
@@ -460,7 +586,7 @@ namespace AquabroMod
                     float candidate = Mathf.Sqrt(dx * dx + dy * dy);
                     if (candidate >= distance) continue;
                     RaycastHit wall;
-                    if (FindTridentTerrainContact(x, y, contactX, contactY, out wall)) continue;
+                    if (FindTridentTerrainContactExcept(x, y, contactX, contactY, receiver, out wall)) continue;
                     distance = candidate;
                 }
             }
@@ -559,6 +685,15 @@ namespace AquabroMod
                 meleeElapsed += Mathf.Max(t, 0f) * MeleeSpeedMultiplier;
                 if (!meleeAttackEmitted && meleeElapsed + 0.00001f >= MeleeHitTime)
                 {
+                    // Custom melee bypasses AnimateMeleeCommon's held-key throw.
+                    // Hand off before the stab, including frames that skip past it.
+                    if (highFive && nearbyMook != null && nearbyMook.CanBeThrown())
+                    {
+                        CancelMelee();
+                        ThrowBackMook(nearbyMook);
+                        nearbyMook = null;
+                        return;
+                    }
                     meleeAttackEmitted = true;
                     PerformKnifeMeleeAttack(true, true);
                 }

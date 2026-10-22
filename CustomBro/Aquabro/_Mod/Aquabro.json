@@ -12,7 +12,7 @@
   },
   "abilities": {},
   "beforeAwake": {
-    "originalSpecialAmmo": 3,
+    "originalSpecialAmmo": 5,
     "fireRate": 0.2,
     "canChimneyFlip": true,
     "useNewFrames": true,

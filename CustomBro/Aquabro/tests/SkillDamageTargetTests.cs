@@ -19,10 +19,10 @@ internal static class SkillDamageTargetTests
     private static int Frame(int kind) { return kind == 0 ? 4 : kind == 1 ? 12 : kind == 2 ? 22 : 10; }
     private static bool Contains(int kind, int frame, float x, float y)
     {
-        if (kind == 0) return TidalWavePixelMask.Contains(frame, x, y, 0);
-        if (kind == 1) return SharkPixelMask.Contains(frame, x, y, 0);
-        if (kind == 2) return MaelstromPixelMask.Contains(frame, x, y, 0);
-        return SpringPixelMask.Contains(frame, x, y, 0);
+        if (kind == 0) return TidalWavePixelMask.Mask.Contains(frame, x, y, 0);
+        if (kind == 1) return SharkPixelMask.Mask.Contains(frame, x, y, 0);
+        if (kind == 2) return MaelstromPixelMask.Mask.Contains(frame, x, y, 0);
+        return SpringPixelMask.Mask.Contains(frame, x, y, 0);
     }
     private static Vector2 Point(int kind, float facing, float scale)
     {
@@ -31,7 +31,7 @@ internal static class SkillDamageTargetTests
                 return new Vector2((px + .5f - 64) * facing * scale, (112 - py - .5f) * scale);
         throw new Exception("Missing skill contact sample " + kind);
     }
-    private static bool Cast(Aquabro owner, int kind, float facing, float scale, HashSet<Unit> hits, bool finish)
+    private static bool Cast(Aquabro owner, int kind, float facing, float scale, HashSet<object> hits, bool finish)
     {
         int frame = Frame(kind);
         if (kind == 0) return owner.SkillWaveContact(0, 0, facing, scale, frame, hits, new HashSet<GameObject>());
@@ -42,8 +42,8 @@ internal static class SkillDamageTargetTests
         }
         if (kind == 2)
         {
-            if (finish) owner.SkillMaelstromFinish(0, 0, facing, scale, new HashSet<Unit>(), hits);
-            else owner.SkillMaelstromPull(0, 0, facing, scale, frame, .016f, true, new HashSet<Unit>());
+            if (finish) owner.SkillMaelstromFinish(0, 0, facing, scale, frame, new HashSet<object>(), hits);
+            else owner.SkillMaelstromPull(0, 0, facing, scale, frame, .016f, true, new HashSet<object>());
         }
         if (kind == 3) owner.SkillSpringBlast(0, 0, facing, scale, frame, spring, 0f);
         return true;
@@ -62,15 +62,27 @@ internal static class SkillDamageTargetTests
         foreach (float scale in new float[] { .65f, 1f })
         {
             Vector2 point = Point(kind, facing, scale);
+            // Keep colliders alive after damage, as exploding props can do.
+            // Every skill must submit damage and waves must keep travelling.
+            foreach (Block prop in new Block[] { new Cage(), new CrateBlock(), new BarrelBlock() })
+            {
+                Reset();
+                Collider body = new Collider(point.x, point.y, true);
+                body.indestructible = true;
+                body.gameObject.AddComponent(prop);
+                Physics.Contacts = new Collider[] { body };
+                Check(Cast(owner, kind, facing, scale, new HashSet<object>(), false), "Prop stopped wave");
+                Check(MapController.ObjectHits == 1, "Skill missed cage/crate/barrel " + kind);
+            }
             Reset();
             Mook corpse = new Mook(); corpse.X = point.x; corpse.Y = point.y - 6;
             corpse.health = -1; corpse.playerNum = -1; Map.Targets.Add(corpse);
-            HashSet<Unit> hits = new HashSet<Unit>();
+            HashSet<object> hits = new HashSet<object>();
             Cast(owner, kind, facing, scale, hits, false);
             Check(Map.TotalHits == 1 && Map.Hits.ContainsKey(corpse), "Corpse missed by skill " + kind);
             if (kind == 2)
             {
-                Check(corpse.KnockCalls == 0, "Dead AI receives continuous suction");
+                Check(corpse.KnockCalls == 1, "Corpse missed by continuous suction");
                 Cast(owner, kind, facing, scale, hits, true);
                 Check(Map.TotalHits == 2 && Map.Hits[corpse] == 9, "Corpse finisher missing");
             }
@@ -87,7 +99,7 @@ internal static class SkillDamageTargetTests
                 if (inMap) Map.Targets.Add(boss);
                 Collider a = Part(boss, point), b = Part(boss, point);
                 Physics.Contacts = new Collider[] { a, b };
-                hits = new HashSet<Unit>();
+                hits = new HashSet<object>();
                 Check(Cast(owner, kind, facing, scale, hits, false), "Boss part stopped wave");
                 Check(Map.TotalHits == 1 && MapController.ObjectHits == 1 &&
                     Map.Hits[boss] == (kind == 0 ? 26 : kind == 3 ? 4 : kind == 1 ? 28 : 3),
@@ -112,7 +124,7 @@ internal static class SkillDamageTargetTests
                 if (filter == 4) boss.playerNum = owner.playerNum;
                 if (filter == 5) Physics.Blocked = true;
                 if (filter == 6) owner.IsMine = false;
-                Physics.Contacts = new Collider[] { armour }; hits = new HashSet<Unit>();
+                Physics.Contacts = new Collider[] { armour }; hits = new HashSet<object>();
                 Cast(owner, kind, facing, scale, hits, false);
                 Check(Map.TotalHits == 0, "Boss armour/ally/immunity/wall/ownership bypass " + filter);
                 if (filter < 3)
@@ -167,7 +179,7 @@ internal static class SkillDamageTargetTests
                 int frame = Math.Min(17, (int)Math.Floor(clock / .05f));
                 bool found = false;
                 for (int py = 0; py < 112 && !found; py++) for (int px = 0; px < 128 && !found; px++)
-                    if (SpringPixelMask.Contains(frame, px + .5f, py + .5f, 0))
+                    if (SpringPixelMask.Mask.Contains(frame, px + .5f, py + .5f, 0))
                     { target.X = px + .5f - 64; target.Y = 112 - py - .5f - 6; found = true; }
                 foreach (AquabroSkillVisual column in columns) column.Tick(1f / fps);
                 int beforePause = count;

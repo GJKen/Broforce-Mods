@@ -18,8 +18,13 @@ $method = (Read-Method 'private static void ResolveWaterImpact(') + "`n" + (Read
 $method += "`n" + (Read-Method 'internal static Unit FindTridentContact(') + "`n" + (Read-Method 'private static bool ClipTridentAxis(')
 $method += "`n" + (Read-Method 'private static float GetTridentSweepStartX(')
 $method += "`n" + (Read-Method 'private static bool FindChargedWaterContact(')
+$method += "`n" + (Read-Method 'private static bool FindChargedWaterContactRect(')
+$method += "`n" + (Read-Method 'private static HashSet<object> ApplyWaterImpactContacts(')
 $method += "`n" + (Read-Method 'private static bool FindTridentTerrainContact(')
+$method += "`n" + (Read-Method 'private static bool FindTridentTerrainContactExcept(')
 $method += "`n" + (Read-Method 'private static void ResolveWaterHit(')
+$method += "`n" + (Read-Method 'private static bool WaterSceneContactVisible(')
+$method += "`n" + (Read-Method 'private static void DamageWaterDoodads(')
 $method += "`n" + (Read-Method 'private static bool WaterHitUnits(') + "`n" + (Read-Method 'private static bool WaterHitGround(')
 $effectMethods = @(
     Read-Method 'public void BeginBlast('
@@ -37,9 +42,14 @@ class MonoBehaviour { }
 class AquabroWaterImpact { }
 class AquabroTridentFlight {public bool hasPrevious;public float previousX,previousY;}
 class GameObject {
+ public Collider Contact;
+ public Transform transform=new Transform();
+ public bool activeInHierarchy {get {return Contact==null || Contact.active;}}
  private Dictionary<Type,object> components=new Dictionary<Type,object>();
  public T AddComponent<T>() where T : new() { var c = new T(); components[typeof(T)]=c; return c; }
- public T GetComponent<T>() where T:class {object value;return components.TryGetValue(typeof(T),out value)?value as T:null;}
+ public void SetComponent(object value) {components[value.GetType()]=value;}
+ public object[] GetComponents(Type type) {return new List<object>(components.Values).ToArray();}
+ public T GetComponent<T>() where T:class {object value;return components.TryGetValue(typeof(T),out value)?value as T:(Contact==null?null:Contact.relay as T);}
 }
 class Projectile {
  public float X,Y,xI,yI;
@@ -50,14 +60,28 @@ class Projectile {
  public T GetComponent<T>() where T : class { return gameObject.GetComponent<T>(); }
 }
 class PredabroSpear : Projectile { }
-enum DamageType { Explosion, Melee, Crush }
+public enum DamageType { Explosion, Melee, Crush, Drill, Unholy, None }
+class Block { public int health=100; }
+class FallingBlock : Block { }
+class Cage : Block { }
+class CageBar { }
+class Doodad {
+ public float centerX,centerY,width=16,height=16;
+ public bool immuneToHeroDamage;public bool CanBeDamagedByMooks=true;
+ public int health=100,hits;public GameObject gameObject=new GameObject();
+ public bool IsPointInRange(float x,float y,float range) {Map.doodadRange=range;return Math.Abs(x-centerX)<=width*.5f+range && Math.Abs(y-centerY)<=height*.5f+range;}
+ public bool DamageOptional(DamageObject damage,ref bool hit) {health-=damage.damage;hits++;hit=true;return true;}
+}
+class DamageObject {public int damage;public DamageObject(int d,DamageType t,float fx,float fy,float x,float y,object sender){damage=d;}}
 class Unit : MonoBehaviour {
  public float X,Y,forceX,forceY;
  public float width=8,height=6;
  public int playerNum=-1,health=100,hits;
  public bool invulnerable;
+ public GameObject gameObject=new GameObject();
 }
 class TestVanDammeAnim : Unit { public float headHeight=18; }
+class MookBigGuy : Unit { }
 struct Vector3 {
  public float x,y,z;
  public Vector3(float x,float y,float z) { this.x=x;this.y=y;this.z=z; }
@@ -70,15 +94,24 @@ class Collider {
  public object parent;
  public DamageRelay relay;
  public float left,right,bottom=-100,top=100;
- public Collider(float a,float b) {left=Math.Min(a,b);right=Math.Max(a,b);}
- public Collider gameObject {get {return this;}}
+ public Collider(float a,float b) {left=Math.Min(a,b);right=Math.Max(a,b);gameObject.Contact=this;}
+ public GameObject gameObject=new GameObject();
+ public Bounds bounds {get {return new Bounds {min=new Vector3(left,bottom,0),max=new Vector3(right,top,0)};}}
+ public Transform transform {get {return gameObject.transform;}}
  public bool activeInHierarchy {get {return active;}}
  public T GetComponentInParent<T>() where T:class {return parent as T;}
- public T GetComponent<T>() where T:class {return relay as T;}
+ public T GetComponent<T>() where T:class {return relay as T ?? gameObject.GetComponent<T>();}
 }
-class DamageRelay {public Unit unit;}
+class DamageRelay {protected bool isDestroyed;public Unit unit;public object doodad;public BossBlockWeapon bossWeapon;public GameObject damageGameObject;public DamageType immunity=DamageType.Drill,forceDamageType=DamageType.None;public Collider ignoreDamageWhileColliderActive,ignoreDamageWhileOtherColliderActive;}
 struct RaycastHit {public Collider collider;public float distance;public Vector3 point,normal;}
+struct Bounds {public Vector3 min,max;}
 class Physics {
+ public static Collider[] OverlapSphere(Vector3 center,float range,int layer) {
+  return Walls.FindAll(delegate(Collider c) {
+   float x=Mathf.Clamp(center.x,c.left,c.right)-center.x,y=Mathf.Clamp(center.y,c.bottom,c.top)-center.y;
+   return c.enabled && c.active && x*x+y*y<=range*range;
+  }).ToArray();
+ }
  public static List<Collider> Walls=new List<Collider>();
  static bool Slab(float p,float d,float low,float high,ref float enter,ref float leave) {
   if(Math.Abs(d)<.000001f)return p>=low && p<=high;
@@ -104,13 +137,16 @@ class Aquabro : MonoBehaviour {
  public Info Info=new Info();
  __CONSTANTS__
  __METHOD__
- public static void Impact(PredabroSpear p, Aquabro a, Unit direct) { ResolveWaterImpact(p,a,0,0,direct); }
+ public static void Impact(PredabroSpear p, Aquabro a, object direct) { ResolveWaterImpact(p,a,0,0,direct); }
  public static void NativeImpact(PredabroSpear p, Aquabro a) {ResolveWaterHit(p,a,p.X,p.Y);}
  public static void SweepImpact(PredabroSpear p,Aquabro a) {p.firedBy=a;WaterHitUnits(p);}
  public static float SweepStart(float ownerX,float shotX,float direction,bool previous,float lastX) { return GetTridentSweepStartX(ownerX,shotX,direction,previous,lastX); }
 }
 class Position { public float x,y; }
-class Transform { public Position position=new Position(); }
+class Transform {
+ public Position position=new Position();public Transform parent;
+ public bool IsChildOf(Transform other) {for(Transform node=this;node!=null;node=node.parent)if(node==other)return true;return false;}
+}
 class Time { public static float deltaTime; }
 class SpriteSM { public void SetLowerLeftPixel(int x,int y) { } }
 class AquabroWaterEffect {
@@ -119,7 +155,7 @@ class AquabroWaterEffect {
  private float elapsed,impactXI;
  private int size,frames;
  private Aquabro impactOwner;
- private readonly HashSet<Unit> affectedUnits=new HashSet<Unit>();
+ private readonly HashSet<object> affectedUnits=new HashSet<object>();
  private Transform transform=new Transform();
  public float BlastX {get {return transform.position.x;}}
  private SpriteSM waterSprite=new SpriteSM();
@@ -156,12 +192,25 @@ class GameModeController { public static bool DoesPlayerNumDamage(int a,int b) {
 class SortOfFollow { public static void Shake(float v) { } }
 class MapController {
  public static float groundRadius;
- public static void DamageGround(object s,int d,DamageType t,float r,float x,float y,object n,bool b) { groundRadius=r; }
+ public static void DamageGround(object s,int d,DamageType t,float r,float x,float y,Collider[] ignored,bool b) {
+  groundRadius=r;
+  foreach(Collider c in Physics.OverlapSphere(new Vector3(x,y,0),r*.5f,Map.groundAndDamageableObjects))
+   if(ignored==null || Array.IndexOf(ignored,c)<0) BossDamageTestStubs.Submit(c.gameObject,d,t,0,0);
+ }
+ public static void Damage_Networked(object owner,GameObject receiver,int damage,DamageType type,float fx,float fy,float x,float y) {
+  if(BossDamageTestStubs.Submit(receiver,damage,type,fx,fy))return;
+  DamageRelay relay=receiver.GetComponent<DamageRelay>();
+  if(relay!=null && relay.unit!=null && type!=relay.immunity)
+   Map.KnockAndDamageUnit(owner,relay.unit,damage,type,fx,fy,1,true,x,y,true);
+  else if(relay!=null && relay.damageGameObject!=null)
+   Damage_Networked(owner,relay.damageGameObject,damage,type,fx,fy,x,y);
+ }
 }
 class Map {
- public const int groundLayer=1;
+ public const int groundLayer=1,groundAndDamageableObjects=3;
  public static List<Unit> units=new List<Unit>();
  public static List<Projectile> damageableProjectiles=new List<Projectile>();
+ public static List<Doodad> destroyableDoodads=new List<Doodad>();
  public static List<Projectile> damagedProjectiles=new List<Projectile>();
  public static float doodadRange;
  public static List<Unit> GetUnitsInRange(float xr,float yr,float x,float y,bool b) { return units.FindAll(delegate(Unit u) { return Math.Abs(u.X-x)<=xr && Math.Abs(u.Y+6-y)<=yr; }); }
@@ -175,9 +224,10 @@ class Map {
 class Tests {
  static void Check(bool ok,string s) { if(!ok)throw new Exception(s); }
  static Unit At(float x,float y) { return new Unit { X=x,Y=y-6 }; }
- static void Reset() { Map.units.Clear();Map.damageableProjectiles.Clear();Map.damagedProjectiles.Clear();MapController.groundRadius=0;Physics.Walls.Clear(); }
+  static void Reset() { BossDamageTestStubs.Reset();Map.units.Clear();Map.damageableProjectiles.Clear();Map.damagedProjectiles.Clear();Map.destroyableDoodads.Clear();MapController.groundRadius=0;Physics.Walls.Clear(); }
  static void Charged(int direction) {
   Reset();
+  Map.destroyableDoodads.Add(new Doodad {centerX=1000});
   foreach(float offset in new float[]{0,16,20,24,26,28,30,32,34}) {
    var target=new TestVanDammeAnim {X=-offset,Y=-10,width=8,headHeight=18};
    Map.units.Add(target);
@@ -214,7 +264,7 @@ class Tests {
    var pixelOwner=new Aquabro();
    for(int f=0;f<6;f++) for(int py=0;py<64;py++) for(int px=0;px<64;px++) {
     Reset();var body=PixelTarget(px,py);Map.units.Add(body);
-    Aquabro.ApplyWaterImpactUnits(pixelOwner,true,0,0,664,0,null,new HashSet<Unit>(),f);
+    Aquabro.ApplyWaterImpactUnits(pixelOwner,true,0,0,664,0,null,new HashSet<object>(),f);
     bool visible=image.GetPixel(f*64+px,py).A>0;
     Check(body.hits==(visible?1:0),"Pixel-center body contact disagrees with displayed frame");
     double radial=Math.Sqrt(body.X*body.X+(body.Y+.05f)*(body.Y+.05f));
@@ -222,7 +272,7 @@ class Tests {
     if(visible && radial>25.4) Check(body.health==100,"Visible outer water dealt damage");
    }
   }
-  Reset();var owner=new Aquabro();var affected=new HashSet<Unit>();
+  Reset();var owner=new Aquabro();var affected=new HashSet<object>();
   var transparent=PixelTarget(32,32);Map.units.Add(transparent);
   Aquabro.ApplyWaterImpactUnits(owner,true,0,0,664,0,null,affected,0);
   Check(transparent.hits==0 && !affected.Contains(transparent),"Transparent center causes phantom hit");
@@ -332,9 +382,31 @@ class Tests {
   }
   Console.WriteLine("PASS walls: left/right standing/crouched spawn+fast sweeps; front enemy; trigger/unit/boss filters; destroyed walls; normal/charged splash; late entry; native inside-wall spawn; tip-wall impact near face");
  }
+ static void SceneOcclusion() {
+  foreach(bool charged in new[]{false,true})foreach(int direction in new[]{-1,1})foreach(int obstacle in new[]{0,1,2,3}) {
+   Reset();var owner=new Aquabro();var prop=new Doodad {centerX=14*direction};Map.destroyableDoodads.Add(prop);
+   var immune=new Doodad {centerX=14*direction,immuneToHeroDamage=true};Map.destroyableDoodads.Add(immune);
+   var rocket=new Projectile {X=14*direction};Map.damageableProjectiles.Add(rocket);
+   var own=new Projectile {X=14*direction,playerNum=0};Map.damageableProjectiles.Add(own);
+   var wall=new Collider(5*direction,6*direction);Physics.Walls.Add(wall);
+   if(obstacle==1)wall.isTrigger=true;
+   if(obstacle==2)wall.enabled=false;
+   if(obstacle==3)wall.parent=new Unit();
+   Aquabro.Impact(new PredabroSpear {xI=(charged?664:400)*direction,damageInternal=5,playerNum=0},owner,null);
+   Check(prop.hits==(obstacle==0?0:1),"Water damages scenery through wall / loses clear hit");
+   Check(prop.health==(obstacle==0?100:charged?86:95) && immune.hits==0,"Scenery damage/eligibility changed");
+   Check(Map.damagedProjectiles.Contains(rocket)==(charged && obstacle!=0) && !Map.damagedProjectiles.Contains(own),
+    "Charged projectile destruction ignores wall/affiliation");
+  }
+  Reset();var receiver=new Doodad {centerX=14};Map.destroyableDoodads.Add(receiver);
+  var child=new Collider(12,13);child.transform.parent=receiver.gameObject.transform;Physics.Walls.Add(child);
+  Aquabro.Impact(new PredabroSpear {xI=664,playerNum=0},new Aquabro(),null);
+  Check(receiver.hits==1,"Scenery's own child collider occludes its hit");
+  Console.WriteLine("PASS scene walls: normal/charged Doodads and charged rockets; both directions; real wall/trigger/disabled/unit; friendly and immune filters; recipient child collider");
+ }
  public static int Main() {
   try {
-   Charged(1);Charged(-1);MaskAndBody();LateEntry();Contact();CloseThrow();WallOcclusion();
+   Charged(1);Charged(-1);MaskAndBody();LateEntry();Contact();CloseThrow();WallOcclusion();SceneOcclusion();BossWaterDamageTests.Run();
    Reset();Unit normal=At(13,0);Map.units.Add(normal);
    Aquabro.Impact(new PredabroSpear { xI=400,damageInternal=5 },new Aquabro(),normal);
    Check(normal.health==92 && normal.hits==1 && normal.forceY==90,"Normal direct hit changed");
@@ -350,7 +422,7 @@ $testSource = Join-Path $env:TEMP ('Aquabro-WaterZones-' + [Guid]::NewGuid().ToS
 $testExe = [IO.Path]::ChangeExtension($testSource,'.exe')
 try {
     [IO.File]::WriteAllText($testSource,$harness.Replace('__CONSTANTS__',$constants).Replace('__METHOD__',$method).Replace('__EFFECT_METHODS__',$effectMethods).Replace('__ATLAS__',(Join-Path $projectRoot '_Mod\water-rocket-explosion.png')))
-    & (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v3.5\csc.exe') /nologo /nowarn:0649 /reference:System.Drawing.dll /out:$testExe $testSource (Join-Path $projectRoot 'src\ChargedWaterPixelMask.cs')
+    & (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v3.5\csc.exe') /nologo /nowarn:0649 /reference:System.Drawing.dll /out:$testExe $testSource (Join-Path $projectRoot 'src\ChargedWaterPixelMask.cs') (Join-Path $projectRoot 'src\CollisionDamageTarget.cs') (Join-Path $PSScriptRoot 'BossDamageTestStubs.cs') (Join-Path $PSScriptRoot 'BossWaterDamageTests.cs')
     if ($LASTEXITCODE -ne 0) { throw '水爆分区测试编译失败' }
     & $testExe
     if ($LASTEXITCODE -ne 0) { throw '水爆分区测试失败' }

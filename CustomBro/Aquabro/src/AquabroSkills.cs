@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Rogueforce;
@@ -14,6 +14,24 @@ namespace AquabroMod
         internal static readonly string[] SkillAssets = { "tidal-wave", "shark-hunt", "maelstrom", "abyssal-spring" };
         private readonly List<AquabroSkillVisual> skillVisuals = new List<AquabroSkillVisual>();
         private int castingSkill;
+        internal int CurrentAcidStage;
+        private static readonly System.Random AcidRandom = new System.Random();
+        internal static bool RollsCorrosion(int stage, double roll)
+        { return stage >= 2 || (stage == 1 && roll < .5); }
+        private DamageType SkillDamageType(Unit target, int damage)
+        {
+            TestVanDammeAnim character = target as TestVanDammeAnim;
+            // Native Acid damage coats compatible characters instead of subtracting
+            // health. Vehicles, boss parts and acid-resistant creatures keep their
+            // normal damage path; never force the coating flag or call Melt directly.
+            if (damage <= 0 || CurrentAcidStage <= 0 || character == null || target.health <= 0 ||
+                !character.canBeCoveredInAcid || character is Alien ||
+                (character is AlienMosquito && !(character is HellLostSoul))) return DamageType.Explosion;
+            // Further poison-water hits must not explode the coated enemy's skeleton
+            // or knock it out of its native panic/melting sequence.
+            return character.HasBeenCoveredInAcid() || RollsCorrosion(CurrentAcidStage, AcidRandom.NextDouble()) ?
+                DamageType.Acid : DamageType.Explosion;
+        }
         private AquabroSkillVisual activeShark;
         private bool sharkCameraTarget;
         private bool sharkDropInput;
@@ -121,12 +139,10 @@ namespace AquabroMod
             // The original input sends this RPC once per rising edge, rather than
             // once per animation loop. Do not hook TriggerFlexEvent (fires twice).
             if (gesture == GestureElement.Gestures.Flex && health > 0 &&
-                !usingSpecial && !usingPockettedSpecial && !doingMelee && !IsIncapacitated() && activeShark == null)
+                !usingSpecial && !usingPockettedSpecial && !doingMelee && !IsIncapacitated() && !ControllingShark)
             {
                 int slot = Mathf.Clamp(playerNum, 0, 3);
                 SkillSelections[slot] = (SkillSelections[slot] + 1) % SkillNames.Length;
-                if (IsMine) SpecialAmmo = originalSpecialAmmo;
-                ClearSkillPreview();
                 chargeTime = throwDelay = 0f;
             }
             base.SetGestureAnimation(gesture);
@@ -168,12 +184,13 @@ namespace AquabroMod
 
         protected override void PressSpecial()
         {
-            if (activeShark != null)
+            if (ControllingShark)
             {
                 if (health > 0 && !IsIncapacitated()) activeShark.BreachShark();
                 return;
             }
-            if (health <= 0 || IsIncapacitated() || doingMelee || usingSpecial || activeShark != null) return;
+            if (health <= 0 || IsIncapacitated() || doingMelee || usingSpecial ||
+                (SelectedSkill == 1 && activeShark != null)) return;
             if (SelectedSkill == 1 && !CanStartShark) return;
             if (SpecialAmmo <= 0) { HeroController.FlashSpecialAmmo(playerNum); return; }
             castingSkill = SelectedSkill;
@@ -256,34 +273,45 @@ namespace AquabroMod
 
         private void StartSpringColumns()
         {
-            HashSet<Unit> sharedHits = new HashSet<Unit>();
+            HashSet<object> sharedHits = new HashSet<object>();
             SpringDamageState sharedSpring = new SpringDamageState();
             for (int i = -3; i <= 3; i++)
             {
-                Vector2 pos = ClampSkillDestination(X + i * 30f, Y + 12f);
-                // Stop the sequence at walls rather than stacking columns there.
-                if (Mathf.Abs(pos.x - (X + i * 30f)) > 12f) continue;
-                float ground = GroundBelow(pos.x, Y + 12f, 55f);
-                AddSkillVisual(3, pos.x, ground, i < 0 ? -1f : 1f, 1.4f,
+                Vector2 pos;
+                if (!FindSpringColumn(X + i * 30f, out pos)) continue;
+                AddSkillVisual(3, pos.x, pos.y, i < 0 ? -1f : 1f, 1.4f,
                     Mathf.Abs(i) * 0.14f, Mathf.Abs(i) == 3 ? 0.9f : 0.65f, sharedHits, sharedSpring);
             }
-            SortOfFollow.Shake(0.7f, new Vector3(X, Y, 0f));
+            SortOfFollow.Shake(0.25f, new Vector3(X, Y, 0f));
         }
 
-        private Vector2 ClampSkillDestination(float x, float y)
+        private bool FindSpringColumn(float destinationX, out Vector2 position)
         {
-            Vector3 origin = new Vector3(X, Y + 14f, 0f);
-            Vector3 diff = new Vector3(x, y, 0f) - origin;
-            RaycastHit hit;
-            if (diff.magnitude > 1f && Physics.Raycast(origin, diff.normalized, out hit, diff.magnitude, Map.groundLayer))
-                return new Vector2(hit.point.x - diff.normalized.x * 8f, hit.point.y - diff.normalized.y * 8f);
-            return new Vector2(x, y);
-        }
-
-        private float GroundBelow(float x, float y, float range)
-        {
-            RaycastHit hit;
-            return Physics.Raycast(new Vector3(x, y, 0f), Vector3.down, out hit, range, Map.groundLayer) ? hit.point.y : y - 12f;
+            float x = X, y = Y;
+            RaycastHit floor, wall;
+            // Preserve the centre's original 12px-up / 55px-down ground search.
+            if (RaycastSpringTerrain(new Vector3(x, y + 12f, 0f), Vector3.down, 55f, out floor)) y = floor.point.y;
+            float distance = destinationX - x;
+            int steps = System.Math.Max(1, (int)System.Math.Ceiling(Mathf.Abs(distance) / 4f));
+            float step = distance / steps;
+            float direction = step < 0f ? -1f : 1f;
+            position = new Vector2(x, y);
+            for (int i = 0; i < steps && Mathf.Abs(step) > .00001f; i++)
+            {
+                float next = x + step;
+                // A one-tile lip is traversable terrain, not a wall cancelling
+                // all three columns. Follow its top, but stop at taller faces.
+                if (RaycastSpringTerrain(new Vector3(x, y + 18f, 0f), new Vector3(direction, 0f, 0f),
+                    Mathf.Abs(step), out wall)) return false;
+                if (RaycastSpringTerrain(new Vector3(next, y + 18f, 0f), Vector3.down, 61f, out floor))
+                {
+                    if (floor.point.y > y + 16f) return false;
+                    y = floor.point.y;
+                }
+                x = next;
+            }
+            position = new Vector2(destinationX, y);
+            return true;
         }
 
         internal bool ValidSkillTarget(Unit target)
@@ -304,15 +332,46 @@ namespace AquabroMod
         }
 
         private static bool SkillContactVisible(float x, float y, float hitX, float hitY, bool ignoreProps)
+        { return SkillContactVisible(x, y, hitX, hitY, ignoreProps, null); }
+
+        // Water may overlap a wall visually, but cannot act through that wall.
+        // Use the full segment even for contacts closer than eight pixels.
+        internal static bool WaterContactVisible(float x, float y, float hitX, float hitY, Collider receiver)
+        {
+            Vector3 start = new Vector3(x, y, 0f);
+            Vector3 diff = new Vector3(hitX - x, hitY - y, 0f);
+            if (diff.magnitude <= .00001f) return true;
+            foreach (RaycastHit hit in Physics.RaycastAll(start, diff.normalized,
+                Mathf.Max(0f, diff.magnitude - .01f), Map.groundLayer))
+            {
+                Collider contact = hit.collider;
+                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy ||
+                    contact.isTrigger || contact == receiver ||
+                    (receiver != null && contact.gameObject == receiver.gameObject) ||
+                    contact.GetComponentInParent<Unit>() != null || contact.GetComponent<DamageRelay>() != null ||
+                    contact.GetComponentInParent<FallingBlock>() != null ||
+                    contact.GetComponentInParent<Cage>() != null || contact.GetComponent<Cage>() != null ||
+                    contact.GetComponent<CageBar>() != null || contact.GetComponent<SawBlade>() != null ||
+                    (contact.GetComponentInParent<Doodad>() != null && contact.GetComponentInParent<Elevator>() == null)) continue;
+                return false;
+            }
+            return true;
+        }
+
+        private static bool SkillContactVisible(float x, float y, float hitX, float hitY, bool ignoreProps, Collider receiver)
         {
             Vector3 diff = new Vector3(hitX - x, hitY - y, 0f);
-            if (diff.magnitude < 8f) return true;
+            if (diff.magnitude < (receiver == null ? 8f : .00001f)) return true;
             foreach (RaycastHit hit in Physics.RaycastAll(new Vector3(x, y, 0f), diff.normalized,
-                diff.magnitude - 4f, Map.groundLayer))
+                Mathf.Max(0f, diff.magnitude - (receiver == null ? 4f : .01f)), Map.groundLayer))
             {
                 Collider contact = hit.collider;
                 if (contact == null || contact.isTrigger || contact.GetComponentInParent<Unit>() != null ||
                     contact.GetComponent<DamageRelay>() != null) continue;
+                if (contact == receiver) continue;
+                CollisionDamageTarget obstacle = CollisionDamageTarget.FindSkill(contact);
+                CollisionDamageTarget target = CollisionDamageTarget.FindSkill(receiver);
+                if (obstacle != null && target != null && obstacle.Key == target.Key) continue;
                 if (ignoreProps && (contact.GetComponentInParent<FallingBlock>() != null ||
                     contact.GetComponentInParent<Doodad>() != null)) continue;
                 return false;
@@ -320,69 +379,112 @@ namespace AquabroMod
             return true;
         }
 
-        private static bool SkillMaskTouchesRectangle(int kind, float x, float y, float facing, float scale,
-            int frame, Bounds bounds)
+        private static bool TryRegisterSkillHit(object target, HashSet<object> alreadyHit,
+            SpringDamageState spring, float castTime, out bool first)
         {
-            if (bounds.max.y <= y + 1f) return false;
-            float left = 64f + (bounds.min.x - x) * facing / scale;
-            float right = 64f + (bounds.max.x - x) * facing / scale;
-            float top = 112f - (bounds.max.y - y) / scale;
-            float bottom = 112f - (Mathf.Max(bounds.min.y, y + 1f) - y) / scale;
-            float margin = 5f / scale;
-            switch (kind)
+            first = true;
+            if (CollisionDamageTarget.AlreadyHit(target, alreadyHit) || (spring != null && !spring.TryHit(target, castTime, out first))) return false;
+            CollisionDamageTarget.Register(target, alreadyHit);
+            return true;
+        }
+
+        private void DamageSkillUnit(Unit target, int damage, float forceX, float forceY,
+            int direction, bool knock, float x, float y)
+        {
+            int modified = ValueOrchestrator.GetModifiedDamage(damage, playerNum);
+            DamageType type = SkillDamageType(target, modified);
+            bool acid = type == DamageType.Acid;
+            // Acid coats the body like a native pool. Do not leave a directional
+            // water-impact flag that lets a riot shield reject the zero-force hit.
+            if (modified > 0) Map.KnockAndDamageUnit(this, target, modified,
+                type, acid ? 0f : forceX, acid ? 0f : forceY, acid ? 0 : direction, !acid && knock, x, y, true);
+        }
+
+        // Shared body pass for wave, shark and spring. Relay hits run first;
+        // wave terrain handling still runs before this pass and can stop the cast.
+        private void SkillDamageUnits(SkillContactMask mask, int damage, float forceX, float forceY,
+            bool radial, HashSet<object> alreadyHit, HashSet<object> partTargets, SpringDamageState spring, float castTime)
+        {
+            bool wave = mask.Kind == 0;
+            // Preserve the broad-query limits, including room for the wave's body test.
+            float range = wave ? 80f * mask.Scale + 64f :
+                mask.Kind == 3 ? 64f * mask.Scale + 5f + 16f : 64f * mask.Scale + 21f;
+            foreach (Unit target in Map.GetUnitsInRange(range, range, mask.X, mask.Y + 48f * mask.Scale, true))
             {
-                case 0: return TidalWavePixelMask.IntersectsRect(frame, left, top, right, bottom, margin);
-                case 1: return SharkPixelMask.IntersectsRect(frame, left, top, right, bottom, margin);
-                case 2: return MaelstromPixelMask.IntersectsRect(frame, left, top, right, bottom, margin);
-                default: return SpringPixelMask.IntersectsRect(frame, left, top, right, bottom, margin);
+                if (!ValidSkillDamageTarget(target) || partTargets.Contains(target) || alreadyHit.Contains(target) ||
+                    (wave && CollisionDamageTarget.IsWaveUnit(target))) continue;
+                float dy = target.Y + 6f - mask.Y;
+                bool contact = wave ? mask.IntersectsBody(target) : mask.Contains(target.X, target.Y + 6f, 5f);
+                if (!contact || !SkillLineOfSight(mask.X,
+                    mask.Y + Mathf.Clamp(dy, 0f, (wave ? 100f : 112f) * mask.Scale), target)) continue;
+                bool first;
+                if (!TryRegisterSkillHit(target, alreadyHit, spring, castTime, out first)) continue;
+                int direction = radial ? (target.X < mask.X ? -1 : 1) : (mask.Facing < 0f ? -1 : 1);
+                DamageSkillUnit(target, damage, first ? (radial ? direction * Mathf.Abs(forceX) : forceX) : 0f,
+                    first ? forceY : 0f, direction, first, mask.X, mask.Y + 24f);
             }
         }
 
-        private HashSet<Unit> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
-            int damage, float forceX, float forceY, bool radial, HashSet<Unit> alreadyHit)
+        private HashSet<object> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
+            int damage, float forceX, float forceY, bool radial, HashSet<object> alreadyHit)
         {
             return SkillDamageRelays(kind, x, y, facing, scale, frame, damage, forceX, forceY, radial, alreadyHit, null, 0f);
         }
 
-        private HashSet<Unit> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
-            int damage, float forceX, float forceY, bool radial, HashSet<Unit> alreadyHit, SpringDamageState spring, float castTime)
+        private HashSet<object> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
+            int damage, float forceX, float forceY, bool radial, HashSet<object> alreadyHit, SpringDamageState spring, float castTime)
+        { return SkillDamageRelays(kind, x, y, facing, scale, frame, damage, forceX, forceY, radial, alreadyHit, spring, castTime, null); }
+
+        private HashSet<object> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
+            int damage, float forceX, float forceY, bool radial, HashSet<object> alreadyHit, SpringDamageState spring, float castTime,
+            WaveDamageState wave)
         {
-            HashSet<Unit> partTargets = new HashSet<Unit>();
-            // Boss parts can be far from Unit.X/Y or absent from Map.units.
-            // Send damage through the part to preserve armour and weak-point rules.
+            HashSet<object> partTargets = new HashSet<object>();
+            SkillContactMask mask = new SkillContactMask(kind, x, y, facing, scale, frame);
+            // Discover collision receivers independently of Unit registries or
+            // boss class names. Keep the native contact/relay as the damage entry.
             foreach (Collider contact in Physics.OverlapSphere(new Vector3(x, y + 48f * scale, 0f),
                 96f * scale + 5f, Map.groundLayer | Map.groundAndDamageableObjects))
             {
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy) continue;
-                DamageRelay relay = contact.GetComponent<DamageRelay>();
-                Unit target = relay == null ? null : relay.unit;
-                if (!ValidSkillDamageTarget(target)) continue;
-                partTargets.Add(target);
-                if (alreadyHit.Contains(target)) continue;
+                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
+                CollisionDamageTarget receiver = CollisionDamageTarget.FindSkill(contact);
+                if (receiver == null) continue;
+                Unit target = receiver.UnitTarget;
+                if (target != null) partTargets.Add(target);
+                object key = receiver.Key;
+                bool periodicWave = wave != null && receiver.IsWaveBoss;
+                if (!periodicWave && CollisionDamageTarget.AlreadyHit(key, alreadyHit)) continue;
                 // An armoured/closed part must not consume the cast's hit before
                 // an exposed weak point is tested later in the same query.
-                if (relay.immunity == DamageType.Explosion ||
-                    (relay.ignoreDamageWhileColliderActive != null && relay.ignoreDamageWhileColliderActive.enabled &&
-                        relay.ignoreDamageWhileColliderActive.gameObject.activeInHierarchy) ||
-                    (relay.ignoreDamageWhileOtherColliderActive != null && relay.ignoreDamageWhileOtherColliderActive.enabled &&
-                        relay.ignoreDamageWhileOtherColliderActive.gameObject.activeInHierarchy)) continue;
+                if ((target != null && !ValidSkillDamageTarget(target)) ||
+                    !receiver.CanDamage(playerNum, DamageType.Explosion)) continue;
                 Bounds bounds = contact.bounds;
-                if (!SkillMaskTouchesRectangle(kind, x, y, facing, scale, frame, bounds)) continue;
+                if (!mask.IntersectsRect(bounds)) continue;
                 float hitX = Mathf.Clamp(x, bounds.min.x, bounds.max.x);
                 float hitY = Mathf.Clamp(y + 48f * scale, Mathf.Max(y + 1f, bounds.min.y), bounds.max.y);
-                if (!SkillContactVisible(x, hitY, hitX, hitY, kind == 2)) continue;
-                bool first = true;
-                if (spring != null && !spring.TryHit(target, castTime, out first)) continue;
-                alreadyHit.Add(target);
+                if (!SkillContactVisible(x, hitY, hitX, hitY, kind == 2, contact)) continue;
+                bool first;
+                int hitDamage = damage;
+                if (periodicWave)
+                {
+                    first = false;
+                    hitDamage = wave.TakeDamage(key, castTime);
+                    if (hitDamage == 0) continue;
+                }
+                else if (!TryRegisterSkillHit(key, alreadyHit, spring, castTime, out first)) continue;
                 float fx = radial ? (hitX < x ? -1f : 1f) * Mathf.Abs(forceX) : forceX;
-                MapController.Damage_Networked(this, contact.gameObject,
-                    ValueOrchestrator.GetModifiedDamage(damage, playerNum), DamageType.Explosion,
-                    first ? fx : 0f, first ? forceY : 0f, hitX, hitY);
+                int modified = ValueOrchestrator.GetModifiedDamage(hitDamage, playerNum);
+                DamageType type = SkillDamageType(target, modified);
+                // Preserve native relay immunity/armour for both requested types.
+                if (type == DamageType.Acid && !receiver.CanDamage(playerNum, type)) type = DamageType.Explosion;
+                bool launch = target != null && first && type != DamageType.Acid;
+                if (modified > 0) MapController.Damage_Networked(this, contact.gameObject,
+                    modified, type, launch ? fx : 0f, launch ? forceY : 0f, hitX, hitY);
             }
             return partTargets;
         }
 
-        internal void SkillBlast(float x, float y, float radius, int damage, float forceX, float forceY, HashSet<Unit> alreadyHit, bool radial)
+        internal void SkillBlast(float x, float y, float radius, int damage, float forceX, float forceY, HashSet<object> alreadyHit, bool radial)
         {
             if (!IsMine) return;
             foreach (Unit target in Map.GetUnitsInRange(radius + 16f, radius + 16f, x, y, true))
@@ -392,8 +494,8 @@ namespace AquabroMod
                 if (dx * dx + dy * dy > radius * radius || !SkillLineOfSight(x, y, target) ||
                     (alreadyHit != null && !alreadyHit.Add(target))) continue;
                 int direction = dx < 0f ? -1 : 1;
-                Map.KnockAndDamageUnit(this, target, ValueOrchestrator.GetModifiedDamage(damage, playerNum),
-                    DamageType.Explosion, radial ? direction * Mathf.Abs(forceX) : forceX, forceY, direction, true, x, y, true);
+                DamageSkillUnit(target, damage, radial ? direction * Mathf.Abs(forceX) : forceX,
+                    forceY, direction, true, x, y);
             }
             Map.HitProjectiles(playerNum, 12, DamageType.Explosion, radius, x, y, forceX, forceY, 0.25f);
         }
@@ -404,7 +506,7 @@ namespace AquabroMod
         }
 
         private void AddSkillVisual(int kind, float x, float y, float facing, float lifetime, float delay, float scale,
-            HashSet<Unit> sharedHits, SpringDamageState sharedSpring)
+            HashSet<object> sharedHits, SpringDamageState sharedSpring)
         {
             skillVisuals.Add(new AquabroSkillVisual(this, kind, x, y, facing, lifetime, delay, scale, sharedHits, sharedSpring));
         }
@@ -414,49 +516,45 @@ namespace AquabroMod
         {
             if (!IsMine || frame < 0 || frame >= AquabroSkillVisual.SpringDissolveStartFrame) return;
             // The build exports this mask from the very same composite as the PNG.
-            HashSet<Unit> pulseHits = new HashSet<Unit>();
-            HashSet<Unit> partTargets = SkillDamageRelays(3, x, y, facing, scale, frame,
+            HashSet<object> pulseHits = new HashSet<object>();
+            HashSet<object> partTargets = SkillDamageRelays(3, x, y, facing, scale, frame,
                 4, 70f, 650f, true, pulseHits, spring, castTime);
-            float range = 64f * scale + 5f + 16f;
-            foreach (Unit target in Map.GetUnitsInRange(range, range, x, y + 48f * scale, true))
-            {
-                if (!ValidSkillDamageTarget(target) || partTargets.Contains(target) || pulseHits.Contains(target)) continue;
-                float dx = target.X - x, dy = target.Y + 6f - y;
-                if (!SpringPixelMask.Contains(frame, 64f + dx * facing / scale, 112f - dy / scale, 5f / scale) ||
-                    !SkillLineOfSight(x, y + Mathf.Clamp(dy, 0f, 112f * scale), target)) continue;
-                bool first;
-                if (!spring.TryHit(target, castTime, out first)) continue;
-                pulseHits.Add(target);
-                int direction = dx < 0f ? -1 : 1;
-                Map.KnockAndDamageUnit(this, target, ValueOrchestrator.GetModifiedDamage(4, playerNum),
-                    DamageType.Explosion, first ? direction * 70f : 0f, first ? 650f : 0f,
-                    direction, first, x, y + 24f, true);
-            }
+            SkillDamageUnits(new SkillContactMask(3, x, y, facing, scale, frame),
+                4, 70f, 650f, true, pulseHits, partTargets, spring, castTime);
         }
 
         internal Vector2 FindMaelstromDestination(float facing)
         {
-            Vector3 origin = new Vector3(X, Y + 14f, 0f);
             Vector2 best = new Vector2();
             float bestScore = float.PositiveInfinity;
             foreach (Unit target in Map.GetUnitsInRange(180f, 112f, X, Y + 6f, false))
             {
-                if (!(target is Mook) || target.playerNum >= 0 || !ValidSkillTarget(target)) continue;
-                float dx = target.X - X, dy = target.Y - Y;
-                if (Mathf.Abs(dx) > 180f || Mathf.Abs(dy) > 96f || dx * facing < 0f) continue;
-                Vector3 destination = new Vector3(target.X, target.Y + 14f, 0f);
-                Vector3 diff = destination - origin;
-                RaycastHit wall, floor;
-                if (diff.magnitude > 1f && RaycastSharkTerrain(origin, diff.normalized, diff.magnitude, out wall)) continue;
-                // Use real terrain below the enemy, passing through stacked props.
-                if (!RaycastSharkTerrain(new Vector3(target.X, target.Y + 2f, 0f), Vector3.down, 80f, out floor)) continue;
-                float score = dx * dx + dy * dy;
-                if (score >= bestScore) continue;
-                bestScore = score; best = new Vector2(target.X, floor.point.y);
+                // Placement follows any valid hostile unit, including vehicles.
+                // Continuous suction below remains limited to infantry.
+                // Worm roots can remain underground while their exposed heads move.
+                // Use the open collision receivers below for this family, even if registered.
+                if (target is AlienMinibossSandWorm || target.playerNum >= 0 || !ValidSkillTarget(target)) continue;
+                ConsiderMaelstromDestination(facing, target.X, target.Y, ref best, ref bestScore);
+            }
+            // Several native worms never register in Map.units. Discover their
+            // exposed damage receivers without changing the game's unit registry.
+            foreach (Collider contact in Physics.OverlapSphere(new Vector3(X, Y + 6f, 0f),
+                216f, Map.groundLayer | Map.groundAndDamageableObjects))
+            {
+                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
+                CollisionDamageTarget receiver = CollisionDamageTarget.FindSkill(contact);
+                Unit target = receiver == null ? null : receiver.UnitTarget;
+                if (!(target is AlienMinibossSandWorm) || target.playerNum >= 0 || !ValidSkillTarget(target) ||
+                    !receiver.CanDamage(playerNum, DamageType.Explosion)) continue;
+                Bounds bounds = contact.bounds;
+                // A partially emerged head can overlap the floor at its lower
+                // edge. Start the ground probe at its exposed centre instead.
+                ConsiderMaelstromDestination(facing, bounds.center.x, bounds.center.y, ref best, ref bestScore);
             }
             if (bestScore < float.PositiveInfinity) return best;
             // Without a reachable enemy, keep the forward cast and stop at solid
             // terrain. Crates, barrels and decorative objects never shorten it.
+            Vector3 origin = new Vector3(X, Y + 14f, 0f);
             Vector3 fallback = new Vector3(X + facing * 70f, Y + 14f, 0f);
             Vector3 forward = fallback - origin;
             RaycastHit hit;
@@ -464,6 +562,21 @@ namespace AquabroMod
                 fallback = new Vector3(hit.point.x - forward.normalized.x * 8f, fallback.y, 0f);
             float ground = RaycastSharkTerrain(fallback, Vector3.down, 80f, out hit) ? hit.point.y : Y + 2f;
             return new Vector2(fallback.x, ground);
+        }
+
+        private void ConsiderMaelstromDestination(float facing, float targetX, float targetY,
+            ref Vector2 best, ref float bestScore)
+        {
+            float dx = targetX - X, dy = targetY - Y;
+            if (Mathf.Abs(dx) > 180f || Mathf.Abs(dy) > 96f || dx * facing < 0f) return;
+            float score = dx * dx + dy * dy;
+            if (score >= bestScore) return;
+            Vector3 origin = new Vector3(X, Y + 14f, 0f);
+            Vector3 diff = new Vector3(targetX, targetY + 14f, 0f) - origin;
+            RaycastHit wall, floor;
+            if (diff.magnitude > 1f && RaycastSharkTerrain(origin, diff.normalized, diff.magnitude, out wall)) return;
+            if (!RaycastSharkTerrain(new Vector3(targetX, targetY + 2f, 0f), Vector3.down, 80f, out floor)) return;
+            bestScore = score; best = new Vector2(targetX, floor.point.y);
         }
 
         private bool MaelstromLineOfSight(float x, float y, Unit target)
@@ -475,17 +588,14 @@ namespace AquabroMod
         }
 
         private bool MaelstromTouchesTarget(float x, float y, float facing, float scale, int frame,
-            Unit target, HashSet<Unit> caught)
+            Unit target, HashSet<object> caught)
         {
             if (!ValidSkillDamageTarget(target)) return false;
             float halfWidth = Mathf.Max(1f, target.width * .5f);
             float top = target.Y + Mathf.Max(target.headHeight, target.height);
             if (top <= y + 1f || target.Y > y + 112f * scale + 5f ||
                 Mathf.Abs(target.X - x) > 64f * scale + halfWidth + 5f) return false;
-            bool contact = MaelstromPixelMask.IntersectsRect(frame,
-                64f + (target.X - halfWidth - x) * facing / scale, 112f - (top - y) / scale,
-                64f + (target.X + halfWidth - x) * facing / scale,
-                112f - (Mathf.Max(target.Y, y + 1f) - y) / scale, 5f / scale);
+            bool contact = new SkillContactMask(2, x, y, facing, scale, frame).IntersectsBody(target);
             // A captured enemy may enter the transparent mouth or a gap between
             // rotating sheets. Keep pulling it while it remains inside the effect.
             if (!contact && !caught.Contains(target)) return false;
@@ -495,11 +605,29 @@ namespace AquabroMod
         }
 
         internal void SkillMaelstromPull(float x, float y, float facing, float scale, int frame,
-            float delta, bool pulse, HashSet<Unit> caught)
+            float delta, bool pulse, HashSet<object> caught)
+        { SkillMaelstromPullAtTime(x, y, facing, scale, frame, delta, pulse, caught, 0f); }
+
+        internal static Vector2 MaelstromAttractor(Unit target, float x, float y, float scale, float age)
+        {
+            // A stable phase per enemy avoids a new random impulse every frame.
+            // The targets circulate through the middle and upper water instead
+            // of all settling at the same low point under gravity.
+            uint seed = unchecked((uint)target.GetHashCode());
+            seed ^= seed >> 16;
+            seed = unchecked(seed * 0x45d9f3bu);
+            seed ^= seed >> 16;
+            float phase = (seed & 65535u) * (6.2831853f / 65536f);
+            return new Vector2(x + scale * 16f * Mathf.Sin(phase + age * 2.3f),
+                y + scale * (62f + 24f * Mathf.Sin(phase * 1.618034f + age * 1.7f)));
+        }
+
+        internal void SkillMaelstromPullAtTime(float x, float y, float facing, float scale, int frame,
+            float delta, bool pulse, HashSet<object> caught, float age)
         {
             if (!IsMine || delta <= 0f || frame < 0 || frame >= AquabroSkillVisual.MaelstromDissolveStartFrame) return;
-            HashSet<Unit> pulseHits = new HashSet<Unit>();
-            HashSet<Unit> partTargets = pulse ? SkillDamageRelays(2, x, y, facing, scale, frame,
+            HashSet<object> pulseHits = new HashSet<object>();
+            HashSet<object> partTargets = pulse ? SkillDamageRelays(2, x, y, facing, scale, frame,
                 AquabroSkillVisual.MaelstromPulseDamage, 0f, 0f, false, pulseHits) : null;
             float range = 64f * scale + 64f;
             foreach (Unit target in Map.GetUnitsInRange(range, range, x, y + 48f * scale, true))
@@ -507,11 +635,12 @@ namespace AquabroMod
                 if (!MaelstromTouchesTarget(x, y, facing, scale, frame, target, caught)) continue;
                 caught.Add(target);
                 if (pulse && !partTargets.Contains(target))
-                    Map.KnockAndDamageUnit(this, target, ValueOrchestrator.GetModifiedDamage(AquabroSkillVisual.MaelstromPulseDamage, playerNum),
-                        DamageType.Explosion, 0f, 0f, 0, false, x, target.Y + 6f, true);
-                if (!(target is Mook) || target.health <= 0) continue;
-                float vx = Mathf.MoveTowards(target.xI, Mathf.Clamp((x - target.X) * 6f, -170f, 170f), delta * 1200f);
-                float vy = Mathf.MoveTowards(target.yI, Mathf.Clamp((y + 48f * scale - target.Y - 6f) * 7f, -160f, 260f), delta * 2000f);
+                    DamageSkillUnit(target, AquabroSkillVisual.MaelstromPulseDamage, 0f, 0f, 0, false, x, target.Y + 6f);
+                if (target == null || !(target is Mook) || !target.gameObject.activeInHierarchy ||
+                    target.HasBeenCoveredInAcid()) continue;
+                Vector2 destination = MaelstromAttractor(target, x, y, scale, age);
+                float vx = Mathf.MoveTowards(target.xI, Mathf.Clamp((destination.x - target.X) * 6f, -170f, 170f), delta * 1200f);
+                float vy = Mathf.MoveTowards(target.yI, Mathf.Clamp((destination.y - target.Y - 6f) * 7f, -160f, 260f), delta * 2400f);
                 ApplyMaelstromKnock(target, vx, vy);
             }
         }
@@ -521,7 +650,7 @@ namespace AquabroMod
             // MookBigGuy divides horizontal impulse by 20 and vertical by 5.
             // Compensate only this skill's continuous suction, including subclasses.
             bool heavy = target is MookBigGuy;
-            if (heavy)
+            if (heavy && target.health > 0)
             {
                 MookBigGuy mook = (MookBigGuy)target;
                 // Its Knock override never tumbles or disables AI. Keep a short
@@ -538,24 +667,36 @@ namespace AquabroMod
                 (vy - target.yI) * (heavy ? 5f : 1f), true);
         }
 
-        internal void SkillMaelstromFinish(float x, float y, float facing, float scale,
-            HashSet<Unit> caught, HashSet<Unit> alreadyHit)
+        internal void SkillMaelstromFinish(float x, float y, float facing, float scale, int frame,
+            HashSet<object> caught, HashSet<object> alreadyHit)
         {
             if (!IsMine) return;
-            HashSet<Unit> partTargets = SkillDamageRelays(2, x, y, facing, scale, AquabroSkillVisual.MaelstromDissolveStartFrame - 1,
+            HashSet<object> partTargets = SkillDamageRelays(2, x, y, facing, scale, frame,
                 AquabroSkillVisual.MaelstromFinishDamage, 220f, 500f, true, alreadyHit);
             float range = 64f * scale + 64f;
             foreach (Unit target in Map.GetUnitsInRange(range, range, x, y + 48f * scale, true))
             {
-                if (partTargets.Contains(target) || !MaelstromTouchesTarget(x, y, facing, scale, AquabroSkillVisual.MaelstromDissolveStartFrame - 1, target, caught) ||
+                if (partTargets.Contains(target) || !MaelstromTouchesTarget(x, y, facing, scale, frame, target, caught) ||
                     !alreadyHit.Add(target)) continue;
                 int direction = target.X < x ? -1 : 1;
-                Map.KnockAndDamageUnit(this, target, ValueOrchestrator.GetModifiedDamage(AquabroSkillVisual.MaelstromFinishDamage, playerNum),
-                    DamageType.Explosion, direction * 220f, 500f, direction, true, x, target.Y + 6f, true);
+                DamageSkillUnit(target, AquabroSkillVisual.MaelstromFinishDamage,
+                    direction * 220f, 500f, direction, true, x, target.Y + 6f);
             }
         }
 
         private static bool RaycastSharkTerrain(Vector3 origin, Vector3 direction, float distance, out RaycastHit nearest)
+        {
+            return RaycastSharkTerrain(origin, direction, distance, Map.groundLayerStrict, out nearest);
+        }
+
+        private static bool RaycastSharkTerrain(Vector3 origin, Vector3 direction, float distance, int layers, out RaycastHit nearest)
+        { return RaycastSkillTerrain(origin, direction, distance, layers, false, out nearest); }
+
+        private static bool RaycastSpringTerrain(Vector3 origin, Vector3 direction, float distance, out RaycastHit nearest)
+        { return RaycastSkillTerrain(origin, direction, distance, Map.groundLayerStrict, true, out nearest); }
+
+        private static bool RaycastSkillTerrain(Vector3 origin, Vector3 direction, float distance, int layers,
+            bool ignoreCages, out RaycastHit nearest)
         {
             nearest = new RaycastHit();
             float best = float.PositiveInfinity;
@@ -563,13 +704,17 @@ namespace AquabroMod
             // Crates and barrels also use Ground. Inspect every hit so ignoring
             // a prop still leaves a real wall/floor behind it available to stop us.
             // Elevators inherit Doodad, but their solid colliders are terrain.
-            foreach (RaycastHit hit in Physics.RaycastAll(origin, direction, distance, Map.groundLayerStrict))
+            foreach (RaycastHit hit in Physics.RaycastAll(origin, direction, distance, layers))
             {
                 Collider contact = hit.collider;
                 if (contact == null || contact.isTrigger ||
                     contact.GetComponentInParent<Unit>() != null || contact.GetComponent<DamageRelay>() != null ||
                     contact.GetComponentInParent<FallingBlock>() != null ||
                     (contact.GetComponentInParent<Doodad>() != null && contact.GetComponentInParent<Elevator>() == null)) continue;
+                // All columns are planned before the first one can break a cage.
+                // A destructible prop must not permanently cancel later columns.
+                if (ignoreCages && (contact.GetComponent<Cage>() != null ||
+                    contact.GetComponentInParent<Cage>() != null || contact.GetComponent<CageBar>() != null)) continue;
                 if (hit.distance >= best) continue;
                 best = hit.distance; nearest = hit; found = true;
             }
@@ -579,8 +724,10 @@ namespace AquabroMod
         private bool FindSharkFloor(float x, float y, bool dropDown, out float floorY)
         {
             RaycastHit floor;
+            // Standing boss surfaces use LargeObjects, just like the hero's
+            // ground mask. Keep horizontal walls and maelstrom queries strict.
             bool found = RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down,
-                float.PositiveInfinity, out floor);
+                float.PositiveInfinity, Map.groundLayer, out floor);
             floorY = found ? floor.point.y : y;
             // Ladder tops and bodies support the shark at its current height.
             // Only down input bypasses this support; solid floors still block it.
@@ -593,7 +740,7 @@ namespace AquabroMod
         internal Collider FindSharkElevatorSupport(float x, float y)
         {
             RaycastHit floor;
-            return RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down, 4f, out floor) &&
+            return RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down, 4f, Map.groundLayer, out floor) &&
                 Mathf.Abs(floor.point.y - y) <= 2f && floor.collider.GetComponentInParent<Elevator>() != null ?
                 floor.collider : null;
         }
@@ -619,6 +766,27 @@ namespace AquabroMod
             }
         }
 
+        internal bool MoveSharkFlight(ref float x, ref float y, float destinationX, float destinationY,
+            out bool ceiling)
+        {
+            x = MoveSkillHorizontally(x, y, destinationX);
+            ceiling = false;
+            RaycastHit contact;
+            if (destinationY < y && RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down,
+                y - destinationY + 2f, Map.groundLayer, out contact))
+            {
+                y = contact.point.y;
+                return true;
+            }
+            if (destinationY > y && RaycastSharkTerrain(new Vector3(x, y + 56f, 0f), new Vector3(0f, 1f, 0f),
+                destinationY - y, out contact))
+            {
+                y = contact.point.y - 56f; ceiling = true;
+            }
+            else y = destinationY;
+            return false;
+        }
+
         internal float MoveSkillHorizontally(float x, float y, float destination)
         {
             float distance = destination - x;
@@ -640,21 +808,12 @@ namespace AquabroMod
             return x;
         }
 
-        internal void SkillSharkBlast(float x, float y, float facing, float scale, int frame, HashSet<Unit> alreadyHit)
+        internal void SkillSharkBlast(float x, float y, float facing, float scale, int frame, HashSet<object> alreadyHit)
         {
-            if (!IsMine || frame < 6 || frame >= 27) return;
-            HashSet<Unit> partTargets = SkillDamageRelays(1, x, y, facing, scale, frame, 28, facing * 180f, 420f, false, alreadyHit);
-            float range = 64f * scale + 21f;
-            foreach (Unit target in Map.GetUnitsInRange(range, range, x, y + 48f * scale, true))
-            {
-                if (!ValidSkillDamageTarget(target) || partTargets.Contains(target) || alreadyHit.Contains(target)) continue;
-                float dx = target.X - x, dy = target.Y + 6f - y;
-                if (!SharkPixelMask.Contains(frame, 64f + dx * facing / scale, 112f - dy / scale, 5f / scale) ||
-                    !SkillLineOfSight(x, y + Mathf.Clamp(dy, 0f, 112f * scale), target)) continue;
-                alreadyHit.Add(target);
-                Map.KnockAndDamageUnit(this, target, ValueOrchestrator.GetModifiedDamage(28, playerNum),
-                    DamageType.Explosion, facing * 180f, 420f, facing < 0f ? -1 : 1, true, x, y + 24f, true);
-            }
+            if (!IsMine || !AquabroSkillVisual.IsSharkDamageFrame(frame)) return;
+            HashSet<object> partTargets = SkillDamageRelays(1, x, y, facing, scale, frame, 28, facing * 180f, 420f, false, alreadyHit);
+            SkillDamageUnits(new SkillContactMask(1, x, y, facing, scale, frame),
+                28, facing * 180f, 420f, false, alreadyHit, partTargets, null, 0f);
         }
 
         internal void SkillSharkPanic(float x, float y, float facing)
@@ -672,15 +831,19 @@ namespace AquabroMod
 
         internal void SkillSharkObjects(float x, float y, float facing, float scale, int frame, HashSet<GameObject> alreadyHit)
         {
-            if (!IsMine || frame < 6 || frame >= 27) return;
+            if (!IsMine || !AquabroSkillVisual.IsSharkDamageFrame(frame)) return;
+            SkillContactMask mask = new SkillContactMask(1, x, y, facing, scale, frame);
             foreach (Collider contact in Physics.OverlapSphere(new Vector3(x, y + 48f * scale, 0f),
                 82f * scale + 5f, Map.groundAndDamageableObjects))
             {
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy) continue;
+                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
                 DamageRelay relay = contact.GetComponent<DamageRelay>();
-                if (contact.GetComponentInParent<Unit>() != null || (relay != null && relay.unit != null)) continue;
+                if (contact.GetComponentInParent<Unit>() != null || (relay != null && relay.doodad == null) ||
+                    CollisionDamageTarget.FindSkill(contact) != null) continue;
                 Bounds bounds = contact.bounds;
-                if (!SharkTouchesRectangle(x,y,facing,scale,frame,bounds.min.x,bounds.min.y,bounds.max.x,bounds.max.y) ||
+                float hitX = Mathf.Clamp(x, bounds.min.x, bounds.max.x);
+                float hitY = Mathf.Clamp(y + 48f * scale, Mathf.Max(y + 1f, bounds.min.y), bounds.max.y);
+                if (!mask.IntersectsRect(bounds) || !WaterContactVisible(x, hitY, hitX, hitY, contact) ||
                     !alreadyHit.Add(contact.gameObject)) continue;
                 MapController.Damage_Networked(this, contact.gameObject, ValueOrchestrator.GetModifiedDamage(28, playerNum),
                     DamageType.Crush, facing * 180f, 420f, bounds.center.x, bounds.center.y);
@@ -690,9 +853,10 @@ namespace AquabroMod
                 Doodad doodad = Map.destroyableDoodads[i];
                 if (doodad == null || !doodad.gameObject.activeInHierarchy ||
                     (playerNum >= 0 ? doodad.immuneToHeroDamage : !doodad.CanBeDamagedByMooks)) continue;
-                if (!SharkTouchesRectangle(x,y,facing,scale,frame,
+                if (!mask.IntersectsRect(
                     doodad.centerX - doodad.width * .5f, doodad.centerY - doodad.height * .5f,
                     doodad.centerX + doodad.width * .5f, doodad.centerY + doodad.height * .5f) ||
+                    !WaterContactVisible(x, doodad.centerY, doodad.centerX, doodad.centerY, null) ||
                     !alreadyHit.Add(doodad.gameObject)) continue;
                 bool hit = false;
                 doodad.DamageOptional(new DamageObject(ValueOrchestrator.GetModifiedDamage(28, playerNum),
@@ -700,42 +864,50 @@ namespace AquabroMod
             }
         }
 
-        private static bool SharkTouchesRectangle(float x,float y,float facing,float scale,int frame,
-            float left,float bottom,float right,float top)
-        {
-            // The waterline sits on the support floor. The contact margin must
-            // not extend damage into terrain or objects entirely below it.
-            if (top <= y + 1f) return false;
-            bottom = Mathf.Max(bottom, y + 1f);
-            return SharkPixelMask.IntersectsRect(frame,64f+(left-x)*facing/scale,112f-(top-y)/scale,
-                64f+(right-x)*facing/scale,112f-(bottom-y)/scale,5f/scale);
-        }
+        internal bool SkillWaveContact(float x, float y, float facing, float scale, int frame,
+            HashSet<object> alreadyHit, HashSet<GameObject> hitObjects)
+        { return SkillWaveContact(x, y, facing, scale, frame, alreadyHit, hitObjects, null, 0f); }
 
         internal bool SkillWaveContact(float x, float y, float facing, float scale, int frame,
-            HashSet<Unit> alreadyHit, HashSet<GameObject> hitObjects)
+            HashSet<object> alreadyHit, HashSet<GameObject> hitObjects, WaveDamageState wave, float castTime)
         {
             if (!IsMine || frame < 0 || frame >= AquabroSkillVisual.TidalDissolveStartFrame) return true;
-            HashSet<Unit> partTargets = SkillDamageRelays(0, x, y, facing, scale, frame, 26, facing * 420f, 300f, false, alreadyHit);
+            HashSet<object> partTargets = SkillDamageRelays(0, x, y, facing, scale, frame, 26, facing * 420f, 300f, false,
+                alreadyHit, null, castTime, wave);
+            SkillContactMask mask = new SkillContactMask(0, x, y, facing, scale, frame);
+            bool blocked = SkillWaveLargeUnits(mask, alreadyHit, partTargets, wave, castTime);
             Collider[] contacts = Physics.OverlapSphere(new Vector3(x, y + 48f * scale, 0f),
-                82f * scale + 5f, Map.groundAndDamageableObjects);
+                96f * scale + 5f, Map.groundLayer | Map.groundAndDamageableObjects);
             Array.Sort(contacts, delegate(Collider a, Collider b)
             { return (a.bounds.center.x * facing).CompareTo(b.bounds.center.x * facing); });
             foreach (Collider contact in contacts)
             {
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy) continue;
+                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
+                CollisionDamageTarget boss = CollisionDamageTarget.FindSkill(contact);
+                if (boss != null && boss.StopsWave && mask.IntersectsRect(contact.bounds))
+                {
+                    Bounds b = contact.bounds;
+                    float hitX = Mathf.Clamp(x, b.min.x, b.max.x);
+                    float hitY = Mathf.Clamp(y + 48f * scale, Mathf.Max(y + 1f, b.min.y), b.max.y);
+                    if (SkillContactVisible(x, hitY, hitX, hitY, false, contact)) blocked = true;
+                }
                 // Units use the body-mask damage pass below, including large
                 // enemies whose colliders may also be in the terrain query.
                 DamageRelay relay = contact.GetComponent<DamageRelay>();
-                if (contact.GetComponentInParent<Unit>() != null || (relay != null && relay.unit != null)) continue;
+                if (contact.GetComponentInParent<Unit>() != null || (relay != null && relay.doodad == null) ||
+                    CollisionDamageTarget.FindSkill(contact) != null) continue;
                 Bounds bounds = contact.bounds;
-                if (!WaveTouchesRectangle(x,y,facing,scale,frame,bounds.min.x,bounds.min.y,bounds.max.x,bounds.max.y)) continue;
-                if (hitObjects.Add(contact.gameObject))
+                if (!mask.IntersectsRect(bounds)) continue;
+                float terrainX = Mathf.Clamp(x, bounds.min.x, bounds.max.x);
+                float terrainY = Mathf.Clamp(y + 48f * scale, Mathf.Max(y + 1f, bounds.min.y), bounds.max.y);
+                if (!WaterContactVisible(x, terrainY, terrainX, terrainY, contact)) continue;
+                if (wave == null ? hitObjects.Add(contact.gameObject) : wave.TryHit(contact.gameObject, castTime))
                     MapController.Damage_Networked(this, contact.gameObject,
                         ValueOrchestrator.GetModifiedDamage(24, playerNum), DamageType.Crush,
                         facing * 420f, 80f, bounds.center.x, bounds.center.y);
                 // A surviving wall stops the wave. Floor contact alone does not.
                 if (contact != null && contact.enabled && contact.gameObject.activeInHierarchy &&
-                    bounds.max.y > y + 8f) return false;
+                    bounds.max.y > y + 8f) blocked = true;
             }
             // Doodads use the same five-pixel boundary, without a separate area blast.
             for (int i=Map.destroyableDoodads.Count-1;i>=0;i--)
@@ -743,47 +915,53 @@ namespace AquabroMod
                 Doodad doodad=Map.destroyableDoodads[i];
                 if (doodad==null || !doodad.gameObject.activeInHierarchy ||
                     (playerNum>=0 ? doodad.immuneToHeroDamage : !doodad.CanBeDamagedByMooks)) continue;
-                if (!WaveTouchesRectangle(x,y,facing,scale,frame,
+                if (!mask.IntersectsRect(
                     doodad.centerX-doodad.width*.5f,doodad.centerY-doodad.height*.5f,
                     doodad.centerX+doodad.width*.5f,doodad.centerY+doodad.height*.5f)) continue;
+                if (!WaterContactVisible(x, doodad.centerY, doodad.centerX, doodad.centerY, null)) continue;
                 bool hit=false;
                 if (hitObjects.Add(doodad.gameObject))
                     doodad.DamageOptional(new DamageObject(ValueOrchestrator.GetModifiedDamage(24,playerNum),
                         DamageType.Crush,facing*420f,80f,x,y,this),ref hit);
-                if (hit && doodad.isImpenetrable) return false;
+                if (hit && doodad.isImpenetrable) blocked = true;
             }
-            // The game's broad query checks feet positions without body size.
-            // Leave room for large bodies touching the outer water pixels.
-            foreach (Unit target in Map.GetUnitsInRange(80f * scale + 64f, 80f * scale + 64f, x, y + 48f * scale, true))
-            {
-                if (!ValidSkillDamageTarget(target) || partTargets.Contains(target) || alreadyHit.Contains(target)) continue;
-                float halfWidth = Mathf.Max(1f, target.width * .5f);
-                float top = target.Y + Mathf.Max(target.headHeight, target.height);
-                float dy = target.Y + 6f - y;
-                if (!WaveTouchesRectangle(x, y, facing, scale, frame,
-                    target.X - halfWidth, target.Y, target.X + halfWidth, top) ||
-                    !SkillLineOfSight(x, y + Mathf.Clamp(dy, 0f, 100f * scale), target)) continue;
-                alreadyHit.Add(target);
-                Map.KnockAndDamageUnit(this, target, ValueOrchestrator.GetModifiedDamage(26, playerNum),
-                    DamageType.Explosion, facing * 420f, 300f, facing < 0f ? -1 : 1, true, x, y + 24f, true);
-            }
-            return true;
+            SkillDamageUnits(mask, 26, facing * 420f, 300f, false, alreadyHit, partTargets, null, 0f);
+            return !blocked;
         }
 
-        private static bool WaveTouchesRectangle(float x,float y,float facing,float scale,int frame,
-            float left,float bottom,float right,float top)
+        // Vehicles can have only Platform-layer child colliders (truck roofs),
+        // or no active damage collider at all. Use their native Unit body too.
+        private bool SkillWaveLargeUnits(SkillContactMask mask, HashSet<object> hits,
+            HashSet<object> partTargets, WaveDamageState wave, float castTime)
         {
-            // Keep the contact margin above the waterline, just like the shark.
-            if (top <= y + 1f) return false;
-            bottom = Mathf.Max(bottom, y + 1f);
-            return TidalWavePixelMask.IntersectsRect(frame,64f+(left-x)*facing/scale,112f-(top-y)/scale,
-                64f+(right-x)*facing/scale,112f-(bottom-y)/scale,5f/scale);
+            bool blocked = false;
+            float range = 80f * mask.Scale + 64f;
+            foreach (Unit target in Map.GetUnitsInRange(range, range, mask.X, mask.Y + 48f * mask.Scale, true))
+            {
+                if (!CollisionDamageTarget.IsWaveUnit(target) || target == this || target.health <= 0 ||
+                    !target.gameObject.activeInHierarchy || !GameModeController.DoesPlayerNumDamage(playerNum, target.playerNum) ||
+                    !mask.IntersectsBody(target) || !SkillLineOfSight(mask.X,
+                        mask.Y + Mathf.Clamp(target.Y + 6f - mask.Y, 0f, 100f * mask.Scale), target)) continue;
+                // Keep closed relay gates authoritative. Relay/body hits share
+                // the same target key and the same cast-wide damage budget.
+                if (!partTargets.Contains(target) && ValidSkillDamageTarget(target))
+                {
+                    int damage = wave == null ? (hits.Add(target) ? 26 : 0) : wave.TakeDamage(target, castTime);
+                    if (damage > 0) DamageSkillUnit(target, damage, 0f, 0f, 0, false, mask.X, target.Y + 6f);
+                }
+                if (target.health > 0) blocked = true;
+            }
+            return blocked;
         }
 
         private void TickSkillPreview(float delta)
         {
             if (health <= 0) { ClearSkillPreview(); return; }
             if (delta <= 0f) return;
+            // Absorb from every spring column before any column deals damage.
+            // In particular, a pool on the left must affect right-side hits
+            // in this same update, independent of the reverse damage order.
+            foreach (AquabroSkillVisual effect in skillVisuals) effect.PrepareSpringWater(delta);
             for (int i = skillVisuals.Count - 1; i >= 0; i--)
                 if (!skillVisuals[i].Tick(delta)) { skillVisuals[i].Dispose(); skillVisuals.RemoveAt(i); }
         }
@@ -792,27 +970,113 @@ namespace AquabroMod
         {
             foreach (AquabroSkillVisual effect in skillVisuals) effect.Dispose();
             skillVisuals.Clear();
+            CurrentAcidStage = 0;
         }
 
         private void OnDisable() { ClearSkillPreview(); }
     }
 
+    // Per-target actual-time cooldown, shared by linked boss parts and substeps.
+    internal sealed class WaveDamageState
+    {
+        private readonly Dictionary<object, float> nextHit = new Dictionary<object, float>();
+        private readonly Dictionary<object, int> spent = new Dictionary<object, int>();
+        internal int TakeDamage(object target, float time)
+        {
+            object[] keys = CollisionDamageTarget.DamageKeys(target);
+            int used = 0;
+            foreach (object key in keys)
+            {
+                int previous;
+                spent.TryGetValue(key, out previous);
+                used = System.Math.Max(used, previous);
+            }
+            int damage = System.Math.Min(2, 26 - used);
+            if (damage <= 0 || !TryHit(target, time)) return 0;
+            foreach (object key in keys) spent[key] = used + damage;
+            return damage;
+        }
+        internal bool TryHit(object target, float time)
+        {
+            object[] keys = CollisionDamageTarget.DamageKeys(target);
+            foreach (object key in keys)
+            {
+                float next;
+                if (nextHit.TryGetValue(key, out next) && time + .00001f < next) return false;
+            }
+            foreach (object key in keys) nextHit[key] = time + .12f;
+            return true;
+        }
+    }
+
     // Shared by all seven columns of one cast, including all boss parts.
     internal sealed class SpringDamageState
     {
-        private readonly Dictionary<Unit, int> hits = new Dictionary<Unit, int>();
-        private readonly Dictionary<Unit, float> nextHit = new Dictionary<Unit, float>();
-        internal bool TryHit(Unit target, float castTime, out bool first)
+        internal readonly WaterAcidState Acid = new WaterAcidState();
+        private readonly Dictionary<object, int> hits = new Dictionary<object, int>();
+        private readonly Dictionary<object, float> nextHit = new Dictionary<object, float>();
+        internal bool TryHit(object target, float castTime, out bool first)
         {
-            int count;
-            hits.TryGetValue(target, out count);
+            object[] keys = CollisionDamageTarget.DamageKeys(target);
+            int count = 0;
+            float available = 0f;
+            foreach (object key in keys)
+            {
+                int previous; float next;
+                hits.TryGetValue(key, out previous); nextHit.TryGetValue(key, out next);
+                count = System.Math.Max(count, previous); available = Mathf.Max(available, next);
+            }
             first = count == 0;
-            if (count >= 7 || (!first && castTime + .00001f < nextHit[target])) return false;
-            hits[target] = count + 1;
+            if (count >= 7 || (!first && castTime + .00001f < available)) return false;
             // Actual hit time prevents adjacent columns or low FPS from
             // compressing pulses into the original vehicle 0.096s cooldown.
-            nextHit[target] = castTime + .12f;
+            foreach (object key in keys) { hits[key] = count + 1; nextHit[key] = castTime + .12f; }
             return true;
+        }
+    }
+
+    internal sealed class SharkSplashVisual
+    {
+        private readonly Aquabro owner;
+        private readonly float x, y, facing, scale;
+        private readonly int first, end;
+        private readonly GameObject[] objects = new GameObject[2];
+        private readonly SpriteSM[] sprites = new SpriteSM[2];
+        internal SharkSplashVisual(Aquabro owner, float x, float y, float facing, float scale, int first, int end)
+        {
+            this.owner = owner; this.x = x; this.y = y; this.facing = facing; this.scale = scale;
+            this.first = first; this.end = end;
+            for (int i = 0; i < 2; i++)
+            {
+                string file = "skill-shark-hunt-water-" + (i == 0 ? "back" : "front") + ".png";
+                objects[i] = new GameObject("Aquabro Shark Splash " + (i == 0 ? "Back" : "Front"));
+                objects[i].transform.parent = owner.transform;
+                SpriteSM sprite = sprites[i] = objects[i].AddComponent<SpriteSM>();
+                sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, file);
+                sprite.SetPixelDimensions(128, 128); sprite.SetSize(128f * scale, 128f * scale);
+                sprite.SetLowerLeftPixel(first * 128, 128); sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+            }
+            Update(0f);
+        }
+        internal void Update(float age)
+        {
+            int frame = first + Mathf.FloorToInt(age / .05f);
+            for (int i = 0; i < 2; i++)
+            {
+                objects[i].SetActive(frame < end);
+                if (frame >= end) continue;
+                // Reset world position and facing even if the parent hero walks or turns.
+                objects[i].transform.position = new Vector3(x, y + 48f * scale, i == 0 ? 1.05f : .95f);
+                objects[i].transform.localScale = new Vector3(facing / (owner.transform.localScale.x < 0f ? -1f : 1f), 1f, 1f);
+                sprites[i].SetLowerLeftPixel(frame * 128, 128);
+            }
+        }
+        internal void Dispose()
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                UnityEngine.Object.Destroy(objects[i]);
+            }
         }
     }
 
@@ -830,6 +1094,15 @@ namespace AquabroMod
         internal const int TidalDissolveStartFrame = 6;
         internal const float TidalTravelDuration = 1.5f;
         internal const float TidalLifetime = 2f;
+        internal const float SharkBreachDistance = 64f;
+        internal const float SharkLaunchSpeed = 240f;
+        internal const float SharkGravity = 800f;
+        internal const float SharkFlightLimit = 4f;
+        internal const int SharkFlightFirstFrame = 28;
+        internal const int SharkFlightFrameCount = 31;
+        internal const int SharkBodyFrameCount = SharkFlightFirstFrame + SharkFlightFrameCount;
+        internal static bool IsSharkDamageFrame(int frame)
+        { return frame >= 6 && (frame < 27 || (frame >= SharkFlightFirstFrame && frame < SharkBodyFrameCount)); }
         private const float TidalSpeed = 160f;
         // Enemies render near z=0 and terrain near z=5; keep all four
         // skill sprites behind enemies while remaining in front of terrain.
@@ -840,19 +1113,24 @@ namespace AquabroMod
         private readonly float lifetime, scale;
         private readonly GameObject obj;
         private readonly SpriteSM sprite;
-        private readonly HashSet<Unit> hitUnits;
+        private readonly HashSet<object> hitUnits;
         private readonly SpringDamageState springDamage;
         private readonly float castDelay;
         private readonly float originX;
-        private readonly float maelstromLeftX, maelstromRightX;
-        private readonly HashSet<Unit> maelstromCaught = new HashSet<Unit>();
+        private float maelstromLeftX, maelstromRightX;
+        private float maelstromRouteStartX, maelstromRouteStartTime;
+        private int maelstromRouteLeg;
+        private readonly HashSet<object> maelstromCaught = new HashSet<object>();
         private readonly HashSet<GameObject> hitObjects = new HashSet<GameObject>();
         private readonly WaterProjectileBarrier waterBarrier;
+        private SharkSplashVisual sharkLaunchWater;
         private float x, y, elapsed, pulseTime;
         private bool resolved;
-        private float tidalStoppedAt = -1f;
+        private bool tidalBlocked;
+        private readonly WaveDamageState waveDamage = new WaveDamageState();
         private static readonly int[] Counts = {16,28,32,28};
-        private float sharkBreachElapsed = -1f, sharkInput, sharkDashProgress;
+        private float sharkBreachElapsed = -1f, sharkInput, sharkVelocityX, sharkVelocityY;
+        private float sharkLandingElapsed = -1f;
         private Collider sharkElevatorSupport;
         private Vector3 sharkElevatorPosition;
         internal bool SharkControlled { get { return kind == 1 && sharkBreachElapsed < 0f; } }
@@ -864,23 +1142,29 @@ namespace AquabroMod
             if (!SharkControlled) return;
             sharkBreachElapsed = 0f;
             sharkInput = 0f;
+            sharkVelocityX = facing * SharkBreachDistance / (2f * SharkLaunchSpeed / SharkGravity);
+            sharkVelocityY = SharkLaunchSpeed;
+            sharkLaunchWater = new SharkSplashVisual(owner, x, y, facing, scale, 6, 19);
+            sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt-body.png");
+            sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
             owner.ReleaseSharkControl(this);
         }
 
         public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay, float scale)
             : this(owner, kind, x, y, facing, lifetime, delay, scale, null) {}
 
-        public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay, float scale, HashSet<Unit> sharedHits)
+        public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay, float scale, HashSet<object> sharedHits)
             : this(owner, kind, x, y, facing, lifetime, delay, scale, sharedHits, null) {}
 
         public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay,
-            float scale, HashSet<Unit> sharedHits, SpringDamageState sharedSpring)
+            float scale, HashSet<object> sharedHits, SpringDamageState sharedSpring)
         {
-            hitUnits = sharedHits ?? new HashSet<Unit>();
+            hitUnits = sharedHits ?? new HashSet<object>();
             springDamage = sharedSpring ?? new SpringDamageState();
             castDelay = delay;
             this.owner = owner; this.kind = kind; this.x = x; this.y = y;
             originX = x;
+            maelstromRouteStartX = x;
             if (kind == 1) RememberSharkElevator();
             if (kind == 2)
             {
@@ -899,7 +1183,8 @@ namespace AquabroMod
             sprite.SetLowerLeftPixel(0,128);
             sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
             obj.transform.position = new Vector3(x, y + 48f * scale, VisualDepth);
-            if (kind==0 || kind==2 || kind==3) waterBarrier=new WaterProjectileBarrier(owner,kind,x,y,facing,scale);
+            if (kind != 1) waterBarrier=new WaterProjectileBarrier(owner,kind,x,y,facing,scale,
+                kind == 3 ? springDamage.Acid : null);
             obj.SetActive(false);
         }
 
@@ -910,7 +1195,175 @@ namespace AquabroMod
                 sharkElevatorPosition = sharkElevatorSupport.transform.position;
         }
 
+        private float MaelstromDestination(float time, out int leg)
+        {
+            leg = maelstromRouteLeg;
+            float target = leg == 1 ? maelstromLeftX : maelstromRightX;
+            float first = Mathf.Abs(target - maelstromRouteStartX);
+            float span = maelstromRightX - maelstromLeftX;
+            float travel = Mathf.Clamp((time - maelstromRouteStartTime) /
+                (MaelstromActiveDuration - maelstromRouteStartTime), 0f, 1f) * (first + (2 - leg) * span);
+            if (travel < first)
+                return maelstromRouteStartX + (target < maelstromRouteStartX ? -travel : travel);
+            travel -= first;
+            for (leg++; leg < 3; leg++)
+            {
+                if (travel < span)
+                    return leg == 1 ? maelstromRightX - travel : maelstromLeftX + travel;
+                travel -= span;
+            }
+            leg = 2;
+            return maelstromRightX;
+        }
+
+        private void ExpandMaelstromRoute(float previousElapsed)
+        {
+            if (resolved || previousElapsed >= MaelstromActiveDuration) return;
+            float left = Mathf.Min(maelstromLeftX, owner.MoveSkillHorizontally(originX, y, originX - 48f));
+            float right = Mathf.Max(maelstromRightX, owner.MoveSkillHorizontally(originX, y, originX + 48f));
+            if (left >= maelstromLeftX - .00001f && right <= maelstromRightX + .00001f) return;
+            int leg;
+            MaelstromDestination(previousElapsed, out leg);
+            if (maelstromRightX - maelstromLeftX <= .00001f) leg = 0;
+            // Rebase only the unfinished legs at the actual current position.
+            // Mapping the original elapsed fraction onto a wider route would jump.
+            maelstromRouteStartX = x;
+            maelstromRouteStartTime = Mathf.Max(0f, previousElapsed);
+            maelstromRouteLeg = leg;
+            maelstromLeftX = left;
+            maelstromRightX = right;
+        }
+
         public bool Tick(float delta)
+        {
+            int previousStage = owner.CurrentAcidStage;
+            owner.CurrentAcidStage = waterBarrier == null ? 0 : waterBarrier.AcidStage;
+            try { return TickCore(delta); }
+            finally { owner.CurrentAcidStage = previousStage; }
+        }
+
+        private float acidColorLevel;
+        private Texture2D acidTexture;
+        private Material acidMaterial;
+        private Color32[] acidFramePixels;
+        private Color32[][] acidPalettePixels;
+        private static readonly Dictionary<string, Color32[][]> AcidPixels = new Dictionary<string, Color32[][]>();
+        internal static float AdvanceAcidColor(float current, int target, float delta)
+        { return delta <= 0f ? current : Mathf.Min(target, current + delta / .3f); }
+
+        private void UpdateAcidColor(int frame, float delta)
+        {
+            if (waterBarrier == null || waterBarrier.AcidStage == 0) return;
+            // All columns use the same cast clock, including delayed columns.
+            // Advancing several columns must not speed up the shared gradient.
+            acidColorLevel = kind == 3 ? springDamage.Acid.AdvanceColor(elapsed + castDelay, delta) :
+                AdvanceAcidColor(acidColorLevel, waterBarrier.AcidStage, delta);
+            if (acidTexture == null)
+            {
+                string key = owner.Info.path + "/" + Aquabro.SkillAssets[kind];
+                if (!AcidPixels.TryGetValue(key, out acidPalettePixels))
+                {
+                    acidPalettePixels = new Color32[3][];
+                    for (int stage = 0; stage <= 2; stage++)
+                    {
+                        string file = "skill-" + Aquabro.SkillAssets[kind] + (stage == 0 ? "" : "-acid-" + stage) + ".png";
+                        // BroMaker's cached render texture has invalid CPU pixel data in this
+                        // runtime even when GetPixels32 does not throw. Decode the original PNG.
+                        Texture2D source = new Texture2D(2,2,TextureFormat.ARGB32,false);
+                        try
+                        {
+                            if (!source.LoadImage(System.IO.File.ReadAllBytes(System.IO.Path.Combine(owner.Info.path, file))) ||
+                                source.width != Counts[kind]*128 || source.height != 128)
+                                throw new InvalidOperationException("Invalid acid source atlas: " + file);
+                            acidPalettePixels[stage] = source.GetPixels32();
+                        }
+                        finally { UnityEngine.Object.Destroy(source); }
+                    }
+                    AcidPixels.Add(key, acidPalettePixels);
+                }
+                // Blend only the visible 128px frame, not the entire animation atlas.
+                // The material and texture belong to this cast; cached source assets stay untouched.
+                acidTexture = new Texture2D(128,128,TextureFormat.ARGB32,false);
+                acidTexture.filterMode = FilterMode.Point;
+                acidTexture.wrapMode = TextureWrapMode.Clamp;
+                acidFramePixels = new Color32[128*128];
+                acidMaterial = new Material(sprite.meshRender.sharedMaterial);
+                acidMaterial.mainTexture = acidTexture;
+                sprite.meshRender.material = acidMaterial;
+                sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+            }
+            int from = System.Math.Min(1, (int)acidColorLevel), to = from + 1;
+            float mix = acidColorLevel - from;
+            int width = Counts[kind] * 128;
+            for (int py = 0; py < 128; py++) for (int px = 0; px < 128; px++)
+            {
+                int sourceIndex = py * width + frame * 128 + px;
+                Color32 a = acidPalettePixels[from][sourceIndex], b = acidPalettePixels[to][sourceIndex];
+                acidFramePixels[py*128+px] = new Color32(
+                    (byte)(a.r+(b.r-a.r)*mix), (byte)(a.g+(b.g-a.g)*mix),
+                    (byte)(a.b+(b.b-a.b)*mix), a.a);
+            }
+            acidTexture.SetPixels32(acidFramePixels); acidTexture.Apply(false, false);
+        }
+
+        internal void PrepareSpringWater(float delta)
+        {
+            if (kind != 3 || delta <= 0f || obj == null) return;
+            float nextElapsed = elapsed + delta;
+            waterBarrier.SetFrame(nextElapsed < 0f || nextElapsed >= lifetime ? -1 :
+                Mathf.Clamp(Mathf.FloorToInt(nextElapsed / .05f), 0, Counts[kind] - 1));
+            waterBarrier.AbsorbPools();
+        }
+
+        private int SharkBreachFrame()
+        {
+            if (sharkLandingElapsed >= 0f)
+                return 19 + Mathf.Clamp(Mathf.FloorToInt(sharkLandingElapsed / .05f), 0, 8);
+            return SharkFlightFirstFrame + Mathf.Clamp(Mathf.FloorToInt(sharkBreachElapsed * 60f), 0, SharkFlightFrameCount - 1);
+        }
+
+        private bool TickSharkBreach(float delta)
+        {
+            // Bound both time and distance, including a long fall at a low FPS.
+            // Analytic gravity within each step keeps the arc stable across FPS.
+            int steps = System.Math.Max(1, System.Math.Max((int)System.Math.Ceiling(delta * 120f),
+                (int)System.Math.Ceiling((Mathf.Abs(sharkVelocityX) + Mathf.Abs(sharkVelocityY) + SharkGravity * delta) * delta / 4f)));
+            float step = delta / steps;
+            for (int i = 0; i < steps; i++)
+            {
+                sharkBreachElapsed += step;
+                if (sharkLandingElapsed >= 0f) sharkLandingElapsed += step;
+                else
+                {
+                    float nextX = x + sharkVelocityX * step;
+                    float nextY = y + sharkVelocityY * step - .5f * SharkGravity * step * step;
+                    bool ceiling;
+                    bool landed = owner.MoveSharkFlight(ref x, ref y, nextX, nextY, out ceiling);
+                    if (Mathf.Abs(x - nextX) > .001f) sharkVelocityX = 0f;
+                    sharkVelocityY = ceiling ? 0f : sharkVelocityY - SharkGravity * step;
+                    if (landed)
+                    {
+                        sharkLandingElapsed = 0f;
+                        sharkVelocityX = sharkVelocityY = 0f;
+                        // The exported entry aligns the nose with the surface,
+                        // preserving the interleaved tail/water/head layers.
+                        // This whole frame stays fixed at the impact surface.
+                        sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt.png");
+                        sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+                    }
+                }
+                int frame = SharkBreachFrame();
+                if (sharkLandingElapsed < 0f)
+                    owner.SkillSharkObjects(x, y, facing, scale, frame, hitObjects);
+                owner.SkillSharkBlast(x, y, facing, scale, frame, hitUnits);
+                if (sharkLandingElapsed >= .45f || (sharkLandingElapsed < 0f && sharkBreachElapsed >= SharkFlightLimit))
+                    return false;
+            }
+            sharkLaunchWater.Update(sharkBreachElapsed);
+            return true;
+        }
+
+        private bool TickCore(float delta)
         {
             if (delta <= 0f) return obj != null && (kind == 1 || elapsed < lifetime);
             float previousElapsed = elapsed;
@@ -923,8 +1376,10 @@ namespace AquabroMod
             int frame;
             if (kind == 1)
             {
+                float flightDelta = delta;
                 if (SharkControlled)
                 {
+                    flightDelta = 0f;
                     float travelTime = Mathf.Max(0f, Mathf.Min(elapsed, lifetime) - Mathf.Max(0f, previousElapsed));
                     if (sharkInput != 0f) facing = sharkInput;
                     // Follow the actual supporting collider before finding the floor:
@@ -941,28 +1396,20 @@ namespace AquabroMod
                     if (elapsed >= lifetime)
                     {
                         BreachShark();
-                        sharkBreachElapsed = elapsed - lifetime;
+                        flightDelta = elapsed - lifetime;
                     }
                 }
-                else sharkBreachElapsed += delta;
-                if (sharkBreachElapsed >= 1.1f) return false;
-                if (!SharkControlled)
-                {
-                    float t = Mathf.Clamp(sharkBreachElapsed / .45f, 0f, 1f);
-                    float progress = t * t * (3f - 2f * t);
-                    x = owner.MoveSkillHorizontally(x, y, x + facing * 24f * (progress - sharkDashProgress));
-                    sharkDashProgress = progress;
-                }
+                if (!SharkControlled && !TickSharkBreach(flightDelta)) return false;
                 if (SharkControlled)
                 {
                     int phase = Mathf.FloorToInt(Mathf.Max(0f, elapsed - .3f) / .1f) % 4;
                     frame = elapsed < .3f ? Mathf.FloorToInt(elapsed / .05f) : (phase == 3 ? 4 : 3 + phase);
                 }
-                else frame = 6 + Mathf.Clamp(Mathf.FloorToInt(sharkBreachElapsed / .05f), 0, 21);
+                else frame = SharkBreachFrame();
             }
             else if (kind == 0)
             {
-                float end = tidalStoppedAt >= 0f ? tidalStoppedAt : TidalTravelDuration;
+                float end = TidalTravelDuration;
                 if (elapsed >= end + .5f) return false;
                 if (elapsed >= end) frame = 6 + Mathf.Clamp(Mathf.FloorToInt((elapsed - end) / .05f), 0, 9);
                 else if (elapsed < .3f) frame = Mathf.FloorToInt(elapsed / .1f);
@@ -976,21 +1423,29 @@ namespace AquabroMod
                 frame=elapsed<0.25f ? Mathf.FloorToInt(elapsed/0.05f) : 5+Mathf.FloorToInt((elapsed-0.25f)/0.07f)%19;
             else if (kind==2) frame=24+Mathf.Clamp(Mathf.FloorToInt((elapsed-MaelstromActiveDuration)/0.075f),0,7);
             else frame=Mathf.Clamp(Mathf.FloorToInt(elapsed/0.05f),0,Counts[kind]-1);
-            if (waterBarrier!=null) waterBarrier.SetFrame(frame);
+            if (waterBarrier != null)
+            {
+                waterBarrier.MoveFacing(facing);
+                waterBarrier.SetFrame(frame);
+                waterBarrier.AbsorbPools();
+                owner.CurrentAcidStage = waterBarrier.AcidStage;
+            }
             if (kind == 0)
             {
                 float travelTime = Mathf.Max(0f, Mathf.Min(elapsed, TidalTravelDuration) - Mathf.Max(0f, previousElapsed));
-                if (tidalStoppedAt < 0f && travelTime > 0f)
+                if (tidalBlocked && elapsed < TidalTravelDuration)
+                    tidalBlocked = !owner.SkillWaveContact(x, y, facing, scale, frame, hitUnits, hitObjects, waveDamage, elapsed);
+                if (!tidalBlocked && travelTime > 0f)
                 {
                     int steps = System.Math.Max(1, (int)System.Math.Ceiling(TidalSpeed * travelTime / 8f));
                     float step = facing * TidalSpeed * travelTime / steps;
                     for (int i = 0; i < steps; i++)
                     {
                         float next = x + step;
-                        if (!owner.SkillWaveContact(next, y, facing, scale, frame, hitUnits, hitObjects))
+                        if (!owner.SkillWaveContact(next, y, facing, scale, frame, hitUnits, hitObjects, waveDamage, elapsed))
                         {
-                            tidalStoppedAt = elapsed;
-                            frame = TidalDissolveStartFrame;
+                            x = next;
+                            tidalBlocked = true;
                             break;
                         }
                         x = next;
@@ -1012,27 +1467,20 @@ namespace AquabroMod
                 }
                 else
                 {
-                    owner.SkillSharkObjects(x,y,facing,scale,frame,hitObjects);
-                    owner.SkillSharkBlast(x,y,facing,scale,frame,hitUnits);
                     if (!resolved)
                     {
                         resolved = true;
-                        SortOfFollow.Shake(0.7f,new Vector3(x,y,0f));
+                        SortOfFollow.Shake(0.25f,new Vector3(x,y,0f));
                     }
                 }
             }
             else if (kind == 2)
             {
-                // Move from the first visible frame at constant speed, reversing
-                // without a hold: centre -> right -> left -> right, then dissolve.
-                // Fit all three legs to the reachable span, so touching a wall
-                // reverses immediately instead of waiting for an off-map phase.
-                float firstLeg = maelstromRightX - originX;
-                float span = maelstromRightX - maelstromLeftX;
-                float travel = Mathf.Clamp(elapsed / MaelstromActiveDuration, 0f, 1f) * (firstLeg + 2f * span);
-                float destination = travel < firstLeg ? originX + travel :
-                    travel < firstLeg + span ? maelstromRightX - (travel - firstLeg) :
-                    maelstromLeftX + (travel - firstLeg - span);
+                // Removed walls can open the remaining route, bounded by the
+                // original +/-48px. Keep completed turns and the 3.6s deadline.
+                ExpandMaelstromRoute(previousElapsed);
+                int leg;
+                float destination = MaelstromDestination(elapsed, out leg);
                 x = owner.MoveSkillHorizontally(x, y, destination);
                 waterBarrier.MoveTo(x, y);
                 if (elapsed < MaelstromActiveDuration)
@@ -1042,13 +1490,14 @@ namespace AquabroMod
                     // within 0.096s of a previous hit to one damage.
                     bool pulse = elapsed >= pulseTime && elapsed < MaelstromActiveDuration - .1f;
                     if (pulse) pulseTime = (Mathf.FloorToInt(elapsed / MaelstromPulseInterval) + 1) * MaelstromPulseInterval;
-                    owner.SkillMaelstromPull(x, y, facing, scale, frame, delta, pulse, maelstromCaught);
+                    owner.SkillMaelstromPullAtTime(x, y, facing, scale, frame, delta, pulse, maelstromCaught, elapsed);
                 }
                 if (!resolved && elapsed >= MaelstromActiveDuration)
                 {
                     resolved=true;
-                    owner.SkillMaelstromFinish(x, y, facing, scale, maelstromCaught, hitUnits);
-                    SortOfFollow.Shake(0.65f,new Vector3(x,y,0f));
+                    // A delayed update can skip dissolve frames; use the same
+                    // frame as the sprite instead of the last active mask.
+                    owner.SkillMaelstromFinish(x, y, facing, scale, frame, maelstromCaught, hitUnits);
                 }
             }
             else if (kind == 3)
@@ -1057,13 +1506,14 @@ namespace AquabroMod
                 if (!resolved)
                 {
                     resolved=true;
-                    SortOfFollow.Shake(0.5f,new Vector3(x,y,0f));
+                    SortOfFollow.Shake(0.25f,new Vector3(x,y,0f));
                 }
             }
             obj.transform.position=new Vector3(x,y+48f*scale,VisualDepth);
             // Parent scale may flip while the hero moves; freeze travel facing.
             obj.transform.localScale=new Vector3(facing/(owner.transform.localScale.x<0f?-1f:1f),1f,1f);
-            sprite.SetLowerLeftPixel(frame*128,128);
+            UpdateAcidColor(frame, delta);
+            sprite.SetLowerLeftPixel(acidTexture == null ? frame*128 : 0,128);
             return true;
         }
 
@@ -1071,7 +1521,10 @@ namespace AquabroMod
         {
             if (kind == 1) owner.EndShark(this);
             if (waterBarrier!=null) waterBarrier.Dispose();
+            if (sharkLaunchWater != null) sharkLaunchWater.Dispose();
             if (obj != null) UnityEngine.Object.Destroy(obj);
+            if (acidMaterial != null) UnityEngine.Object.Destroy(acidMaterial);
+            if (acidTexture != null) UnityEngine.Object.Destroy(acidTexture);
         }
     }
 }

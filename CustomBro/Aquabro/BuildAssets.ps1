@@ -108,6 +108,9 @@ try {
     & $aseprite -b --script-param "root=$projectRoot" --script-param "output=$tempRoot" --script (Join-Path $projectRoot 'tools\export_skill_effects.lua') | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Skill effect export failed' }
 
+    & $aseprite -b --script-param "root=$projectRoot" --script-param "output=$tempRoot" --script (Join-Path $projectRoot 'tools\export_acid_skills.lua') | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Acid skill export failed' }
+
     # 图集和选帧表必须与 DLL 配套；全部生成和编译成功后再替换正式产物。
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v3.5\csc.exe'
     $response = New-AquabroCompilerResponse -ProjectRoot $projectRoot -ReferenceDirectory $settings.ReferenceDirectory -OutputDirectory $tempRoot -GeneratedDirectory $tempRoot
@@ -123,13 +126,13 @@ try {
     Copy-Item -LiteralPath (Join-Path $tempRoot 'MaelstromPixelMask.cs') -Destination (Join-Path $projectRoot 'src\MaelstromPixelMask.cs') -Force
     Copy-Item -LiteralPath (Join-Path $tempRoot 'TidalWavePixelMask.cs') -Destination (Join-Path $projectRoot 'src\TidalWavePixelMask.cs') -Force
     Copy-Item -LiteralPath (Join-Path $tempRoot 'ChargedWaterPixelMask.cs') -Destination (Join-Path $projectRoot 'src\ChargedWaterPixelMask.cs') -Force
-    foreach ($name in @('Aquabro.dll','sprite.png','gunSprite.png','trident.png','avatar.png','special.png','special-tidal-wave.png','special-shark-hunt.png','special-maelstrom.png','special-abyssal-spring.png','water-hit-small.png','water-rocket-explosion.png','skill-tidal-wave.png','skill-shark-hunt.png','skill-maelstrom.png','skill-abyssal-spring.png')) {
+    foreach ($name in @('Aquabro.dll','sprite.png','gunSprite.png','trident.png','avatar.png','special.png','special-tidal-wave.png','special-shark-hunt.png','special-maelstrom.png','special-abyssal-spring.png','water-hit-small.png','water-rocket-explosion.png','skill-tidal-wave.png','skill-shark-hunt.png','skill-shark-hunt-body.png','skill-shark-hunt-water-back.png','skill-shark-hunt-water-front.png','skill-maelstrom.png','skill-abyssal-spring.png','skill-tidal-wave-acid-1.png','skill-tidal-wave-acid-2.png','skill-maelstrom-acid-1.png','skill-maelstrom-acid-2.png','skill-abyssal-spring-acid-1.png','skill-abyssal-spring-acid-2.png')) {
         Copy-Item -LiteralPath (Join-Path $tempRoot $name) -Destination (Join-Path $outputRoot $name) -Force
     }
 
     foreach ($deployRoot in $(if ($SkipDeploy) { @() } else { $deployRoots })) {
         if (Test-Path -LiteralPath $deployRoot) {
-            foreach ($name in @('Aquabro.dll','sprite.png','gunSprite.png','trident.png','avatar.png','special.png','special-tidal-wave.png','special-shark-hunt.png','special-maelstrom.png','special-abyssal-spring.png','water-hit-small.png','water-rocket-explosion.png','skill-tidal-wave.png','skill-shark-hunt.png','skill-maelstrom.png','skill-abyssal-spring.png')) {
+            foreach ($name in @('Aquabro.json','Aquabro.dll','sprite.png','gunSprite.png','trident.png','avatar.png','special.png','special-tidal-wave.png','special-shark-hunt.png','special-maelstrom.png','special-abyssal-spring.png','water-hit-small.png','water-rocket-explosion.png','skill-tidal-wave.png','skill-shark-hunt.png','skill-shark-hunt-body.png','skill-shark-hunt-water-back.png','skill-shark-hunt-water-front.png','skill-maelstrom.png','skill-abyssal-spring.png','skill-tidal-wave-acid-1.png','skill-tidal-wave-acid-2.png','skill-maelstrom-acid-1.png','skill-maelstrom-acid-2.png','skill-abyssal-spring-acid-1.png','skill-abyssal-spring-acid-2.png')) {
                 $source = Join-Path $outputRoot $name
                 if (Test-Path -LiteralPath $source) {
                     $destination = Join-Path $deployRoot $name
