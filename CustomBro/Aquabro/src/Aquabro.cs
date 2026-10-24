@@ -273,11 +273,12 @@ namespace AquabroMod
         {
             nearest = new RaycastHit();
             Vector3 path = new Vector3(toX - fromX, toY - fromY, 0f);
-            if (path.magnitude <= .00001f) return false;
+            float length = path.magnitude;
+            if (length <= .00001f) return false;
             float distance = float.PositiveInfinity;
             bool found = false;
             foreach (RaycastHit hit in Physics.RaycastAll(new Vector3(fromX, fromY, 0f), path.normalized,
-                path.magnitude, Map.groundLayer | Map.groundAndDamageableObjects))
+                length, Map.groundLayer | Map.groundAndDamageableObjects))
             {
                 Collider contact = hit.collider;
                 if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger ||
@@ -409,9 +410,10 @@ namespace AquabroMod
         private static bool WaterSceneContactVisible(float x, float y, float hitX, float hitY, GameObject receiver)
         {
             Vector3 path = new Vector3(hitX - x, hitY - y, 0f);
-            if (path.magnitude <= .00001f) return true;
+            float length = path.magnitude;
+            if (length <= .00001f) return true;
             foreach (RaycastHit hit in Physics.RaycastAll(new Vector3(x, y, 0f), path.normalized,
-                Mathf.Max(0f, path.magnitude - .01f), Map.groundLayer | Map.groundAndDamageableObjects))
+                Mathf.Max(0f, length - .01f), Map.groundLayer | Map.groundAndDamageableObjects))
             {
                 Collider contact = hit.collider;
                 if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger ||

@@ -1,13 +1,10 @@
 // 由 export_water_effects.lua 与蓄力水花图集同时生成，坐标从左上角开始。
-using System;
-
 namespace AquabroMod
 {
     internal static class ChargedWaterPixelMask
     {
-        private static readonly byte[][] Frames = {
-@FRAMES@
-        };
+        private static readonly byte[][] Frames = PixelMask.DecodeContextFrames(6, 64, @COMPRESSED_LENGTH@, @CHECKSUM@u,
+            "@DATA@");
 
         internal static bool IsVisible(int frame, int x, int y)
         {

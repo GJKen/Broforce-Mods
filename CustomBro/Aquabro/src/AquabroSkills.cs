@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Rogueforce;
@@ -165,20 +165,22 @@ namespace AquabroMod
             }
             // Keep BroMaker's later HUD refreshes on this player's selected skill.
             CurrentSpecialMaterials = skillHudMaterials;
-            foreach (SpriteSM icon in player.hud.grenadeIcons)
-            {
-                if (icon == null || icon.meshRender.sharedMaterial == skillHudMaterial) continue;
-                icon.meshRender.sharedMaterial = skillHudMaterial;
-                icon.RecalcTexture();
-                icon.SetPixelDimensions(16, 16);
-                icon.SetLowerLeftPixel(0, 16);
-                icon.CalcUVs();
-                icon.UpdateUVs();
-            }
             // Match the native HUD's 10px icon spacing while leaving room by the avatar.
             float offset = playerNum % 2 == 0 ? 3f : -3f;
             foreach (SpriteSM icon in player.hud.grenadeIcons)
-                if (icon != null) icon.SetOffset(new Vector3(offset, 0f, 0f));
+            {
+                if (icon == null) continue;
+                if (icon.meshRender.sharedMaterial != skillHudMaterial)
+                {
+                    icon.meshRender.sharedMaterial = skillHudMaterial;
+                    icon.RecalcTexture();
+                    icon.SetPixelDimensions(16, 16);
+                    icon.SetLowerLeftPixel(0, 16);
+                    icon.CalcUVs();
+                    icon.UpdateUVs();
+                }
+                icon.SetOffset(new Vector3(offset, 0f, 0f));
+            }
             CurrentSpecialMaterialOffset = new Vector2(3f, 0f);
         }
 
@@ -294,16 +296,18 @@ namespace AquabroMod
             float distance = destinationX - x;
             int steps = System.Math.Max(1, (int)System.Math.Ceiling(Mathf.Abs(distance) / 4f));
             float step = distance / steps;
-            float direction = step < 0f ? -1f : 1f;
+            Vector3 direction = new Vector3(step < 0f ? -1f : 1f, 0f, 0f);
+            float stepLength = Mathf.Abs(step);
             position = new Vector2(x, y);
-            for (int i = 0; i < steps && Mathf.Abs(step) > .00001f; i++)
+            for (int i = 0; i < steps && stepLength > .00001f; i++)
             {
                 float next = x + step;
+                float probeY = y + 18f;
                 // A one-tile lip is traversable terrain, not a wall cancelling
                 // all three columns. Follow its top, but stop at taller faces.
-                if (RaycastSpringTerrain(new Vector3(x, y + 18f, 0f), new Vector3(direction, 0f, 0f),
-                    Mathf.Abs(step), out wall)) return false;
-                if (RaycastSpringTerrain(new Vector3(next, y + 18f, 0f), Vector3.down, 61f, out floor))
+                if (RaycastSpringTerrain(new Vector3(x, probeY, 0f), direction,
+                    stepLength, out wall)) return false;
+                if (RaycastSpringTerrain(new Vector3(next, probeY, 0f), Vector3.down, 61f, out floor))
                 {
                     if (floor.point.y > y + 16f) return false;
                     y = floor.point.y;
@@ -340,9 +344,10 @@ namespace AquabroMod
         {
             Vector3 start = new Vector3(x, y, 0f);
             Vector3 diff = new Vector3(hitX - x, hitY - y, 0f);
-            if (diff.magnitude <= .00001f) return true;
+            float length = diff.magnitude;
+            if (length <= .00001f) return true;
             foreach (RaycastHit hit in Physics.RaycastAll(start, diff.normalized,
-                Mathf.Max(0f, diff.magnitude - .01f), Map.groundLayer))
+                Mathf.Max(0f, length - .01f), Map.groundLayer))
             {
                 Collider contact = hit.collider;
                 if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy ||
@@ -361,9 +366,10 @@ namespace AquabroMod
         private static bool SkillContactVisible(float x, float y, float hitX, float hitY, bool ignoreProps, Collider receiver)
         {
             Vector3 diff = new Vector3(hitX - x, hitY - y, 0f);
-            if (diff.magnitude < (receiver == null ? 8f : .00001f)) return true;
+            float length = diff.magnitude;
+            if (length < (receiver == null ? 8f : .00001f)) return true;
             foreach (RaycastHit hit in Physics.RaycastAll(new Vector3(x, y, 0f), diff.normalized,
-                Mathf.Max(0f, diff.magnitude - (receiver == null ? 4f : .01f)), Map.groundLayer))
+                Mathf.Max(0f, length - (receiver == null ? 4f : .01f)), Map.groundLayer))
             {
                 Collider contact = hit.collider;
                 if (contact == null || contact.isTrigger || contact.GetComponentInParent<Unit>() != null ||
@@ -388,17 +394,17 @@ namespace AquabroMod
             return true;
         }
 
-        private void DamageSkillUnit(Unit target, int damage, float forceX, float forceY,
-            int direction, bool knock, float x, float y)
-        {
-            int modified = ValueOrchestrator.GetModifiedDamage(damage, playerNum);
-            DamageType type = SkillDamageType(target, modified);
-            bool acid = type == DamageType.Acid;
-            // Acid coats the body like a native pool. Do not leave a directional
-            // water-impact flag that lets a riot shield reject the zero-force hit.
-            if (modified > 0) Map.KnockAndDamageUnit(this, target, modified,
-                type, acid ? 0f : forceX, acid ? 0f : forceY, acid ? 0 : direction, !acid && knock, x, y, true);
-        }
+    private void DamageSkillUnit(Unit target, int damage, float forceX, float forceY,
+        int direction, bool knock, float x, float y)
+    {
+        int modified = ValueOrchestrator.GetModifiedDamage(damage, playerNum);
+        DamageType type = SkillDamageType(target, modified);
+        bool acid = type == DamageType.Acid;
+        // Acid coats the body like a native pool. Do not leave a directional
+        // water-impact flag that lets a riot shield reject the zero-force hit.
+        if (modified > 0) Map.KnockAndDamageUnit(this, target, modified,
+            type, acid ? 0f : forceX, acid ? 0f : forceY, acid ? 0 : direction, !acid && knock, x, y, true);
+    }
 
         // Shared body pass for wave, shark and spring. Relay hits run first;
         // wave terrain handling still runs before this pass and can stop the cast.
@@ -557,9 +563,10 @@ namespace AquabroMod
             Vector3 origin = new Vector3(X, Y + 14f, 0f);
             Vector3 fallback = new Vector3(X + facing * 70f, Y + 14f, 0f);
             Vector3 forward = fallback - origin;
+            Vector3 forwardDirection = forward.normalized;
             RaycastHit hit;
-            if (RaycastSharkTerrain(origin, forward.normalized, forward.magnitude, out hit))
-                fallback = new Vector3(hit.point.x - forward.normalized.x * 8f, fallback.y, 0f);
+            if (RaycastSharkTerrain(origin, forwardDirection, forward.magnitude, out hit))
+                fallback = new Vector3(hit.point.x - forwardDirection.x * 8f, fallback.y, 0f);
             float ground = RaycastSharkTerrain(fallback, Vector3.down, 80f, out hit) ? hit.point.y : Y + 2f;
             return new Vector2(fallback.x, ground);
         }
@@ -573,8 +580,9 @@ namespace AquabroMod
             if (score >= bestScore) return;
             Vector3 origin = new Vector3(X, Y + 14f, 0f);
             Vector3 diff = new Vector3(targetX, targetY + 14f, 0f) - origin;
+            float length = diff.magnitude;
             RaycastHit wall, floor;
-            if (diff.magnitude > 1f && RaycastSharkTerrain(origin, diff.normalized, diff.magnitude, out wall)) return;
+            if (length > 1f && RaycastSharkTerrain(origin, diff.normalized, length, out wall)) return;
             if (!RaycastSharkTerrain(new Vector3(targetX, targetY + 2f, 0f), Vector3.down, 80f, out floor)) return;
             bestScore = score; best = new Vector2(targetX, floor.point.y);
         }
@@ -582,9 +590,10 @@ namespace AquabroMod
         private bool MaelstromLineOfSight(float x, float y, Unit target)
         {
             Vector3 diff = new Vector3(target.X - x, target.Y + 6f - y, 0f);
+            float length = diff.magnitude;
             RaycastHit hit;
-            return diff.magnitude < 8f || !RaycastSharkTerrain(new Vector3(x, y, 0f),
-                diff.normalized, diff.magnitude - 4f, out hit);
+            return length < 8f || !RaycastSharkTerrain(new Vector3(x, y, 0f),
+                diff.normalized, length - 4f, out hit);
         }
 
         private bool MaelstromTouchesTarget(float x, float y, float facing, float scale, int frame,
@@ -626,7 +635,7 @@ namespace AquabroMod
             float delta, bool pulse, HashSet<object> caught, float age)
         {
             if (!IsMine || delta <= 0f || frame < 0 || frame >= AquabroSkillVisual.MaelstromDissolveStartFrame) return;
-            HashSet<object> pulseHits = new HashSet<object>();
+            HashSet<object> pulseHits = pulse ? new HashSet<object>() : null;
             HashSet<object> partTargets = pulse ? SkillDamageRelays(2, x, y, facing, scale, frame,
                 AquabroSkillVisual.MaelstromPulseDamage, 0f, 0f, false, pulseHits) : null;
             float range = 64f * scale + 64f;
@@ -793,17 +802,20 @@ namespace AquabroMod
             int steps = System.Math.Max(1, (int)System.Math.Ceiling(Mathf.Abs(distance) / 4f));
             float step = distance / steps;
             float direction = step < 0f ? -1f : 1f;
-            for (int i = 0; i < steps && Mathf.Abs(step) > .00001f; i++)
+            float stepLength = Mathf.Abs(step);
+            Vector3 rayDirection = new Vector3(direction, 0f, 0f);
+            for (int i = 0; i < steps && stepLength > .00001f; i++)
             {
-                float travel = Mathf.Abs(step);
-                foreach (float height in new float[] { 12f, 56f })
+                float travel = stepLength;
+                for (int probe = 0; probe < 2; probe++)
                 {
+                    float height = probe == 0 ? 12f : 56f;
                     RaycastHit hit;
-                    if (RaycastSharkTerrain(new Vector3(x, y + height, 0f), new Vector3(direction, 0f, 0f),
+                    if (RaycastSharkTerrain(new Vector3(x, y + height, 0f), rayDirection,
                         travel + 8f, out hit)) travel = Mathf.Min(travel, Mathf.Max(0f, hit.distance - 8f));
                 }
                 x += direction * travel;
-                if (travel < Mathf.Abs(step)) break;
+                if (travel < stepLength) break;
             }
             return x;
         }
@@ -884,7 +896,8 @@ namespace AquabroMod
             {
                 if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
                 CollisionDamageTarget boss = CollisionDamageTarget.FindSkill(contact);
-                if (boss != null && boss.StopsWave && mask.IntersectsRect(contact.bounds))
+                if (boss != null && boss.StopsWave && mask.IntersectsRect(contact.bounds) &&
+                    WaveLeadingEdgeIntersects(contact.bounds, x, facing))
                 {
                     Bounds b = contact.bounds;
                     float hitX = Mathf.Clamp(x, b.min.x, b.max.x);
@@ -907,7 +920,7 @@ namespace AquabroMod
                         facing * 420f, 80f, bounds.center.x, bounds.center.y);
                 // A surviving wall stops the wave. Floor contact alone does not.
                 if (contact != null && contact.enabled && contact.gameObject.activeInHierarchy &&
-                    bounds.max.y > y + 8f) blocked = true;
+                    bounds.max.y > y + 8f && WaveLeadingEdgeIntersects(bounds, x, facing)) blocked = true;
             }
             // Doodads use the same five-pixel boundary, without a separate area blast.
             for (int i=Map.destroyableDoodads.Count-1;i>=0;i--)
@@ -923,10 +936,24 @@ namespace AquabroMod
                 if (hitObjects.Add(doodad.gameObject))
                     doodad.DamageOptional(new DamageObject(ValueOrchestrator.GetModifiedDamage(24,playerNum),
                         DamageType.Crush,facing*420f,80f,x,y,this),ref hit);
-                if (hit && doodad.isImpenetrable) blocked = true;
+                if (hit && doodad.isImpenetrable && WaveLeadingEdgeIntersects(
+                    doodad.centerX - doodad.width * .5f, doodad.centerX + doodad.width * .5f, x, facing)) blocked = true;
             }
             SkillDamageUnits(mask, 26, facing * 420f, 300f, false, alreadyHit, partTargets, null, 0f);
             return !blocked;
+        }
+
+        // The wave sprite overlaps its trailing side and the support floor.
+        // Only a solid object that reaches the moving front edge may stop it;
+        // otherwise a block behind the caster can pin a newly spawned wave.
+        private static bool WaveLeadingEdgeIntersects(Bounds bounds, float x, float facing)
+        {
+            return facing < 0f ? bounds.min.x < x : bounds.max.x > x;
+        }
+
+        private static bool WaveLeadingEdgeIntersects(float left, float right, float x, float facing)
+        {
+            return facing < 0f ? left < x : right > x;
         }
 
         // Vehicles can have only Platform-layer child colliders (truck roofs),
@@ -949,7 +976,9 @@ namespace AquabroMod
                     int damage = wave == null ? (hits.Add(target) ? 26 : 0) : wave.TakeDamage(target, castTime);
                     if (damage > 0) DamageSkillUnit(target, damage, 0f, 0f, 0, false, mask.X, target.Y + 6f);
                 }
-                if (target.health > 0) blocked = true;
+                float halfWidth = Mathf.Max(1f, target.width * .5f);
+                if (target.health > 0 && !CollisionDamageTarget.IsWavePassThroughMook(target) && WaveLeadingEdgeIntersects(
+                    target.X - halfWidth, target.X + halfWidth, mask.X, mask.Facing)) blocked = true;
             }
             return blocked;
         }
@@ -991,14 +1020,20 @@ namespace AquabroMod
                 spent.TryGetValue(key, out previous);
                 used = System.Math.Max(used, previous);
             }
-            int damage = System.Math.Min(2, 26 - used);
-            if (damage <= 0 || !TryHit(target, time)) return 0;
+            Unit unit = target as Unit;
+            bool fixedDamageMook = CollisionDamageTarget.IsWavePassThroughMook(unit);
+            if (used >= 26) return 0;
+            int damage = fixedDamageMook ? 26 : System.Math.Min(2, 26 - used);
+            if (damage <= 0 || !TryHitKeys(keys, time)) return 0;
             foreach (object key in keys) spent[key] = used + damage;
             return damage;
         }
         internal bool TryHit(object target, float time)
         {
-            object[] keys = CollisionDamageTarget.DamageKeys(target);
+            return TryHitKeys(CollisionDamageTarget.DamageKeys(target), time);
+        }
+        private bool TryHitKeys(object[] keys, float time)
+        {
             foreach (object key in keys)
             {
                 float next;
@@ -1247,6 +1282,8 @@ namespace AquabroMod
         private Material acidMaterial;
         private Color32[] acidFramePixels;
         private Color32[][] acidPalettePixels;
+        private int acidUploadedFrame = -1;
+        private float acidUploadedColorLevel = -1f;
         private static readonly Dictionary<string, Color32[][]> AcidPixels = new Dictionary<string, Color32[][]>();
         internal static float AdvanceAcidColor(float current, int target, float delta)
         { return delta <= 0f ? current : Mathf.Min(target, current + delta / .3f); }
@@ -1292,18 +1329,28 @@ namespace AquabroMod
                 sprite.meshRender.material = acidMaterial;
                 sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
             }
+            // Once the gradient settles, repeated game ticks can show the same
+            // animation frame. Rebuild/upload only when either input changes.
+            if (acidUploadedFrame == frame && acidUploadedColorLevel == acidColorLevel) return;
             int from = System.Math.Min(1, (int)acidColorLevel), to = from + 1;
             float mix = acidColorLevel - from;
             int width = Counts[kind] * 128;
-            for (int py = 0; py < 128; py++) for (int px = 0; px < 128; px++)
+            for (int py = 0; py < 128; py++)
             {
-                int sourceIndex = py * width + frame * 128 + px;
-                Color32 a = acidPalettePixels[from][sourceIndex], b = acidPalettePixels[to][sourceIndex];
-                acidFramePixels[py*128+px] = new Color32(
-                    (byte)(a.r+(b.r-a.r)*mix), (byte)(a.g+(b.g-a.g)*mix),
-                    (byte)(a.b+(b.b-a.b)*mix), a.a);
+                int sourceRow = py * width + frame * 128;
+                int destinationRow = py * 128;
+                for (int px = 0; px < 128; px++)
+                {
+                    int sourceIndex = sourceRow + px;
+                    Color32 a = acidPalettePixels[from][sourceIndex], b = acidPalettePixels[to][sourceIndex];
+                    acidFramePixels[destinationRow+px] = new Color32(
+                        (byte)(a.r+(b.r-a.r)*mix), (byte)(a.g+(b.g-a.g)*mix),
+                        (byte)(a.b+(b.b-a.b)*mix), a.a);
+                }
             }
             acidTexture.SetPixels32(acidFramePixels); acidTexture.Apply(false, false);
+            acidUploadedFrame = frame;
+            acidUploadedColorLevel = acidColorLevel;
         }
 
         internal void PrepareSpringWater(float delta)

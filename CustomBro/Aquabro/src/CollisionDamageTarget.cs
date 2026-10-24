@@ -20,7 +20,8 @@ namespace AquabroMod
             {
                 if (Key is Block || !Active(Contact)) return false;
                 if (Key is SawBlade) return false;
-                if (UnitTarget != null) return IsWaveUnit(UnitTarget) && UnitTarget.health > 0;
+                if (UnitTarget != null) return IsWaveUnit(UnitTarget) &&
+                    !IsWavePassThroughMook(UnitTarget) && UnitTarget.health > 0;
                 BossPiece piece = Key as BossPiece;
                 if (piece != null) return piece.health > 0;
                 BossBlockPiece block = Key as BossBlockPiece;
@@ -80,8 +81,12 @@ namespace AquabroMod
         internal static bool IsWaveUnit(Unit unit)
         {
             return unit is Tank || unit is TankWeapon || unit is Mech || unit is MechWeapon ||
-                unit is AlienSandWorm || unit is SatanMiniboss || unit is MookVehicleDigger || unit is MookBigGuy;
+                unit is AlienSandWorm || unit is SatanMiniboss || unit is MookVehicleDigger ||
+                unit is MookBigGuy || unit is MookGrenadier;
         }
+
+        internal static bool IsWavePassThroughMook(Unit unit)
+        { return unit is MookBigGuy || unit is MookGrenadier; }
 
         internal static CollisionDamageTarget Find(Collider contact, DamageType type)
         {
@@ -153,9 +158,10 @@ namespace AquabroMod
                 if (!DamageHandlers.TryGetValue(type, out handles))
                 {
                     handles = false;
+                    Type[] signature = new Type[] { typeof(DamageObject) };
                     for (Type declaring = type; declaring != null && !handles; declaring = declaring.BaseType)
                         handles = declaring.GetMethod("Damage", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly,
-                            null, new Type[] { typeof(DamageObject) }, null) != null;
+                            null, signature, null) != null;
                     DamageHandlers[type] = handles;
                 }
                 if (handles) return true;
@@ -234,12 +240,20 @@ namespace AquabroMod
 
         internal static bool AlreadyHit(object target, HashSet<object> hits)
         {
+            BossPiece piece = target as BossPiece;
+            if (piece == null || piece.connectedPieces == null || piece.connectedPieces.Count == 0)
+                return hits.Contains(target);
             foreach (object key in DamageKeys(target)) if (hits.Contains(key)) return true;
             return false;
         }
 
         internal static void Register(object target, HashSet<object> hits)
-        { foreach (object key in DamageKeys(target)) hits.Add(key); }
+        {
+            BossPiece piece = target as BossPiece;
+            if (piece == null || piece.connectedPieces == null || piece.connectedPieces.Count == 0)
+            { hits.Add(target); return; }
+            foreach (object key in DamageKeys(target)) hits.Add(key);
+        }
 
         // Terrain destruction must not also submit an untracked boss hit.
         internal static Collider[] IgnoreForGround(float x, float y, float range)

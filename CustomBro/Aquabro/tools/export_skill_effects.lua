@@ -1,18 +1,9 @@
 local root=assert(app.params['root'])
 local output=assert(app.params['output'])
-local function base64(bytes)
-  local chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  local result={}
-  for i=1,#bytes,3 do
-    local a,b,c=bytes[i],bytes[i+1],bytes[i+2]
-    local n=a*65536+(b or 0)*256+(c or 0)
-    result[#result+1]=chars:sub(math.floor(n/262144)%64+1,math.floor(n/262144)%64+1)
-      ..chars:sub(math.floor(n/4096)%64+1,math.floor(n/4096)%64+1)
-      ..(b and chars:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1) or '=')
-      ..(c and chars:sub(n%64+1,n%64+1) or '=')
-  end
-  return table.concat(result)
-end
+local deflate=assert(loadfile(root..'/tools/export_water_effects.lua'))('mask-deflate')
+local pack16=assert(loadfile(root..'/tools/export_water_effects.lua'))('mask-pack16')
+local maskRuns=assert(loadfile(root..'/tools/export_water_effects.lua'))('mask-runs')
+local contextMask=assert(loadfile(root..'/tools/export_water_effects.lua'))('mask-context')
 -- Keep water fixed and preserve source layer ordering. Align entry body pixels
 -- with the waterline; flight ends in that same pose without changing its pivot.
 local sharkFlightFrames=31
@@ -53,7 +44,7 @@ local function maskRow(image)
     for bit=0,7 do if app.pixelColor.rgbaA(image:getPixel(x+bit,y))>0 then byte=byte+2^bit end end
     bytes[#bytes+1]=byte
   end end
-  return '            Convert.FromBase64String("'..base64(bytes)..'"),'
+  return bytes
 end
 for _,entry in ipairs({{'tidal-wave',16},{'shark-hunt',28},{'maelstrom',32},{'abyssal-spring',28}}) do
   local name='skill-'..entry[1]
@@ -156,7 +147,12 @@ for _,entry in ipairs({{'tidal-wave',16},{'shark-hunt',28},{'maelstrom',32},{'ab
       template=template:gsub('Generated from the visible Aseprite composites',
         'Generated from the visible shark body layers, excluding water')
     end
-    local code=template:gsub('@FRAMES@',function() return table.concat(masks,'\n') end)
+    local bytes={}
+    for _,frame in ipairs(masks) do for _,byte in ipairs(frame) do bytes[#bytes+1]=byte end end
+    local compressed,checksum=contextMask(bytes,2048)
+    local code=template:gsub('@COUNT@',tostring(#masks)):gsub('@COMPRESSED_LENGTH@',tostring(#compressed))
+      :gsub('@CHECKSUM@',tostring(checksum))
+      :gsub('@DATA@',function() return pack16(compressed) end)
     local file=assert(io.open(output..'/'..className..'.cs','w'));file:write(code);file:close()
   end
   print('EXPORTED',name,#sprite.frames)

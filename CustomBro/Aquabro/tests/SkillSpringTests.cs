@@ -1,4 +1,4 @@
-﻿// 编译本文件与真实 src/AquabroSkills.cs，使用轻量游戏桩验证技能逻辑。
+// 编译本文件与真实 src/AquabroSkills.cs，使用轻量游戏桩验证技能逻辑。
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -14,7 +14,7 @@ public static class SkillSpringTests
         Map.Targets.Add(unit); return unit;
     }
     private static readonly BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
-    private static void Reset() { Map.Targets.Clear(); Map.Hits.Clear(); Map.TotalHits = 0; Map.DamageObserver=null; MapController.ObjectHits=Map.DoodadHits=0; Map.destroyableDoodads.Clear(); Physics.Contacts=new Collider[0]; }
+    private static void Reset() { Map.Targets.Clear(); Map.Hits.Clear(); Map.TotalHits = 0; Map.DamageObserver=null; MapController.ObjectHits=Map.DoodadHits=0; Map.destroyableDoodads.Clear(); Physics.Contacts=new Collider[0]; EffectsController.WhiteFlashCalls=0; }
     private static Vector2 PixelWorld(int px, int py, float scale, float facing)
     { return new Vector2((px + .5f - 64f) * scale * facing, (112f - py - .5f) * scale); }
     public static void Main(string[] args)
@@ -88,6 +88,7 @@ public static class SkillSpringTests
                 System.Drawing.Color source=stage==0?System.Drawing.Color.FromArgb(137,0,0,200):stage==1?System.Drawing.Color.FromArgb(137,100,200,0):System.Drawing.Color.FromArgb(137,200,240,0);
                 for(int y=0;y<128;y++)for(int x=0;x<frames*128;x++)png.SetPixel(x,y,source);
                 for(int frame=0;frame<frames;frame++)png.SetPixel(frame*128+1,127,System.Drawing.Color.Transparent);
+                for(int frame=0;frame<frames;frame++)png.SetPixel(frame*128+2,127,System.Drawing.Color.FromArgb(137,stage*10+frame,200,0));
                 png.Save(System.IO.Path.Combine(fixture,"skill-"+(kind==3?"abyssal-spring":"tidal-wave")+(stage==0?"":"-acid-"+stage)+".png"),System.Drawing.Imaging.ImageFormat.Png);
             }
         }
@@ -102,6 +103,29 @@ public static class SkillSpringTests
         visualWater.Absorb(new object());visual.Tick(.15f);
         sample=mixed.GetPixels32()[0];Check(sample.r==100 && sample.g==200,"Continuous upgrade did not pass stage one");
         visual.Tick(.3f);sample=mixed.GetPixels32()[0];Check(sample.r==200 && sample.g==240,"Stage two gradient endpoint");
+        MethodInfo updateColor=typeof(AquabroSkillVisual).GetMethod("UpdateAcidColor",Private);
+        int settledFrame=(int)typeof(WaterProjectileBarrier).GetField("frame",Private).GetValue(visualWater);
+        int uploads=mixed.UploadCount;
+        for(int i=0;i<240;i++)updateColor.Invoke(visual,new object[]{settledFrame,.001f});
+        Check(mixed.UploadCount==uploads,"Settled color/frame uploaded repeatedly");
+        int nextFrame=(settledFrame+1)%16;
+        updateColor.Invoke(visual,new object[]{nextFrame,0f});
+        Check(mixed.UploadCount==uploads+1 && mixed.GetPixels32()[2].r==20+nextFrame,"Animation frame did not invalidate color upload");
+        visual.Dispose();
+        visual=new AquabroSkillVisual(owner,0,0,0,1,2,0,1);
+        visualWater=(WaterProjectileBarrier)typeof(AquabroSkillVisual).GetField("waterBarrier",Private).GetValue(visual);
+        visualWater.Absorb(new object());visual.Tick(.3f);
+        mixed=(Texture2D)typeof(AquabroSkillVisual).GetField("acidTexture",Private).GetValue(visual);
+        settledFrame=(int)typeof(WaterProjectileBarrier).GetField("frame",Private).GetValue(visualWater);uploads=mixed.UploadCount;
+        updateColor.Invoke(visual,new object[]{settledFrame,.001f});
+        Check(mixed.UploadCount==uploads,"Settled stage one uploaded repeatedly");
+        visualWater.Absorb(new object());updateColor.Invoke(visual,new object[]{settledFrame,.15f});
+        sample=mixed.GetPixels32()[0];
+        Check(mixed.UploadCount==uploads+1 && sample.r==150 && sample.g==220,"Same-frame acid upgrade did not invalidate color upload");
+        updateColor.Invoke(visual,new object[]{settledFrame,0f});
+        Check(mixed.UploadCount==uploads+1,"Unchanged partial gradient uploaded repeatedly");
+        updateColor.Invoke(visual,new object[]{settledFrame,.15f});
+        Check(mixed.UploadCount==uploads+2 && mixed.GetPixels32()[0].r==200,"Same-frame gradient stopped advancing");
         visual.Dispose();
         CheckSpringSharedAcid(fixture);
         System.IO.Directory.Delete(fixture,true);owner.Info.path="";
@@ -110,7 +134,7 @@ public static class SkillSpringTests
         sharkVisual.Tick(.1f);Check(typeof(AquabroSkillVisual).GetField("acidTexture",Private).GetValue(sharkVisual)==null,"Shark creates acid texture");sharkVisual.Dispose();
         CheckNativeAcid();
         CheckSlimeSources();
-        Console.WriteLine("PASS acid: three skills + shark excluded; PNG decoding; alpha; smooth gradient; 50%/100% boundaries; source dedup; projectile/pool contact; native acid coating replaces deferred damage");
+        Console.WriteLine("PASS acid: three skills + shark excluded; PNG decoding; alpha; smooth gradient; unchanged frame upload skipped; frame/color invalidation; 50%/100% boundaries; source dedup; projectile/pool contact; native acid coating replaces deferred damage");
     }
     private static void CheckSlimeSources()
     {
@@ -605,6 +629,7 @@ public static class SkillSpringTests
             Check(TidalWavePixelMask.Mask.Contains(f, px + .5f, py + .5f, 0) == (atlas.GetPixel(f * 128 + px, py).A > 0), "Wave mask differs from reference PNG");
         CheckWaveTerrainBoundary(atlas);
         CheckWaveSupportFloor();
+        CheckWaveDirectionalBlocking(atlas);
         CheckWaveLargeEnemies(atlas);
         CheckWaveCloseCast();
         Aquabro owner = new Aquabro();
@@ -697,10 +722,10 @@ public static class SkillSpringTests
             Check(right>=0,"Missing active wave edge");
             foreach(float scale in new float[]{.65f,.85f,1f})
             foreach(float facing in new float[]{-1,1})
-            foreach(Unit target in new Unit[]{new MookBigGuy(),new WaveHeavyVariant(),new Unit()})
+            foreach(Unit target in new Unit[]{new MookBigGuy(),new WaveHeavyVariant(),new MookGrenadier(),new Unit()})
             {
                 Reset();target.width=24;target.headHeight=target.height=26;target.playerNum=-1;
-                int initialHealth=target is WaveHeavyVariant?40:target is MookBigGuy?25:48;target.health=initialHealth;
+                int initialHealth=target is WaveHeavyVariant?40:target is MookBigGuy?25:target is MookGrenadier?15:48;target.health=initialHealth;
                 target.X=(right+1-64)*scale*facing+facing*(12f+4.99f);
                 target.Y=Mathf.Max(0,(112-edgeY-.5f)*scale-13);
                 Check(!TidalWavePixelMask.Mask.Contains(frame,64+target.X*facing/scale,112-(target.Y+6)/scale,5/scale),
@@ -713,9 +738,12 @@ public static class SkillSpringTests
                 Collider body=new Collider((right+.5f-64)*scale*facing,(112-edgeY-.5f)*scale,true);
                 body.ParentComponent=target;Physics.Contacts=new Collider[]{body};
                 bool passed = owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects);
-                Check(passed == (!(target is MookBigGuy) || target.health <= 0),"Heavy enemy blocking did not follow surviving body");
+                Check(passed,"Water wall was blocked by a body unit: "+target.GetType().Name);
                 Check(target.health==initialHealth-26 && Map.Hits[target]==26 && Map.TotalHits==1 && MapController.ObjectHits==0,
                     "Body contact did not deal exactly 26 damage");
+                if (target is MookGrenadier)
+                    Check(((MookGrenadier)target).StunCalls==0 && EffectsController.WhiteFlashCalls==0,
+                        "Killed grenadier received an extra hit reaction");
                 owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects);
                 Check(Map.TotalHits==1,"Wave repeated enemy damage");
                 target.health=200;Map.Hits.Clear();Map.TotalHits=0;hits.Clear();
@@ -734,7 +762,42 @@ public static class SkillSpringTests
                 owner.IsMine=true;Physics.Blocked=false;
             }
         }
-        Reset();Console.WriteLine("PASS wave large enemies: all 6 active frames; both facings; 3 scales; body-only contact; 25/40/48 HP targets; unit colliders not walls; 26 fixed damage; single hit; filters and support waterline");
+        CheckWaveMookFixedDamage(atlas);
+        Reset();Console.WriteLine("PASS wave large enemies: all 6 active frames; both facings; 3 scales; body-only contact; 15/25/40/48 HP targets; unit colliders not walls; 26 fixed damage; single hit; filters and support waterline");
+    }
+
+    private static void CheckWaveMookFixedDamage(System.Drawing.Bitmap atlas)
+    {
+        const int frame=4;
+        int right=-1,edgeY=0;
+        for(int py=0;py<111;py++)for(int px=0;px<128;px++)
+            if(atlas.GetPixel(frame*128+px,py).A>0 && px>right){right=px;edgeY=py;}
+        Check(right>=0,"Missing active wave edge for heavy Mook fixed-damage fixture");
+        Aquabro owner=new Aquabro();
+        foreach(float scale in new float[]{.65f,.85f,1f})
+        foreach(float facing in new float[]{-1,1})
+        foreach(Unit target in new Unit[]{new MookBigGuy(),new WaveHeavyVariant(),new MookGrenadier()})
+        foreach(int initialHealth in new int[]{target is MookGrenadier?15:target is WaveHeavyVariant?40:25,200})
+        {
+            Reset();
+            target.width=24;target.headHeight=target.height=26;
+            target.playerNum=-1;target.health=initialHealth;
+            target.X=(right+1-64)*scale*facing+facing*(12f+4.99f);
+            target.Y=Mathf.Max(0,(112-edgeY-.5f)*scale-13);
+            Map.Targets.Add(target);
+            Map.DamageObserver=delegate(Unit victim,int damage){victim.health-=damage;};
+            WaveDamageState wave=new WaveDamageState();
+            HashSet<object> hits=new HashSet<object>();HashSet<GameObject> objects=new HashSet<GameObject>();
+            bool passed=owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects,wave,0f);
+            Check(passed && target.health==initialHealth-26 && Map.Hits[target]==26 && Map.TotalHits==1,
+                "Water wall did not apply one fixed 26-damage hit: "+target.GetType().Name+" hp="+initialHealth+" facing="+facing+" scale="+scale);
+            Check(((Mook)target).StunCalls==0 && EffectsController.WhiteFlashCalls==0,
+                "Heavy Mook received an extra hit reaction: "+target.GetType().Name);
+            owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects,wave,.12f);
+            Check(Map.TotalHits==1 && target.health==initialHealth-26,
+                "Water wall repeated its fixed hit: "+target.GetType().Name);
+        }
+        Reset();Console.WriteLine("PASS wave heavy Mook fixed damage: Big Guy, Grenadier, and Big Guy subtype; 26 damage once; default/high HP; both facings; 3 scales; survivors pass through");
     }
 
     private static void CheckWaveTerrainBoundary(System.Drawing.Bitmap atlas)
@@ -787,6 +850,50 @@ public static class SkillSpringTests
         }
         Reset();
         Console.WriteLine("PASS wave support: all frames, both facings, three scales, elevated floors; below-waterline terrain/items preserved");
+    }
+
+    private static void CheckWaveDirectionalBlocking(System.Drawing.Bitmap atlas)
+    {
+        const int frame = 5;
+        int behindPixel = -1, frontPixel = -1, behindY = -1, frontY = -1;
+        for (int py = 0; py < 128; py++) for (int px = 0; px < 128; px++)
+        {
+            if (atlas.GetPixel(frame * 128 + px, py).A == 0) continue;
+            if (px <= 56 && behindPixel < 0) { behindPixel = px; behindY = py; }
+            if (px >= 72 && frontPixel < 0) { frontPixel = px; frontY = py; }
+        }
+        Check(behindPixel >= 0 && frontPixel >= 0, "Missing directional wave fixture");
+        foreach (float facing in new float[] { -1f, 1f })
+        {
+            Reset();
+            Aquabro owner = new Aquabro();
+            Vector2 behind = PixelWorld(behindPixel, behindY, 1f, facing);
+            Collider trailing = new Collider(behind.x, behind.y, true);
+            Bounds trailingBounds = trailing.bounds;
+            trailingBounds.min = new Vector3(behind.x - 1f, behind.y - 8f, 0f);
+            trailingBounds.max = new Vector3(behind.x + 1f, behind.y + 16f, 0f);
+            trailingBounds.center = new Vector3(behind.x, behind.y + 4f, 0f);
+            trailing.bounds = trailingBounds;
+            Physics.Contacts = new Collider[] { trailing };
+            Check(owner.SkillWaveContact(0f, 0f, facing, 1f, frame,
+                new HashSet<object>(), new HashSet<GameObject>()),
+                "Trailing terrain pinned wave at facing " + facing);
+
+            Reset();
+            Vector2 ahead = PixelWorld(frontPixel, frontY, 1f, facing);
+            Collider leading = new Collider(ahead.x, ahead.y, true);
+            Bounds leadingBounds = leading.bounds;
+            leadingBounds.min = new Vector3(ahead.x - 1f, ahead.y - 8f, 0f);
+            leadingBounds.max = new Vector3(ahead.x + 1f, ahead.y + 16f, 0f);
+            leadingBounds.center = new Vector3(ahead.x, ahead.y + 4f, 0f);
+            leading.bounds = leadingBounds;
+            Physics.Contacts = new Collider[] { leading };
+            Check(!owner.SkillWaveContact(0f, 0f, facing, 1f, frame,
+                new HashSet<object>(), new HashSet<GameObject>()),
+                "Leading terrain failed to stop wave at facing " + facing);
+        }
+        Reset();
+        Console.WriteLine("PASS wave directional blocking: trailing terrain ignored; leading terrain stops; both facings");
     }
 
     private static void CheckRopeSettlement()
@@ -921,7 +1028,7 @@ namespace UnityEngine
     public struct Color32 { public byte r,g,b,a;public Color32(byte r,byte g,byte b,byte a){this.r=r;this.g=g;this.b=b;this.a=a;} }
     public enum TextureFormat { ARGB32 } public enum FilterMode { Point } public enum TextureWrapMode { Clamp }
     public class Texture2D : Object {
-        public int width,height;public FilterMode filterMode;public TextureWrapMode wrapMode;
+        public int width,height,UploadCount;public FilterMode filterMode;public TextureWrapMode wrapMode;
         public Texture2D(int w,int h,TextureFormat f,bool mip){width=w;height=h;}
         private Color32[] data;
         public bool LoadImage(byte[] bytes){
@@ -935,7 +1042,7 @@ namespace UnityEngine
             return true;
         }
         public Color32[] GetPixels32(){return data ?? new Color32[width*height];}
-        public void SetPixels32(Color32[] pixels){data=(Color32[])pixels.Clone();} public void Apply(bool mip,bool unreadable){}
+        public void SetPixels32(Color32[] pixels){data=(Color32[])pixels.Clone();} public void Apply(bool mip,bool unreadable){UploadCount++;}
     }
     public class Object { public static void Destroy(Object value) {} public static T[] FindObjectsOfType<T>() { return new T[0]; } }
     public struct Vector3
@@ -1103,6 +1210,11 @@ public class Unit
     public virtual bool HasBeenCoveredInAcid() { return false; }
     public GameObject gameObject=new GameObject("Test unit");
 }
+public static class EffectsController
+{
+    public static int WhiteFlashCalls;
+    public static void CreateWhiteFlashPopSmall(float x,float y) {WhiteFlashCalls++;}
+}
 public class TestVanDammeAnim : Unit
 {
     public bool canBeCoveredInAcid=true, hasBeenCoverInAcid;
@@ -1127,6 +1239,7 @@ public class MookBigGuy : Mook
     public override void Knock(DamageType type,float vx,float vy,bool tumble)
     {xI=Mathf.Clamp(xI+vx/20f,-200f,200f);yI=Mathf.Clamp(yI+vy/5f,-20000f,300f);KnockCalls++;}
 }
+public class MookGrenadier : Mook {}
 public class FallingBlock : Block {}
 public class Cage : Block {}
 public class CageBar {}

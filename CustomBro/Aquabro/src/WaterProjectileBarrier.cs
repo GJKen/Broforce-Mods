@@ -98,11 +98,12 @@ namespace AquabroMod
                 new HarmonyMethod(typeof(WaterProjectileBarrier).GetMethod("RegisterSlime", BindingFlags.Static | BindingFlags.NonPublic)), null, null);
             foreach (SlimeGroundCover slime in UnityEngine.Object.FindObjectsOfType<SlimeGroundCover>()) RegisterSlime(slime);
             HarmonyMethod prefix=new HarmonyMethod(typeof(WaterProjectileBarrier).GetMethod("BeforeRun",BindingFlags.Static|BindingFlags.NonPublic));
+            Type[] signature = new Type[] { typeof(float) };
             foreach (Type type in typeof(Projectile).Assembly.GetTypes())
             {
                 if (!typeof(Projectile).IsAssignableFrom(type)) continue;
                 MethodInfo method=type.GetMethod("RunProjectile",BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public|BindingFlags.DeclaredOnly,
-                    null,new Type[] {typeof(float)},null);
+                    null,signature,null);
                 if (method!=null && !method.IsAbstract) harmony.Patch(method,prefix,null,null,null);
             }
         }
@@ -138,23 +139,27 @@ namespace AquabroMod
         private bool Intersects(float px,float py,float dx,float dy,float radius)
         {
             float startX=px,startY=py,travelX=dx,travelY=dy;
+            float waterDx=x-previousX,waterDy=y-previousY;
             // Sweep relative motion too: the moving wave can cross a slow shot.
-            px+=x-previousX;py+=y-previousY;
-            dx-=x-previousX;dy-=y-previousY;
+            px+=waterDx;py+=waterDy;
+            dx-=waterDx;dy-=waterDy;
             float margin=radius+5f,near=0f,far=1f;
-            if (!Clip(px,dx,x-64f*scale-margin,x+64f*scale+margin,ref near,ref far) ||
-                !Clip(py,dy,y-16f*scale-margin,y+112f*scale+margin,ref near,ref far)) return false;
-            float length=System.Math.Max(System.Math.Abs(dx),System.Math.Abs(dy))*(far-near);
+            float height=112f*scale;
+            float halfWidth=64f*scale;
+            if (!Clip(px,dx,x-halfWidth-margin,x+halfWidth+margin,ref near,ref far) ||
+                !Clip(py,dy,y-16f*scale-margin,y+height+margin,ref near,ref far)) return false;
+            float span=far-near;
+            float length=System.Math.Max(System.Math.Abs(dx),System.Math.Abs(dy))*span;
             int steps=System.Math.Max(1,(int)System.Math.Ceiling(length/scale));
             SkillContactMask mask = new SkillContactMask(kind, x, y, facing, scale, frame);
             for (int i=0;i<=steps;i++)
             {
-                float time=near+(far-near)*i/steps;
+                float time=near+span*i/steps;
                 if (!mask.Contains(px + dx * time, py + dy * time, margin)) continue;
                 float contactX=startX+travelX*time,contactY=startY+travelY*time;
-                float waterX=previousX+(x-previousX)*time;
-                float waterY=previousY+(y-previousY)*time;
-                float sourceY=Mathf.Clamp(contactY,waterY+1f,waterY+112f*scale);
+                float waterX=previousX+waterDx*time;
+                float waterY=previousY+waterDy*time;
+                float sourceY=Mathf.Clamp(contactY,waterY+1f,waterY+height);
                 if (!Aquabro.WaterContactVisible(waterX,sourceY,contactX,contactY,null) ||
                     !Aquabro.WaterContactVisible(startX,startY,contactX,contactY,null)) continue;
                 return true;

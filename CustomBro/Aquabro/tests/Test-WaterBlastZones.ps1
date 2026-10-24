@@ -82,6 +82,7 @@ class Unit : MonoBehaviour {
 }
 class TestVanDammeAnim : Unit { public float headHeight=18; }
 class MookBigGuy : Unit { }
+class MookGrenadier : Unit { }
 struct Vector3 {
  public float x,y,z;
  public Vector3(float x,float y,float z) { this.x=x;this.y=y;this.z=z; }
@@ -422,7 +423,7 @@ $testSource = Join-Path $env:TEMP ('Aquabro-WaterZones-' + [Guid]::NewGuid().ToS
 $testExe = [IO.Path]::ChangeExtension($testSource,'.exe')
 try {
     [IO.File]::WriteAllText($testSource,$harness.Replace('__CONSTANTS__',$constants).Replace('__METHOD__',$method).Replace('__EFFECT_METHODS__',$effectMethods).Replace('__ATLAS__',(Join-Path $projectRoot '_Mod\water-rocket-explosion.png')))
-    & (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v3.5\csc.exe') /nologo /nowarn:0649 /reference:System.Drawing.dll /out:$testExe $testSource (Join-Path $projectRoot 'src\ChargedWaterPixelMask.cs') (Join-Path $projectRoot 'src\CollisionDamageTarget.cs') (Join-Path $PSScriptRoot 'BossDamageTestStubs.cs') (Join-Path $PSScriptRoot 'BossWaterDamageTests.cs')
+    & (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v3.5\csc.exe') /nologo /nowarn:0649 /reference:System.Drawing.dll /out:$testExe $testSource (Join-Path $projectRoot 'src\PixelMask.cs') (Join-Path $projectRoot 'src\ChargedWaterPixelMask.cs') (Join-Path $projectRoot 'src\CollisionDamageTarget.cs') (Join-Path $PSScriptRoot 'BossDamageTestStubs.cs') (Join-Path $PSScriptRoot 'BossWaterDamageTests.cs')
     if ($LASTEXITCODE -ne 0) { throw '水爆分区测试编译失败' }
     & $testExe
     if ($LASTEXITCODE -ne 0) { throw '水爆分区测试失败' }

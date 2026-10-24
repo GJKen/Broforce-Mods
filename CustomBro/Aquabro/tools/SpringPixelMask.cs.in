@@ -1,12 +1,9 @@
 // Generated from the visible Aseprite composites by export_skill_effects.lua.
-using System;
-
 namespace AquabroMod
 {
     internal static class SpringPixelMask
     {
-        internal static readonly PixelMask Mask = new PixelMask(128, new byte[][] {
-@FRAMES@
-        });
+        internal static readonly PixelMask Mask = new PixelMask(128, PixelMask.DecodeContextFrames(@COUNT@, 128, @COMPRESSED_LENGTH@, @CHECKSUM@u,
+            "@DATA@"));
     }
 }

@@ -13,6 +13,9 @@
 | [Test-Spring.ps1](Test-Spring.ps1) | **四技能综合回归**：地形、操控、伤害、Boss、拦弹、毒水、蒙版、HUD；不只测涌泉 |
 | [Test-SpriteInitialization.ps1](Test-SpriteInitialization.ps1) | 生成和直升机运输时身体／武器贴图初始化 |
 | [Test-FrameStep.ps1](Test-FrameStep.ps1) | 暂停、逐帧调试、移动平台与击掌加速的时间步 |
+| [Test-MaskDeflate.ps1](Test-MaskDeflate.ps1) | 构建编码器的14组确定性数据经生产DecodeFrames/.NET3.5逐字节还原，覆盖空/极短/随机/重叠/32KiB距离及固定/动态码表 |
+| [Test-MaskRuns.ps1](Test-MaskRuns.ps1) | 逐帧位游程经生产DecodeRunFrames/.NET3.5完整还原；11组全零/全一/交替/字节与帧边界/127与128变长整数/长游程/随机数据，以及8组截断、越界、溢出、零长和尾随数据拒绝 |
+| [Test-MaskContext.ps1](Test-MaskContext.ps1) | 当前32空间上下文区间编码经生产DecodeContextFrames/.NET3.5逐字节恢复；11组空/零/一/交替/行帧边界/斜线/计数折半/随机，以及9组截断、尾随、损坏、校验和和尺寸错误拒绝 |
 
 ## 如何运行
 
@@ -26,6 +29,12 @@
 ```
 
 水花测试读取当前 `_Mod/water-rocket-explosion.png` 和 `src/ChargedWaterPixelMask.cs`，两者必须配套。
+
+`./tests/Test-MaskDeflate.ps1`另需Aseprite，读取相同本机配置，也可传`-AsepritePath`。它只在临时目录生成测试数据、编译执行，结束清理；不修改正式资源或部署。实际游戏完整蒙版和首次初始化证据仍使用下方现场诊断，不能用离线编解码代替。
+
+`./tests/Test-MaskRuns.ps1`使用相同配置和临时目录流程，验证构建期位游程编码与初始化时还原；不修改或放宽既有DEFLATE回归。完整五组PNG与蒙版仍由五个既有入口及实际游戏导出共同验收。
+
+`./tests/Test-MaskContext.ps1`验证当前正式空间上下文编码器，重复编码须相同、完整输出逐字节一致且各帧数组独立；损坏立即拒绝。旧DEFLATE及游程回归作为兼容入口保留。完整游戏冷初始化与导出另用MaskStorageLive及受保护MaskSnapshotLive；现场探针同时支持旧/新初始化入口，观察每组恰好一次还原。参见[第5轮证据与冷初始化耗时](../docs/自动精简-20261023-152127-0005.md)。
 
 四技能综合测试另需 Aseprite 和 `0Harmony.dll`。可在 `LocalBuild.json` 中配置 `AsepritePath`、`ReferenceDirectory` 后运行 `./tests/Test-Spring.ps1`，也可直接传参：
 
@@ -43,18 +52,19 @@
 
 | 文件 | 主要覆盖 |
 | --- | --- |
-| [SkillSpringTests.cs](SkillSpringTests.cs) | 综合入口与模拟对象；七柱展开、低台阶／牢笼／高墙、共享七击和整组污染、狂潮、拦弹、切换与次数、HUD |
+| [SkillSpringTests.cs](SkillSpringTests.cs) | 综合入口与模拟对象；七柱展开、低台阶／牢笼／高墙、共享七击和整组污染、狂潮、拦弹、切换与次数、HUD；Big Guy／Grenadier 固定一次 26 点且存活不挡浪 |
 | [SkillSharkTests.cs](SkillSharkTests.cs) | 潜行操控、梯子／电梯／Boss 顶面支撑；多帧率重力飞行、深坑／无底洞、阻墙、镜头与暂停；固定水花、59 格本体与蒙版、鼻尖触水和入水停破坏 |
 | [SkillMaelstromTests.cs](SkillMaelstromTests.cs) | 普通兵／载具／露头虫类落点、分散吸附、普通／重装尸体吸力及死亡状态、重装控制、拆墙扩路线、收尾显示帧与伤害一致 |
 | [SkillDamageTargetTests.cs](SkillDamageTargetTests.cs) | 单位、Boss 和物件的伤害资格；毒水两阶段、原生腐蚀、免疫与普通伤害回退 |
 | [SkillOcclusionTests.cs](SkillOcclusionTests.cs) | 墙后狂潮／猎杀物件、三种屏障拦弹与酸池污染，含贴身薄墙、弹丸先撞墙和拆墙恢复 |
-| [BossSkillDamageTests.cs](BossSkillDamageTests.cs) | 部件、代理链与未知接收者；阶段保护、关联去重、伤害预算；狂潮载具挡停／击杀恢复和锯齿打落 |
+| [BossSkillDamageTests.cs](BossSkillDamageTests.cs) | 部件、代理链与未知接收者；阶段保护、关联去重、伤害预算；狂潮载具挡停／击杀恢复、Big Guy／Grenadier 单次 26 点后穿行和锯齿打落 |
 | [BossWaterDamageTests.cs](BossWaterDamageTests.cs) | 普通／蓄力完整扫掠、直击优先、地形与水花去重、可见像素、遮挡和大型部件边缘 |
 | [BossDamageTestStubs.cs](BossDamageTestStubs.cs) | 非 Unit 的 Boss 模型，不提供帧内防重复，以暴露重复请求 |
 | [PixelMaskTests.cs](PixelMaskTests.cs) | 公共像素查询的边缘／斜角、反向矩形、空帧及世界坐标平移、镜像、缩放、水线裁剪 |
 
 维护时保留这些关键边界：
 
+- **狂潮胖兵例外**：`CheckWaveMookFixedDamage` 覆盖 `MookBigGuy`、其子类与 `MookGrenadier`，低／高血量、双朝向、三种缩放下都只受一次 26 点，不按血量强杀，也不附加闪白／眩晕；存活时仍放行水墙。`CheckWaveBodyVehicles` 另以 30／60／120 FPS 的真实技能实例检查两类目标受击后水墙继续前进，其余载具仍按原周期伤害并在存活时挡停。
 - **Boss**：坦克、蛞蝓头部、撒旦头部／六臂及关联部件分别检查；装甲、关闭碰撞、免疫阶段不能被身体兜底绕过。持续伤害覆盖 30／60／120 FPS 和涌泉 28、漩涡 36、狂潮 26 的基础总额。
 - **虫类落点**：`CheckWormDestination` 覆盖主体未登记／远离头部、已登记仍按露出部位、头部下缘埋土、最近目标和护甲／关闭／无效／墙／无地面／距离过滤，不能只用手动登记的虫代替。
 - **漩涡路线与收尾**：`CheckWallExpansion` 覆盖双向、15～120 FPS、不同时刻拆墙、无跳位和原定寿命；`CheckFinishVisualFrame` 按显示帧 24／跳帧 26 检查正式 PNG 接触及单次 9 点收尾。
@@ -63,6 +73,10 @@
 - **死亡酸液残留**：`CheckSlimeSources` 覆盖三种水体、双向／两种缩放、地板／墙／天花板四个附着面、隔墙后拆墙、血色／伤害／有效性筛选、来源去重和两级升级，不消耗残留。`Probe-SlimeWaterLive.cs` 默认只读现场；暂停时传 `verify=true`，用临时原生酸液检查 Setup 登记和实际 PNG 变绿，结束清理全部临时对象。
 
 ## 本地可选的现场诊断文件
+
+`MaskStorageLive.cs`在TestMod暂停的实际海王进程逐帧逐像素调用五种生产查询，检查无效边界、每组100,000次稳定调用与数组引用。新压缩路径用临时Harmony观察各组冷初始化恰好解码一次、重复初始化/查询不再解码，finally移除观察补丁；需要在新进程首次访问蒙版前运行。旧Mono没有线程分配计数API时会明确报告unsupported，不以堆大小冒充分配数据。完整导出仍使用受保护`tools/auto-optimize/MaskSnapshotLive.cs`及其output绝对路径参数，不能用采样指纹替代全部原始字节。结束卸载诊断、恢复暂停并关闭游戏；验证范围与限制见[DLL瘦身第1轮报告](../docs/自动精简-20261023-100531-0001.md)。
+
+随仓库保存的 `LogicOptimizationLive.cs` 用于代码精简前后对照：测试关海王、Test Mod 暂停后加载，检查三种毒水双向 RGBA 指纹、固定帧重复更新耗时、狂潮冷却／26 点预算及四种 HUD。临时效果在 `finally` 清理，选择恢复；结束卸载脚本、恢复暂停并关闭游戏。结果及范围见 [2026-10-23 代码精简对照](../docs/代码精简与实机对照-2026-10-23.md)。
 
 这些脚本供 MCP 等游戏内脚本环境加载，使用真实 Unity／Broforce 对象，不是命令行回归。除 [Preview-SharkBallistics.cs](Preview-SharkBallistics.cs) 外，下列现场文件可能仅本地保留、不随发布包提供；先检查文件和当前方法签名。
 

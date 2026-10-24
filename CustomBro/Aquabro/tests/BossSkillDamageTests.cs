@@ -199,6 +199,12 @@ internal static class BossSkillDamageTests
 
     private static void CheckWaveBossContact()
     {
+        WaveDamageState cooldown = new WaveDamageState();
+        object firstTarget = new object(), otherTarget = new object();
+        Check(cooldown.TakeDamage(firstTarget, 0f) == 2 && cooldown.TakeDamage(firstTarget, .119f) == 0 &&
+            cooldown.TakeDamage(firstTarget, .12f) == 2, "Wave actual-time cooldown boundary changed");
+        Check(cooldown.TryHit(otherTarget, 0f) && cooldown.TakeDamage(otherTarget, .01f) == 0 &&
+            cooldown.TakeDamage(otherTarget, .12f) == 2, "Wave object cooldown no longer shares damage gate");
         WaveDamageState budget = new WaveDamageState();
         BossPiece linked = new BossPiece(), other = new BossPiece();
         linked.connectedPieces.Add(other); other.connectedPieces.Add(linked);
@@ -307,17 +313,20 @@ internal static class BossSkillDamageTests
         foreach (float facing in new float[] { -1, 1 })
         foreach (bool kill in new bool[] { false, true })
         foreach (Unit target in new Unit[] { new MookTruck(), new MookAPC(), new DrillCarrier(), new MookDumpTruck(),
-            new MookArtilleryTruck(), new Mookopter(), new MammothKopter(), new MookVehicleDigger(), new MookBigGuy(), new Mech() })
+            new MookArtilleryTruck(), new Mookopter(), new MammothKopter(), new MookVehicleDigger(), new MookBigGuy(), new MookGrenadier(), new Mech() })
         {
             Reset();
             // Live truck body: Y=168, top=190, while the wave's waterline is 184.
             // Its Platform child is deliberately absent from the terrain query.
             target.X = facing * 60; target.Y=-16; target.width=16; target.height=target.headHeight=22;
-            target.playerNum=-1; target.health=kill ? 12 : 1000; Map.Targets.Add(target);
+            bool fixedDamageMook = target is MookBigGuy || target is MookGrenadier;
+            int initialHealth = kill ? 12 : 1000;
+            target.playerNum=-1; target.health=initialHealth; Map.Targets.Add(target);
             int total=0; float last=-1; float time=0;
             Map.DamageObserver=delegate(Unit victim,int damage)
             {
-                Check(damage==2 && (last<0 || time-last>=.1199f), "Body vehicle pulse duplicated");
+                if (fixedDamageMook) Check(last < 0 && damage==26, "Heavy Mook did not receive one fixed 26-damage hit");
+                else Check(damage==2 && (last<0 || time-last>=.1199f), "Body vehicle pulse duplicated");
                 total+=damage; last=time; victim.health-=damage;
             };
             AquabroSkillVisual wave=new AquabroSkillVisual(new Aquabro(),0,0,0,facing,2f,0,.85f);
@@ -331,13 +340,19 @@ internal static class BossSkillDamageTests
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(wave))blocked=true;
             }
             float end=(float)position.GetValue(wave)*facing;
-            Check(blocked && total>0 && total<=26, "Platform-only vehicle missed or over budget: "+target.GetType().Name);
-            if(kill)Check(target.health<=0 && end>60, "Killed body vehicle failed to release wave");
-            else Check(end<60, "Living body vehicle let wave through: "+target.GetType().Name);
+            if (fixedDamageMook)
+                Check(total==26 && target.health==initialHealth-26 && end>60,
+                    "Water wall did not pass through after its fixed Mook hit: "+target.GetType().Name);
+            else
+            {
+                Check(blocked && total>0 && total<=26, "Platform-only vehicle missed or over budget: "+target.GetType().Name);
+                if(kill)Check(target.health<=0 && end>60, "Killed body vehicle failed to release wave");
+                else Check(end<60, "Living body vehicle let wave through: "+target.GetType().Name);
+            }
             wave.Dispose();
         }
         Reset();
-        Console.WriteLine("PASS wave body vehicles: live truck geometry; ten vehicle/heavy families; missing Platform colliders; both directions; 30/60/120 FPS; <=26 total; survive blocks / kill resumes");
+        Console.WriteLine("PASS wave body vehicles: live truck geometry; vehicles keep periodic damage; Big Guy and Grenadier take one 26-damage hit and never block; both directions; 30/60/120 FPS");
     }
 
     private static void CheckWaveResume()

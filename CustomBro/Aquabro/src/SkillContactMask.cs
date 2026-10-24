@@ -32,14 +32,16 @@ namespace AquabroMod
 
         internal bool IntersectsRect(Bounds bounds)
         {
-            return IntersectsRect(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
+            Vector3 min = bounds.min, max = bounds.max;
+            return IntersectsRect(min.x, min.y, max.x, max.y);
         }
 
         internal bool IntersectsRect(float left, float bottom, float right, float top)
         {
             // Keep the five-pixel margin above the support floor/waterline.
-            if (top <= Y + 1f) return false;
-            bottom = Mathf.Max(bottom, Y + 1f);
+            float floor = Y + 1f;
+            if (top <= floor) return false;
+            bottom = Mathf.Max(bottom, floor);
             return mask.IntersectsRect(frame, PixelX(left), PixelY(top), PixelX(right), PixelY(bottom), 5f / Scale);
         }
 
