@@ -18,3 +18,14 @@
 /CustomBro/*/tools/archive/**/*.dll
 **/__pycache__/
 *.py[cod]
+
+# Aquabro local compiler references and generated diagnostics.
+/CustomBro/Aquabro/.aquabro-buildrefs/
+/CustomBro/Aquabro/.aseprite-export/
+/CustomBro/Aquabro/.layer-probe/
+/CustomBro/Aquabro/bin/
+/CustomBro/Aquabro/obj/
+/CustomBro/Aquabro/aseprite-build.log
+/CustomBro/Aquabro/.debug-*.png
+/CustomBro/Aquabro/.diag-*.png
+/CustomBro/Aquabro/_debug_*.png
