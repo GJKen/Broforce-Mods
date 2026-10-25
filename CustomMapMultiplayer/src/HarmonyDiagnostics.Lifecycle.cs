@@ -146,6 +146,7 @@ namespace CustomMapMultiplayer
             PreparedLocalWorkshopRejoins.Clear();
             WorkshopKnownHeroTypes.Clear();
             WorkshopDropoutHeroTypes.Clear();
+            WorkshopDropoutAvatarTextures.Clear();
             WorkshopDropoutControllerIds.Clear();
             ClearOnlineHostObservation();
         }
@@ -835,6 +836,8 @@ namespace CustomMapMultiplayer
         {
             try
             {
+                ManualAfkDeadReturnControllers.Clear();
+                WorkshopDropoutAvatarTextures.Clear();
                 ClearWorkshopAcidPoolCache();
                 ClearEntityFinalStateSynchronizationState();
                 ClearDemolitionBroBombDetonationState();

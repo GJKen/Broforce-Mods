@@ -50,6 +50,8 @@ FRP Direct 的房主退出仍按现有协议结束房间，不支持主机迁移
 
 晚加入流程等待玩家列表稳定 250ms，再用本机主控制器调用一次 `HeroController.AddLocalPlayer(-1, controllerId)`。已有本地槽位或待处理请求时复用，避免重复生成 P2-P4；45 秒内没有观察到本地 `Player.Start` 或 `SetPlayerCharacter` 时允许重试一次。创建方仍在 `newJoin`/选关界面时不启动地图加载，进入 Workshop 过场后最长等待约 120 秒。
 
+每次本地 Workshop `Player.Start` 成功后，清理 `WorkshopLocalJoinRequests` 及关联槽位请求，而不是只在首次晚加入完成时清理。已完成请求不会阻挡下一次主动 AFK 返回；尚未创建 Player 的请求仍使用原有 10 秒重复加入保护。这与首次晚加入流程的 45 秒观察窗口不同。
+
 Host 只在晚加入 Workshop 会话中放宽 `RequestJoinGame` 的关卡完成和控制器注册保护。请求成功后，拥有角色的一端重发权威 `SetSpawnPositon`；房主调用 `InstantiationController.SendInstantiatedPrefabs(requesteeID)`，只向新 PID 重放 buffered `PlayerPrefab` 和角色实例。
 
 成功判据：
@@ -65,6 +67,8 @@ Host 只在晚加入 Workshop 会话中放宽 `RequestJoinGame` 的关卡完成�
 游戏原本的 `RequestHeroTypeFromMaster` 流程继续保留。Workshop 本地玩家等待 18 秒仍无回复时，使用原生 `GetHeroType` 和 `Player.SpawnHero` 做一次本地备用生成；已有角色、远程玩家和正常收到回复的玩家不进入备用分支。
 
 Workshop 玩家发生 `Dropout` 后，按槽位保存英雄类型和本地 `playerControllerIDs`。重新请求英雄、备用生成和 `AddLocalPlayer` 优先恢复这些值；`Player.Start`/`登记` 阶段修正原生写回的错误控制器。角色存在但无法操作时，优先比较掉线前后的控制器绑定，而不是只检查 `character`。
+
+主动 AFK 不安排自动重入。存活时 AFK 后显式返回正常恢复角色；死亡后在同一关返回只恢复参与槽位、控制器和英雄类型，保持 `Lives=0`、`character=null`，不补生命或生成角色。双方 HUD 保留原角色死亡头像，包括各端原有的随机头像变体和双头像；只恢复原有显示，不新增跨端随机变体同步。死亡玩家仍可正常获救，重开或切换场景后不保留死亡 AFK 标记。详见 [AFK 行为](AFK.md) 和[死亡后主动 AFK 问题记录](../issues/ISSUES-2026-10-26-死亡后主动AFK与返回状态.md)。
 
 ## Workshop 出生点与复活位置
 

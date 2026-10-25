@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
@@ -25,6 +26,8 @@ namespace CustomMapMultiplayer
         private static readonly bool[] AfkPreventionLogged = new bool[4];
         private static readonly bool[] PendingManualAfkRequests = new bool[4];
         private static readonly bool[] ManualAfkDropoutActive = new bool[4];
+        private static readonly HashSet<int> ManualAfkDeadReturnControllers =
+            new HashSet<int>();
         private static readonly DateTime[] ManualAfkDropoutPendingUntilUtc =
             new DateTime[4];
         private static System.Reflection.FieldInfo _playerIdleTimerField;
@@ -523,14 +526,39 @@ namespace CustomMapMultiplayer
                 ManualAfkDropoutActive[player.playerNum] = true;
                 ManualAfkDropoutPendingUntilUtc[player.playerNum] = DateTime.UtcNow.AddSeconds(
                     ManualAfkDropoutCallbackWindowSeconds);
+                if (!player.IsAlive())
+                {
+                    ManualAfkDeadReturnControllers.Add(GetAfkControllerNumber(player));
+                }
                 LogAfkEvent("AFK_STATE event=manual-requested; player=" + player.playerNum +
                     "; controller=" + GetAfkControllerNumber(player) +
                     "; idleSeconds=" + FormatAfkSeconds(NativeAfkTimeoutSeconds + 1f));
+
+                // Native Player.Update only checks the AFK timer while the hero is alive.
+                // A dead or missing hero must use the same dropout lifecycle directly.
+                if (player.character == null || !player.character.IsAlive())
+                {
+                    PendingManualAfkRequests[player.playerNum] = false;
+                    HeroController.Dropout(player.playerNum, true);
+                    ShowAfkEnteredNotice();
+                }
+
                 return true;
             }
 
             DiagnosticLog.Info("Manual AFK request ignored because no local player is currently playing.");
             return false;
+        }
+
+        private static void ShowAfkEnteredNotice()
+        {
+            var preference = Plugin.Settings == null ? null : Plugin.Settings.SettingsLanguage;
+            LevelTitle.ShowText(SettingsUiLocalization.Get(preference).AfkEnteredNotice, 0f, false);
+        }
+
+        private static bool ShouldPreserveDeadManualAfkReturn(Player player)
+        {
+            return ManualAfkDeadReturnControllers.Contains(GetAfkControllerNumber(player));
         }
 
         private static int CountAfkRoomParticipants()
@@ -773,6 +801,10 @@ namespace CustomMapMultiplayer
             var currentPlayer = GetPlayerForAfkSlot(playerNum);
             var slotPlaying = IsAfkSlotPlaying(playerNum);
             var removed = currentPlayer == null || !slotPlaying;
+            if (observation.ManualRequest && (dropoutObserved || removed))
+            {
+                ShowAfkEnteredNotice();
+            }
 
             if (observation.MayReachNativeTimeout &&
                 (dropoutObserved || removed) && state.LogStage < 3)
@@ -1017,6 +1049,7 @@ namespace CustomMapMultiplayer
 
         private static void ClearAfkDiagnosticsState()
         {
+            ManualAfkDeadReturnControllers.Clear();
             for (var index = 0; index < AfkPlayerLogStates.Length; index++)
             {
                 AfkPlayerLogStates[index] = new AfkPlayerLogState();

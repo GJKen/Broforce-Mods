@@ -34,6 +34,7 @@ namespace CustomMapMultiplayer
         internal string OnlineKickFixDisabled;
         internal string OnlineKickFixHelp;
         internal string ManualAfkButton;
+        internal string AfkEnteredNotice;
         internal string ManualAfkSinglePlayerNotice;
         internal string WorkshopNotice;
         internal string WorkshopSubscriptionMissingNotice;
@@ -148,6 +149,7 @@ namespace CustomMapMultiplayer
             OnlineKickFixDisabled = "Disabled native online kick fixes and optimizations",
             OnlineKickFixHelp = "A joining player cannot kick the host through the native online kick flow. When enabled, the host's own kick prompt and kick explosion damage are removed; the host can still kick joining players, and the result is synchronized to everyone.",
             ManualAfkButton = "Enter AFK now",
+            AfkEnteredNotice = "Entered AFK spectator mode",
             ManualAfkSinglePlayerNotice = "AFK is unavailable while you are the only player in the room.",
             WorkshopNotice = "When using a Workshop map, all players must use the same Mod build and subscribe to the same map.\nThe host enters the numeric Workshop ID.\nAfter joining, the joining player uses the host's Workshop ID; this setting can be ignored.",
             WorkshopSubscriptionMissingNotice = "The host is using Steam Workshop map ID {id}, but the map is not subscribed on this local machine. Please subscribe to the map in the Steam Workshop, restart the game, and then rejoin the room.",
@@ -271,6 +273,7 @@ namespace CustomMapMultiplayer
             OnlineKickFixDisabled = "已禁用 原生联机踢人机制修复与优化",
             OnlineKickFixHelp = "房主不会被联机玩家踢出；启用后隐藏房主自身踢人气泡以及踢人爆炸，同时保留房主正常踢出加入方且结果同步给所有玩家。",
             ManualAfkButton = "立即进入 AFK",
+            AfkEnteredNotice = "已进入旁观AFK模式",
             ManualAfkSinglePlayerNotice = "房间只有你一人时无法进入 AFK。",
             WorkshopNotice = "使用 Workshop 地图时，所有玩家必须使用相同的 Mod 构建，并订阅同一张地图。\n房主填写数字 Workshop ID；\n进入房间后，加入方则会使用房主的 Workshop ID，此项无需留意。",
             WorkshopSubscriptionMissingNotice = "房主使用的 Steam 创意工坊地图 ID 为 {id}，但本机尚未订阅。请先在 Steam 创意工坊订阅地图，重启游戏后，再重新加入房间。",

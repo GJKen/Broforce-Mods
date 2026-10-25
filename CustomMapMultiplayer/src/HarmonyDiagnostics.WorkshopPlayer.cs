@@ -13,6 +13,9 @@ namespace CustomMapMultiplayer
     // 角色退出重入：控制器绑定恢复、英雄类型恢复、重复加入抑制、暂停状态清理。
     internal static partial class HarmonyDiagnostics
     {
+        private static readonly Dictionary<int, Texture> WorkshopDropoutAvatarTextures =
+            new Dictionary<int, Texture>();
+
                 private static bool ShouldSuppressDuplicateWorkshopLocalJoin(object[] arguments)
         {
             if (!IsWorkshopJoinProtectionActive() || arguments == null || arguments.Length < 2 ||
@@ -572,6 +575,12 @@ namespace CustomMapMultiplayer
             }
 
             var pid = HeroController.PIDS[playerNum];
+            var player = HeroController.players[playerNum];
+            if (player != null && player.heroType != HeroType.None && player.hud != null)
+            {
+                WorkshopDropoutAvatarTextures[playerNum] =
+                    player.hud.avatar.GetComponent<Renderer>().sharedMaterial.mainTexture;
+            }
             if (pid == null || !pid.IsMine)
             {
                 return;
@@ -732,7 +741,8 @@ namespace CustomMapMultiplayer
                     player.playerNum + ".");
             }
             var lives = GetIntFieldOrProperty(player, "lives");
-            if (lives <= 0)
+            var preserveDeath = ShouldPreserveDeadManualAfkReturn(player);
+            if (!preserveDeath && lives <= 0)
             {
                 SetFieldOrProperty(player, "lives", 1);
                 DiagnosticLog.Warning(
@@ -741,7 +751,7 @@ namespace CustomMapMultiplayer
             }
 
             var controller = HeroController.Instance;
-            if (controller != null && controller.IDroppedOutThisRound)
+            if (!preserveDeath && controller != null && controller.IDroppedOutThisRound)
             {
                 controller.IDroppedOutThisRound = false;
                 DiagnosticLog.Warning(
@@ -752,16 +762,26 @@ namespace CustomMapMultiplayer
 
         private static void PlayerStartPostfix(Player __instance)
         {
+            // A dead return has no new hero registration to replace the default HUD avatar.
+            HeroType lastRemoteHeroType;
+            if (__instance != null && !__instance.IsMine && IsWorkshopOnlineSession() &&
+                __instance.heroType == HeroType.None &&
+                WorkshopKnownHeroTypes.TryGetValue(__instance.playerNum, out lastRemoteHeroType))
+            {
+                RestoreDeadWorkshopAvatar(__instance, lastRemoteHeroType);
+            }
+
             if (__instance != null && __instance.IsMine && IsWorkshopOnlineSession())
             {
                 RememberLastLocalWorkshopController(__instance.controllerNum);
+                // The request is complete; retaining it delays the next explicit AFK return.
+                ClearWorkshopLocalJoinRequests();
                 ResetStalePauseStateForWorkshopSession("local Workshop Player.Start");
             }
 
             if (__instance != null && __instance.IsMine && _lateJoinStarted &&
                 !_lateJoinAutoJoinCompleted)
             {
-                ClearWorkshopLocalJoinRequests();
                 _lateJoinPlayerJoinRequested = false;
                 _lateJoinPlayerRequestAtUtc = DateTime.MinValue;
                 _lateJoinAutoJoinCompleted = true;
@@ -773,6 +793,26 @@ namespace CustomMapMultiplayer
             if (!IsWorkshopOnlineSession() || __instance == null || !__instance.IsMine ||
                 !PreparedLocalWorkshopRejoins.Remove(__instance.playerNum))
             {
+                return;
+            }
+
+            if (ShouldPreserveDeadManualAfkReturn(__instance))
+            {
+                ManualAfkDeadReturnControllers.Remove(GetAfkControllerNumber(__instance));
+                __instance.firstDeployment = false;
+                __instance.Lives = 0;
+                HeroType savedHeroType;
+                if (TryGetWorkshopRejoinHeroType(__instance.playerNum, out savedHeroType))
+                {
+                    RestoreDeadWorkshopAvatar(__instance, savedHeroType);
+                }
+                __instance.SetAvatarDead(true);
+                __instance.SetAvatarDead(false);
+                __instance.ActivateHUD();
+                __instance.ClearTimeSinceDeath();
+                DiagnosticLog.Info(
+                    "Preserved dead Workshop player after manual AFK return: player=" +
+                    __instance.playerNum + "; lives=0; waiting for native rescue or the next round.");
                 return;
             }
 
@@ -807,6 +847,24 @@ namespace CustomMapMultiplayer
                     "Skipped local Workshop rejoin respawn because the player PID is not registered: player=" +
                     __instance.playerNum + ".");
             }
+        }
+
+        private static void RestoreDeadWorkshopAvatar(Player player, HeroType heroType)
+        {
+            player.SetHeroType(heroType);
+            Texture avatarTexture;
+            if (WorkshopDropoutAvatarTextures.TryGetValue(player.playerNum, out avatarTexture))
+            {
+                player.hud.avatar.GetComponent<Renderer>().material.mainTexture = avatarTexture;
+                WorkshopDropoutAvatarTextures.Remove(player.playerNum);
+            }
+            if (heroType == HeroType.BoondockBros)
+            {
+                var prefab = (BoondockBro)HeroController.GetHeroPrefab(heroType);
+                player.hud.GoToDoubleAvatarMode(prefab.avatar1, prefab.avatar2);
+            }
+            player.SetAvatarDead(true);
+            player.SetAvatarDead(false);
         }
 
         private static bool RecieveHeroTypeFromMasterPrefix(object[] __args)

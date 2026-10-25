@@ -18,18 +18,19 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 ## 源码职责
 
 - `src/Plugin.cs`：UMM 加载、设置界面、保存和启用/禁用入口。
-- `src/SettingsUiText.cs`：UMM 设置界面的中英文文案和系统语言选择。
+- `src/SettingsUiText.cs`：UMM 设置界面及游戏内提示的中英文文案和系统语言选择，包括主动 AFK 的统一标题提示。
 - `src/DiagnosticSettings.cs`：Workshop、会话、当前页面、语言、FRP 和日志类别配置。旧的折叠状态字段仅为迁移兼容保留。
 - `src/DiagnosticLog.cs`：普通会话日志、Harmony 追踪、分类过滤和刷新。
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：大厅、关卡切换、Workshop 加载、玩家和英雄流程。
 - `src/WorkshopMapDirectory.cs`：枚举 Steam 已订阅项目、读取本地地图状态、查询 Workshop 标题并维护选择页目录。
 - `src/HarmonyDiagnostics.WorkshopIdentity.cs`：房主地图身份发布、加入方会话配置采用、Steam 订阅检测和缺图加载保护。
-- `src/HarmonyDiagnostics.WorkshopPlayer.cs`：Workshop 本地玩家请求、控制器所有权、掉线重入和英雄类型恢复。
+- `src/HarmonyDiagnostics.WorkshopPlayer.cs`：Workshop 本地玩家请求、控制器所有权、掉线重入和英雄类型恢复；死亡主动 AFK 返回不补生命或生成角色，并恢复原死亡头像；每次本地 `Player.Start` 成功后释放已完成的加入请求，保留进行中的重复请求保护。
+- `src/HarmonyDiagnostics.Lifecycle.cs`：Workshop 会话及场景生命周期清理，包括死亡 AFK 返回标记和掉线头像缓存，避免影响下一回合出生。
 - `src/HarmonyDiagnostics.WorkshopSpawn.cs`：Workshop 首次稳定出生点记录、异常 DropInDuringGame 复活位置修复、远端角色初次位置校正和出生点重广播。
 - `src/HarmonyDiagnostics.WorkshopPickup.cs`：道具确定性、拾取所有权、幂等和满弹药退避。
 - `src/HarmonyDiagnostics.WorkshopLevelEnd.cs`：Workshop 关卡结束动作防重入保护。
-- `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、主动 AFK、超时和槽位移除观测。
+- `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、存活及死亡主动 AFK、死亡返回控制器记录、本地化标题提示、超时和槽位移除观测。
 - `src/HarmonyDiagnostics.Chat.cs`：联机聊天的 Enter/Esc 边界、真实键盘重复编辑、Unity IME 提交、500 UTF-16 字符上限、相对输入框 `RectTransform` 右下角的本地字数显示，以及基于 Unity `TextGenerator` 的多行 viewport、按实际视觉行的 Up/Down 与 preferred X、`MessageController.UpdateText`/`ChatTextBox.Update` 时序同步和聊天 `Text.OnPopulateMesh` 前置校正。
 - `src/HarmonyDiagnostics.Acid.cs`：英雄酸液入口、酸池扫描、本地预测、Host 权威校验和死亡链日志。
 - `src/HarmonyDiagnostics.EntityFinalState.cs`：普通网络 Mook 的死亡事件、尸体终态同步、待提交候选和生命周期清理。
