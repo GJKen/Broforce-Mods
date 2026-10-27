@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using HarmonyLib;
+using Networking;
 using Rogueforce;
 using BroMakerLib;
 using BroMakerLib.CustomObjects.Bros;
@@ -26,6 +27,8 @@ namespace AquabroMod
     {
         public bool hasPrevious;
         public float previousX, previousY;
+        public int frameId;
+        public float usedTime;
     }
 
     public class AquabroWaterEffect : MonoBehaviour
@@ -125,6 +128,8 @@ namespace AquabroMod
         private static Projectile chargedTridentPrefab;
         private static SoundHolder tridentSoundHolder;
         private static bool tridentVisualPatchInstalled;
+        private int tridentSequence, lastReceivedTrident;
+        private readonly HashSet<int> pendingTridentImpacts = new HashSet<int>();
 
         private float chargeTime;
         private float throwDelay;
@@ -156,6 +161,11 @@ namespace AquabroMod
                 PatchWaterMethod(visualHarmony, "HitUnits", "WaterHitUnits");
                 PatchWaterMethod(visualHarmony, "Bounce", "WaterHitGround");
                 PatchWaterMethod(visualHarmony, "MakeEffects", "AllowOriginalHitEffects");
+                PatchWaterMethod(visualHarmony, "HitHorizontalWalls", "AllowOriginalSpearWalls");
+                visualHarmony.Patch(typeof(PredabroSpear).GetMethod("RunProjectile",
+                    BindingFlags.NonPublic | BindingFlags.Instance),
+                    new HarmonyMethod(typeof(Aquabro).GetMethod("LimitTridentStep", BindingFlags.NonPublic | BindingFlags.Static)),
+                    new HarmonyMethod(typeof(Aquabro).GetMethod("RestoreTridentStep", BindingFlags.NonPublic | BindingFlags.Static)), null, null);
                 WaterProjectileBarrier.Install(visualHarmony);
                 tridentVisualPatchInstalled = true;
             }
@@ -193,6 +203,36 @@ namespace AquabroMod
         {
             // 蓄力长矛的残影使用独立原版武器 prefab；海王暂不生成该残影。
             return !(__instance is PredabroSpear) || !(__instance.firedBy is Aquabro);
+        }
+
+        private static bool AllowOriginalSpearWalls(PredabroSpear __instance)
+        {
+            // 海王已按实际戟尖扫墙，不再使用原版向下一步延伸的墙预检。
+            return !(__instance.firedBy is Aquabro);
+        }
+
+        private static bool LimitTridentStep(PredabroSpear __instance, ref float t, ref float ___t, out float __state)
+        {
+            __state = ___t;
+            if (!(__instance.firedBy is Aquabro)) return true;
+            AquabroTridentFlight flight = __instance.GetComponent<AquabroTridentFlight>();
+            if (flight == null) flight = __instance.gameObject.AddComponent<AquabroTridentFlight>();
+            if (flight.frameId != Time.frameCount)
+            {
+                flight.frameId = Time.frameCount;
+                flight.usedTime = 0f;
+            }
+            // 蓄力每帧分三步；三步共用剩余寿命，不能各自多飞一整步。
+            t = Mathf.Min(t, Mathf.Max(0f, __instance.life - flight.usedTime));
+            flight.usedTime += t;
+            ___t = t;
+            return t > 0f;
+        }
+
+        private static void RestoreTridentStep(ref float ___t, float __state)
+        {
+            // RunLife 仍按原整帧耗时扣寿命，不能重复扣除子步时间。
+            ___t = __state;
         }
 
         private static void PatchWaterMethod(Harmony harmony, string method, string prefix)
@@ -363,7 +403,16 @@ namespace AquabroMod
         {
             if (shot.GetComponent<AquabroWaterImpact>() != null) return;
             shot.gameObject.AddComponent<AquabroWaterImpact>();
+            if (!owner.IsMine)
+            {
+                // 另一端只结束飞行，水花由操作者的可靠命中结果决定。
+                UnityEngine.Object.Destroy(shot.gameObject);
+                return;
+            }
             bool charged = Mathf.Abs(shot.xI) > 500f;
+            if (!Connect.IsOffline)
+                Networking.Networking.RPC<int, bool, float, float>(PID.TargetOthers, false, false,
+                    new RpcSignature<int, bool, float, float>(owner.ReceiveTridentImpact), shot.seed, charged, x, y);
             float radius = charged ? WaterBlastRange : 12f;
             float damageRadius = charged ? radius * WaterBlastDamageRatio : radius;
             int blastDamage = charged ? 14 : 8;
@@ -1102,6 +1151,15 @@ namespace AquabroMod
             if (!animationTimeStepReady)
                 return;
             TickSkillPreview(Mathf.Max(0f, t));
+            if (IsMine && activeShark != null)
+            {
+                sharkNetworkTimer -= Mathf.Max(0f, t);
+                if (sharkNetworkTimer <= 0f)
+                {
+                    sharkNetworkTimer = 0.08f;
+                    BroadcastSharkState();
+                }
+            }
             // 基类换帧、移动和落地可能覆盖姿态，最后统一写入本次攻击帧。
             if (AnimateTridentAttack() || health <= 0)
                 return;
@@ -1247,6 +1305,9 @@ namespace AquabroMod
 
         private void FireTrident()
         {
+            if (!IsMine)
+                return;
+
             bool charged = chargeTime >= FullChargeDuration;
             Projectile prefab = charged ? chargedTridentPrefab : normalTridentPrefab;
             if (prefab == null)
@@ -1255,13 +1316,60 @@ namespace AquabroMod
             float x = X + transform.localScale.x * 14f;
             float y = Y + (ducking ? 8f : 11f);
             float speed = transform.localScale.x * 400f * (charged ? 1.66f : 1f);
-            if (IsMine)
+            int seed = ++tridentSequence;
+            // 贴墙时 Fire 内就可能命中；生成通知必须排在命中通知前面。
+            if (!Connect.IsOffline)
             {
-                ProjectileController.SpawnProjectileOverNetwork(prefab, this, x, y, speed, 0f, false, playerNum, false, false, 0f);
+                Networking.Networking.RPC<bool, float, float, float, float, int, int>(PID.TargetOthers,
+                    false, false,
+                    new RpcSignature<bool, float, float, float, float, int, int>(ReceiveTrident),
+                    charged, x, y, speed, 0f, playerNum, seed);
             }
+            SpawnTridentLocally(charged, x, y, speed, 0f, playerNum, seed);
 
             PlayAttackSound();
             Map.DisturbWildLife(X, Y, 120f, playerNum);
+        }
+
+        private void SpawnTridentLocally(bool charged, float x, float y, float speedX, float speedY,
+            int projectilePlayerNum, int seed)
+        {
+            Projectile prefab = charged ? chargedTridentPrefab : normalTridentPrefab;
+            if (prefab == null)
+                return;
+
+            // 与原版本地生成相同，但身份需在 Fire 的出生点碰撞前设置。
+            Projectile projectile = UnityEngine.Object.Instantiate<Projectile>(prefab, new Vector3(x, y, 0f), Quaternion.identity);
+            projectile.SetSeed(seed);
+            projectile.Fire(x, y, speedX, speedY, 0f, projectilePlayerNum, this);
+        }
+
+        [AllowedRPC]
+        private void ReceiveTrident(bool charged, float x, float y, float speedX, float speedY,
+            int projectilePlayerNum, int seed)
+        {
+            if (IsMine || seed <= lastReceivedTrident)
+                return;
+
+            lastReceivedTrident = seed;
+            pendingTridentImpacts.Add(seed);
+            SpawnTridentLocally(charged, x, y, speedX, speedY, projectilePlayerNum, seed);
+        }
+
+        [AllowedRPC]
+        private void ReceiveTridentImpact(int seed, bool charged, float x, float y)
+        {
+            // 游戏重发整批 RPC 时也只消费一次；命中顺序可与投掷顺序不同。
+            if (IsMine || !pendingTridentImpacts.Remove(seed)) return;
+            foreach (PredabroSpear shot in UnityEngine.Object.FindObjectsOfType(typeof(PredabroSpear)))
+                if (shot.firedBy == this && shot.seed == seed)
+                {
+                    if (shot.GetComponent<AquabroWaterImpact>() == null)
+                        shot.gameObject.AddComponent<AquabroWaterImpact>();
+                    UnityEngine.Object.Destroy(shot.gameObject);
+                }
+            AquabroWaterEffect.Play(Info.path, charged ? "water-rocket-explosion.png" : "water-hit-small.png",
+                x, y, charged ? 64 : 48, charged ? 6 : 12, charged);
         }
 
         protected override void PlayAttackSound(float volume)

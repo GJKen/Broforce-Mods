@@ -38,6 +38,16 @@ using System;
 using System.Collections.Generic;
 using AquabroMod;
 using System.Drawing;
+using Networking;
+namespace Networking {
+ enum PID { TargetOthers }
+ delegate void RpcSignature<T1,T2,T3,T4>(T1 a,T2 b,T3 c,T4 d);
+ static class Connect { public static bool IsOffline=true; }
+ static class Networking {
+  public static void RPC<T1,T2,T3,T4>(PID target,bool immediate,bool ignoreSessionID,
+   RpcSignature<T1,T2,T3,T4> method,T1 a,T2 b,T3 c,T4 d) { }
+ }
+}
 class MonoBehaviour { }
 class AquabroWaterImpact { }
 class AquabroTridentFlight {public bool hasPrevious;public float previousX,previousY;}
@@ -53,7 +63,7 @@ class GameObject {
 }
 class Projectile {
  public float X,Y,xI,yI;
- public int playerNum=-1,damageInternal=13,damage=13;
+ public int playerNum=-1,damageInternal=13,damage=13,seed;
  public MonoBehaviour firedBy;
  public DamageType damageType;
  public GameObject gameObject=new GameObject();
@@ -136,6 +146,7 @@ class Aquabro : MonoBehaviour {
  public int playerNum;
  public float X,Y;
  public Info Info=new Info();
+ private void ReceiveTridentImpact(int seed,bool charged,float x,float y) { }
  __CONSTANTS__
  __METHOD__
  public static void Impact(PredabroSpear p, Aquabro a, object direct) { ResolveWaterImpact(p,a,0,0,direct); }
@@ -411,9 +422,10 @@ class Tests {
    Reset();Unit normal=At(13,0);Map.units.Add(normal);
    Aquabro.Impact(new PredabroSpear { xI=400,damageInternal=5 },new Aquabro(),normal);
    Check(normal.health==92 && normal.hits==1 && normal.forceY==90,"Normal direct hit changed");
-   Reset();Unit remote=At(0,0);Map.units.Add(remote);
+   Reset();Unit remote=At(0,0);Map.units.Add(remote);AquabroWaterEffect.Last=null;
    Aquabro.Impact(new PredabroSpear { xI=664 },new Aquabro { IsMine=false },remote);
    Check(remote.hits==0,"Remote owner repeats damage");
+   Check(AquabroWaterEffect.Last==null,"Remote collision starts an independent splash");
    Console.WriteLine("PASS: close+overlap throws / crouch+both directions / behind excluded / tip+head+swept hits / 600ms late entry / pause / once / inner70% damage / outer30% knock / normal / remote");return 0;
   } catch(Exception ex) { Console.Error.WriteLine(ex.Message);return 1; }
  }

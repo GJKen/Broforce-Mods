@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Networking;
 using UnityEngine;
 using Rogueforce;
 using BroMakerLib;
@@ -38,7 +39,24 @@ namespace AquabroMod
         private int hudSkill = -1;
         private Material skillHudMaterial;
         private List<Material> skillHudMaterials;
+        private float sharkNetworkTimer;
+        private bool sharkNetworkLeft, sharkNetworkRight, sharkNetworkDrop;
+        private bool pendingSharkState;
+        private float pendingSharkX, pendingSharkY, pendingSharkFacing;
+        private bool pendingSharkLeft, pendingSharkRight, pendingSharkDrop;
         public int SelectedSkill { get { return SkillSelections[Mathf.Clamp(playerNum, 0, 3)]; } }
+
+        [Syncronize(Interpolate = false)]
+        public int SelectedSkillSynced
+        {
+            get { return SelectedSkill; }
+            set
+            {
+                int slot = Mathf.Clamp(playerNum, 0, 3);
+                SkillSelections[slot] = Mathf.Clamp(value, 0, SkillNames.Length - 1);
+                RefreshSkillHud();
+            }
+        }
         private bool ControllingShark { get { return activeShark != null && activeShark.SharkControlled; } }
         private bool SharkSkillActive { get { return ControllingShark || (usingSpecial && castingSkill == 1); } }
         private bool CanStartShark
@@ -74,6 +92,13 @@ namespace AquabroMod
             {
                 sharkDropInput = down;
                 activeShark.SetSharkInput(left, right);
+                sharkNetworkLeft = left;
+                sharkNetworkRight = right;
+                sharkNetworkDrop = special && !wasSpecial;
+            }
+            else
+            {
+                sharkNetworkLeft = sharkNetworkRight = sharkNetworkDrop = false;
             }
             // Keep special/wasSpecial intact so holding the launch key cannot trigger a breach.
             left = right = up = down = buttonJump = fire = highFive = buttonGesture = false;
@@ -138,20 +163,32 @@ namespace AquabroMod
         {
             // The original input sends this RPC once per rising edge, rather than
             // once per animation loop. Do not hook TriggerFlexEvent (fires twice).
-            if (gesture == GestureElement.Gestures.Flex && health > 0 &&
+            if (IsMine && gesture == GestureElement.Gestures.Flex && health > 0 &&
                 !usingSpecial && !usingPockettedSpecial && !doingMelee && !IsIncapacitated() && !ControllingShark)
             {
                 int slot = Mathf.Clamp(playerNum, 0, 3);
                 SkillSelections[slot] = (SkillSelections[slot] + 1) % SkillNames.Length;
                 chargeTime = throwDelay = 0f;
+                // BroBase disables continuous owner sync while idle, so the
+                // selection must also travel as a reliable event.
+                if (!Connect.IsOffline)
+                    Networking.Networking.RPC<int>(PID.TargetOthers, false, false,
+                        new RpcSignature<int>(ReceiveSkillSelection), SelectedSkill);
             }
             base.SetGestureAnimation(gesture);
             RefreshSkillHud();
         }
 
+        [AllowedRPC]
+        private void ReceiveSkillSelection(int skill)
+        {
+            if (IsMine || skill < 0 || skill >= SkillNames.Length) return;
+            SelectedSkillSynced = skill;
+        }
+
         private void RefreshSkillHud()
         {
-            if (!IsMine || playerNum < 0 || playerNum >= 4 || HeroController.players == null ||
+            if (playerNum < 0 || playerNum >= 4 || HeroController.players == null ||
                 playerNum >= HeroController.players.Length) return;
             Player player = HeroController.players[playerNum];
             if (player == null || player.character != this || player.hud == null || player.hud.grenadeIcons == null) return;
@@ -184,11 +221,77 @@ namespace AquabroMod
             CurrentSpecialMaterialOffset = new Vector2(3f, 0f);
         }
 
+        private void BroadcastSkillCast(int skill, float x, float y, float facing)
+        {
+            if (!IsMine || Connect.IsOffline) return;
+            Networking.Networking.RPC<int, float, float, float>(PID.TargetOthers, false, false,
+                new RpcSignature<int, float, float, float>(ReceiveSkillCast), skill, x, y, facing);
+        }
+
+        [AllowedRPC]
+        private void ReceiveSkillCast(int skill, float x, float y, float facing)
+        {
+            if (IsMine || health <= 0 || skill < 0 || skill >= SkillAssets.Length) return;
+            castingSkill = skill;
+            specialResolved = true;
+            if (skill == 1 && activeShark != null) return;
+            if (skill == 0)
+                AddSkillVisual(0, x, y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f);
+            else if (skill == 1)
+            {
+                activeShark = new AquabroSkillVisual(this, 1, x, y, facing, SharkControlDuration(), 0f, 1f);
+                skillVisuals.Add(activeShark);
+                if (pendingSharkState)
+                {
+                    activeShark.ApplyNetworkState(pendingSharkX, pendingSharkY, pendingSharkFacing,
+                        pendingSharkLeft, pendingSharkRight, pendingSharkDrop);
+                    pendingSharkState = false;
+                }
+            }
+            else if (skill == 2)
+                AddSkillVisual(2, x, y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
+            else
+                StartSpringColumns(x, y);
+        }
+
+        private void BroadcastSharkState()
+        {
+            if (!IsMine || Connect.IsOffline || activeShark == null) return;
+            int flags = (sharkNetworkLeft ? 1 : 0) | (sharkNetworkRight ? 2 : 0) |
+                (sharkNetworkDrop ? 4 : 0);
+            Vector3 state = new Vector3(activeShark.NetworkX, activeShark.NetworkY, activeShark.NetworkFacing);
+            Networking.Networking.UnreliableRPC<Vector3, int>(PID.TargetOthers, false, false,
+                new RpcSignature<Vector3, int>(ReceiveSharkState), state, flags);
+            sharkNetworkDrop = false;
+        }
+
+        [AllowedRPC]
+        private void ReceiveSharkState(Vector3 state, int flags)
+        {
+            if (IsMine) return;
+            bool left = (flags & 1) != 0, right = (flags & 2) != 0, drop = (flags & 4) != 0;
+            if (activeShark == null)
+            {
+                pendingSharkState = true;
+                pendingSharkX = state.x; pendingSharkY = state.y; pendingSharkFacing = state.z;
+                pendingSharkLeft = left; pendingSharkRight = right; pendingSharkDrop = drop;
+                return;
+            }
+            activeShark.ApplyNetworkState(state.x, state.y, state.z, left, right, drop);
+        }
+
         protected override void PressSpecial()
         {
             if (ControllingShark)
             {
-                if (health > 0 && !IsIncapacitated()) activeShark.BreachShark();
+                if (IsMine && health > 0 && !IsIncapacitated())
+                {
+                    activeShark.BreachShark();
+                    if (!Connect.IsOffline)
+                        Networking.Networking.RPC<Vector3, int>(PID.TargetOthers, false, false,
+                            new RpcSignature<Vector3, int>(ReceiveSharkState),
+                            new Vector3(activeShark.NetworkX, activeShark.NetworkY, activeShark.NetworkFacing), 4);
+                }
                 return;
             }
             if (health <= 0 || IsIncapacitated() || doingMelee || usingSpecial ||
@@ -209,7 +312,8 @@ namespace AquabroMod
 
         protected override void UseSpecial()
         {
-            if (specialResolved || health <= 0) return;
+            // Remote input keeps the cast animation; its effects arrive by RPC.
+            if (!IsMine || specialResolved || health <= 0) return;
             specialResolved = true;
             // Recheck at release: stepping off an edge during the wind-up spends no ammo.
             if (castingSkill == 1 && !CanStartShark) return;
@@ -221,6 +325,7 @@ namespace AquabroMod
             {
                 case 0:
                     AddSkillVisual(0, X, Y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f);
+                    BroadcastSkillCast(0, X, Y, facing);
                     break;
                 case 1:
                     sharkDropInput = false;
@@ -228,6 +333,7 @@ namespace AquabroMod
                     if (!FindSharkFloor(X, Y, false, out sharkY)) sharkY = Y;
                     activeShark = new AquabroSkillVisual(this, 1, X, sharkY, facing, SharkControlDuration(), 0f, 1f);
                     skillVisuals.Add(activeShark);
+                    BroadcastSkillCast(1, X, sharkY, facing);
                     usingSpecial = usingPockettedSpecial = false;
                     pressSpecialFacingDirection = 0;
                     // UseSpecial can run before this tick's movement calculation.
@@ -246,9 +352,11 @@ namespace AquabroMod
                 case 2:
                     Vector2 center = FindMaelstromDestination(facing);
                     AddSkillVisual(2, center.x, center.y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
+                    BroadcastSkillCast(2, center.x, center.y, facing);
                     break;
                 case 3:
                     StartSpringColumns();
+                    BroadcastSkillCast(3, X, Y, facing);
                     break;
             }
             PlayAttackSound(0.8f);
@@ -275,12 +383,17 @@ namespace AquabroMod
 
         private void StartSpringColumns()
         {
+            StartSpringColumns(X, Y);
+        }
+
+        private void StartSpringColumns(float originX, float originY)
+        {
             HashSet<object> sharedHits = new HashSet<object>();
             SpringDamageState sharedSpring = new SpringDamageState();
             for (int i = -3; i <= 3; i++)
             {
                 Vector2 pos;
-                if (!FindSpringColumn(X + i * 30f, out pos)) continue;
+                if (!FindSpringColumn(originX, originY, originX + i * 30f, out pos)) continue;
                 AddSkillVisual(3, pos.x, pos.y, i < 0 ? -1f : 1f, 1.4f,
                     Mathf.Abs(i) * 0.14f, Mathf.Abs(i) == 3 ? 0.9f : 0.65f, sharedHits, sharedSpring);
             }
@@ -288,8 +401,11 @@ namespace AquabroMod
         }
 
         private bool FindSpringColumn(float destinationX, out Vector2 position)
+        { return FindSpringColumn(X, Y, destinationX, out position); }
+
+        private bool FindSpringColumn(float originX, float originY, float destinationX, out Vector2 position)
         {
-            float x = X, y = Y;
+            float x = originX, y = originY;
             RaycastHit floor, wall;
             // Preserve the centre's original 12px-up / 55px-down ground search.
             if (RaycastSpringTerrain(new Vector3(x, y + 12f, 0f), Vector3.down, 55f, out floor)) y = floor.point.y;
@@ -1170,8 +1286,19 @@ namespace AquabroMod
         private Vector3 sharkElevatorPosition;
         internal bool SharkControlled { get { return kind == 1 && sharkBreachElapsed < 0f; } }
         internal Transform CameraTarget { get { return obj.transform; } }
+        internal float NetworkX { get { return x; } }
+        internal float NetworkY { get { return y; } }
+        internal float NetworkFacing { get { return facing; } }
         internal void SetSharkInput(bool left, bool right)
         { sharkInput = (right ? 1f : 0f) - (left ? 1f : 0f); }
+        internal void ApplyNetworkState(float newX, float newY, float newFacing, bool left, bool right, bool drop)
+        {
+            x = newX;
+            y = newY;
+            facing = newFacing < 0f ? -1f : 1f;
+            SetSharkInput(left, right);
+            if (drop && SharkControlled) BreachShark();
+        }
         internal void BreachShark()
         {
             if (!SharkControlled) return;

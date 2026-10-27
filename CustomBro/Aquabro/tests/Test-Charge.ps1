@@ -1,8 +1,8 @@
-param()
+﻿param()
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$source = [System.IO.File]::ReadAllText((Join-Path $projectRoot 'src\Aquabro.cs'))
+$source = [System.IO.File]::ReadAllText((Join-Path $projectRoot 'src\Aquabro.cs'), [System.Text.Encoding]::UTF8)
 function Read-Method([string]$signature) {
     $start = $source.IndexOf($signature)
     if ($start -lt 0) { throw "未找到生产方法：$signature" }
@@ -20,12 +20,20 @@ $methods = @(
     Read-Method 'private void SetupTridentPrefabs()'
     Read-Method 'protected override void RunFiring()'
     Read-Method 'private void FireTrident()'
+    Read-Method 'private void SpawnTridentLocally(bool charged, float x, float y, float speedX, float speedY,'
+    Read-Method 'private void ReceiveTrident(bool charged, float x, float y, float speedX, float speedY,'
+    Read-Method 'private void ReceiveTridentImpact('
     Read-Method 'private static void ApplyTridentVisual('
     Read-Method 'private static int GetAnimationFrame('
     Read-Method 'private static bool AllowOriginalSpearTrail('
     Read-Method 'private static int GetChargeAnimationFrame('
     Read-Method 'private static int GetRunningChargeAnimationFrame('
 ) -join "`r`n"
+# Compile the production ownership/RPC gate; combat settlement has its own zone tests.
+$impact = Read-Method 'private static void ResolveWaterImpact('
+$methods += "`r`n" + $impact.Substring(0, $impact.IndexOf('float radius')) + "DamageCalls++;`r`n}"
+$tridentFields = [regex]::Match($source, 'private int tridentSequence, lastReceivedTrident;').Value + "`r`n" +
+    [regex]::Match($source, 'private readonly HashSet<int> pendingTridentImpacts = new HashSet<int>\(\);').Value
 $constants = [regex]::Matches($source, 'private const float (FullChargeDuration|ThrowCooldown|ThrowAnimationDuration|MeleeSpeedMultiplier|MeleeHitTime|MeleeDuration|RunningChargeLoopDuration|RunningChargeFrameDuration) = [^;]+;')
 $constantText = ($constants | ForEach-Object { $_.Value }) -join "`r`n"
 $constantText += "`r`n" + [regex]::Match($source, 'private static readonly float\[\] ChargedFrameDurations = \{[^}]+\};').Value
@@ -33,7 +41,60 @@ $constantText += "`r`n" + [regex]::Match($source, 'private static readonly float
 # 直接编译生产方法。外部对象仅记录发射调用，验证输入时序、原版 prefab 和参数。
 $harness = @'
 using System;
+using System.Collections.Generic;
+using Networking;
+namespace UnityEngine {
+ public static class Random { public static int Range(int min, int max) { return 4242; } }
+ static class Object {
+  public static T Instantiate<T>(T prefab, Vector3 position, Quaternion rotation) where T:Projectile {
+   Projectile p= prefab is PredabroSpear ? (Projectile)new PredabroSpear() : new Projectile();
+   ProjectileController.Count++; ProjectileController.InstantiateCalls++; ProjectileController.LastPrefab=prefab;
+   ProjectileController.Last=p; ProjectileController.Instances.Add(p); return (T)p;
+  }
+  public static object[] FindObjectsOfType(Type type) {
+   List<object> result=new List<object>(); foreach(Projectile p in ProjectileController.Instances)
+    if(!p.gameObject.Destroyed && type.IsInstanceOfType(p)) result.Add(p); return result.ToArray();
+  }
+  public static void Destroy(object target) { ((GameObject)target).Destroyed=true; }
+ }
+}
+class Vector3 { public Vector3(float x,float y,float z) { } }
+class Quaternion { public static readonly Quaternion identity=new Quaternion(); }
+class GameObject {
+ public bool Destroyed; object component;
+ public T AddComponent<T>() where T:new() { T value=new T(); component=value; return value; }
+ public T GetComponent<T>() where T:class { return component as T; }
+}
+class AquabroWaterImpact { }
+class AquabroWaterEffect {
+ public static int Calls; public static float X,Y; public static bool Charged;
+ public static AquabroWaterEffect Play(string path,string texture,float x,float y,int size,int frames,bool charged) {
+  Calls++; X=x; Y=y; Charged=charged; return new AquabroWaterEffect();
+ }
+ public void BeginBlast() { AquabroProbe.DamageCalls++; }
+}
+namespace Networking {
+ public enum PID { TargetOthers }
+ [AttributeUsage(AttributeTargets.Method)] public sealed class AllowedRPC : Attribute { }
+ public delegate void RpcSignature<T1, T2, T3, T4, T5, T6, T7>(T1 a, T2 b, T3 c, T4 d, T5 e, T6 f, T7 g);
+ public delegate void RpcSignature<T1,T2,T3,T4>(T1 a,T2 b,T3 c,T4 d);
+ public static class Connect { public static bool IsOffline; }
+ public static class Networking {
+  public static int Calls;
+  public static PID Target;
+  public static object[] Arguments;
+  public static List<string> Events=new List<string>();
+  public static void RPC<T1, T2, T3, T4, T5, T6, T7>(PID target, bool immediate, bool ignoreSessionID,
+      RpcSignature<T1, T2, T3, T4, T5, T6, T7> method, T1 a, T2 b, T3 c, T4 d, T5 e, T6 f, T7 g) {
+   Calls++; Target = target; Arguments = new object[] { a, b, c, d, e, f, g }; Events.Add(method.Method.Name);
+  }
+  public static void RPC<T1,T2,T3,T4>(PID target,bool immediate,bool ignoreSessionID,RpcSignature<T1,T2,T3,T4> method,T1 a,T2 b,T3 c,T4 d) {
+   Calls++; Target=target; Arguments=new object[] {a,b,c,d}; Events.Add(method.Method.Name);
+  }
+ }
+}
 class Mathf {
+ public static float Abs(float value) { return Math.Abs(value); }
  public static float Max(float a, float b) { return Math.Max(a, b); }
  public static int FloorToInt(float x) { return (int)Math.Floor(x); }
  public static int Clamp(int x, int a, int b) { return Math.Max(a, Math.Min(b, x)); }
@@ -46,15 +107,26 @@ class Mook {
 }
 class Renderer { public object gameObject; public bool enabled = true; }
 class Projectile : MonoBehaviour {
-    public object gameObject = new object();
+    public GameObject gameObject = new GameObject();
     public Renderer Child = new Renderer { gameObject = new object() };
     public SpriteSM Sprite = new SpriteSM();
-    public T GetComponent<T>() where T : class { return Sprite as T; }
+    public float X, Y, xI, yI;
+    public int playerNum, seed;
+    public MonoBehaviour firedBy;
+    public static Action<Projectile> FireHook;
+    public T GetComponent<T>() where T : class { return typeof(T)==typeof(SpriteSM) ? Sprite as T : gameObject.GetComponent<T>(); }
     public T[] GetComponentsInChildren<T>(bool inactive) where T : class {
         return new T[] { new Renderer { gameObject = gameObject } as T, Child as T };
     }
+    public virtual void Fire(float x, float y, float speedX, float speedY, float z, int player, MonoBehaviour owner) {
+        X = x; Y = y; xI = speedX; yI = speedY; playerNum = player; firedBy = owner;
+        ProjectileController.LastOwner=owner; ProjectileController.X=x; ProjectileController.Y=y; ProjectileController.Speed=speedX;
+        if(FireHook!=null) FireHook(this);
+        AquabroProbe.Visual(this, owner);
+    }
+    public void SetSeed(int value) { seed = value; }
 }
-class BrocheteMachete : Projectile { public MonoBehaviour firedBy; }
+class BrocheteMachete : Projectile { }
 class PredabroSpear : BrocheteMachete { }
 class SpriteSM {
     public class Renderer { public object material; }
@@ -75,7 +147,7 @@ class ResourcesController {
 class AudioClip { }
 class SoundHolder { public AudioClip[] attackSounds = new AudioClip[1]; }
 class Predabro {
-    public Projectile projectile = new Projectile(), chargedSpearProectilePrefab = new Projectile();
+    public Projectile projectile = new PredabroSpear(), chargedSpearProectilePrefab = new PredabroSpear();
     public SoundHolder soundHolder = new SoundHolder();
 }
 class HeroController {
@@ -88,12 +160,20 @@ class Transform {
     public class Scale { public float x = 1f; }
 }
 class ProjectileController {
-    public static int Count;
+    public static int Count, LocalSpawnCalls, InstantiateCalls;
+    public static List<Projectile> Instances=new List<Projectile>();
     public static Projectile Last;
+    public static Projectile LastPrefab;
+    public static MonoBehaviour LastOwner;
+    public static bool LastSynced;
     public static float X, Y, Speed;
-    public static Projectile SpawnProjectileOverNetwork(Projectile p, object owner, float x, float y,
+    public static Projectile SpawnProjectileLocally(Projectile p, MonoBehaviour owner, float x, float y,
         float speed, float verticalSpeed, bool synced, int player, bool target, bool immediate, float z) {
-        Count++; Last = p; X = x; Y = y; Speed = speed; return p;
+        Count++; LocalSpawnCalls++; LastPrefab = p; LastOwner = owner; LastSynced = synced;
+        Last = p is PredabroSpear ? (Projectile)new PredabroSpear() : new Projectile();
+        X = x; Y = y; Speed = speed;
+        Last.Fire(x, y, speed, verticalSpeed, z, player, owner);
+        return Last;
     }
 }
 class Map { public static void DisturbWildLife(float x, float y, float range, int player) { } }
@@ -104,6 +184,7 @@ class SimulationBase : MonoBehaviour {
 }
 class AquabroProbe : SimulationBase {
     __CONSTANTS__
+    __TRIDENT_FIELDS__
     static float[] ChargeLoopDurations = { .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f };
     static Projectile normalTridentPrefab, chargedTridentPrefab;
     static SoundHolder tridentSoundHolder;
@@ -112,6 +193,7 @@ class AquabroProbe : SimulationBase {
     public bool fire, wasFire, doingMelee, meleeAttackEmitted, ducking, highFive, IsMine = true;
     public Mook nearbyMook, ThrownMook;
     public int KnifeHits, ThrowCalls;
+    public static int DamageCalls;
     public bool isOnHelicopter, throwingHeldObject, hasBeenCoverInAcid, Incapacitated;
     public bool usingSpecial, usingPockettedSpecial, usingSpecial2, usingSpecial3, usingSpecial4;
     public bool PoseAllowed = true, GunVisible;
@@ -121,6 +203,12 @@ class AquabroProbe : SimulationBase {
     public Transform transform = new Transform();
     public CustomInfo Info = new CustomInfo();
     public AquabroProbe() { SetupTridentPrefabs(); }
+    public void DeliverTrident(bool charged, float x, float y, float speedX, float speedY, int projectilePlayerNum, int seed) {
+        ReceiveTrident(charged, x, y, speedX, speedY, projectilePlayerNum, seed);
+    }
+    public void DeliverImpact(int seed,bool charged,float x,float y) { ReceiveTridentImpact(seed,charged,x,y); }
+    public void Emit(bool charged) { chargeTime=charged?FullChargeDuration:0f; FireTrident(); }
+    public static void Contact(PredabroSpear shot,AquabroProbe owner) { ResolveWaterImpact(shot,owner,120.05f,115f,null); }
     bool IsIncapacitated() { return Incapacitated; }
     bool CanShowTridentPose() { return PoseAllowed; }
     void ActivateGun() { GunVisible = true; }
@@ -145,16 +233,28 @@ class ChargeTests {
     static bool Near(float a, float b) { return Math.Abs(a - b) < 0.00001f; }
     static void Shot(float held, bool charged, bool left, bool ducking) {
         ProjectileController.Count = 0;
+        ProjectileController.LocalSpawnCalls = 0;
+        ProjectileController.InstantiateCalls = 0;
+        Networking.Networking.Calls = 0;
         var p = new AquabroProbe { ducking = ducking };
         p.transform.localScale.x = left ? -1f : 1f;
         p.Tick(true, held);
         Check(ProjectileController.Count == 0, "长按时提前发射");
         p.Tick(false, 0.001f);
         Check(ProjectileController.Count == 1, "松键没有发射一次");
-        Check(object.ReferenceEquals(ProjectileController.Last, charged ? HeroController.Prefab.chargedSpearProectilePrefab : HeroController.Prefab.projectile), "未使用对应原版 prefab");
+        Check(object.ReferenceEquals(ProjectileController.LastPrefab, charged ? HeroController.Prefab.chargedSpearProectilePrefab : HeroController.Prefab.projectile), "未使用对应原版 prefab");
         float direction = left ? -1f : 1f;
         Check(Near(ProjectileController.Speed, direction * (charged ? 664f : 400f)), "弹速不符合 Predabro");
         Check(Near(ProjectileController.X, 100f + direction * 14f) && Near(ProjectileController.Y, ducking ? 58f : 61f), "发射位置不符合 Predabro");
+        Check(ProjectileController.InstantiateCalls == 1 && ProjectileController.LocalSpawnCalls == 0, "拥有端没有手动生成长矛并在Fire前初始化");
+        Check(object.ReferenceEquals(ProjectileController.LastOwner, p) && object.ReferenceEquals(ProjectileController.Last.firedBy, p) &&
+              ProjectileController.Last.playerNum == p.playerNum && Near(ProjectileController.Last.yI, 0f), "拥有端长矛没有初始化发射者、玩家编号或竖直速度");
+        Check(ProjectileController.Last.seed == 1 && ProjectileController.Last.Sprite.meshRender.material.ToString() == "Aquabro/trident.png", "拥有端没有递增种子或应用自定义贴图");
+        Check(Networking.Networking.Calls == 1 && Networking.Networking.Target == PID.TargetOthers, "拥有端没有且仅广播一次长矛");
+        Check((bool)Networking.Networking.Arguments[0] == charged && Near((float)Networking.Networking.Arguments[1], ProjectileController.X) &&
+              Near((float)Networking.Networking.Arguments[2], ProjectileController.Y) && Near((float)Networking.Networking.Arguments[3], ProjectileController.Speed) &&
+              Near((float)Networking.Networking.Arguments[4], 0f) && (int)Networking.Networking.Arguments[5] == p.playerNum &&
+              (int)Networking.Networking.Arguments[6] == 1, "广播没有携带完整的投掷数据与共享序号");
         Check(Near(p.chargeTime, 0f) && Near(p.fireDelay, 0.4f), "发射后未重置");
         p.Tick(false, 0.02f);
         Check(ProjectileController.Count == 1, "松键重复发射");
@@ -199,6 +299,52 @@ class ChargeTests {
         paused.Tick(false, 0f);
         Check(paused.ThrowCalls == 0 && paused.KnifeHits == 0, "暂停时仍丢兵或前刺");
     }
+    static void ImpactAuthority() {
+        Networking.Networking.Calls=0; Networking.Networking.Events.Clear(); AquabroProbe.DamageCalls=0; AquabroWaterEffect.Calls=0;
+        var first=new AquabroProbe(); var second=new AquabroProbe();
+        Projectile.FireHook=delegate(Projectile shot) {
+            Check(shot.seed==1,"贴墙Fire尚未设置投掷序号");
+            Check(Networking.Networking.Calls==1 && Networking.Networking.Events[0]=="ReceiveTrident","贴墙Fire早于生成广播");
+            AquabroProbe.Contact((PredabroSpear)shot,first); AquabroProbe.Contact((PredabroSpear)shot,first);
+        };
+        first.Emit(true); Projectile.FireHook=null;
+        Check(Networking.Networking.Events.Count==2 && Networking.Networking.Events[1]=="ReceiveTridentImpact" &&
+              AquabroProbe.DamageCalls==1,"贴墙重复回调没有只发送一次拥有端命中结果");
+        Check((int)Networking.Networking.Arguments[0]==1 && (bool)Networking.Networking.Arguments[1] &&
+              Near((float)Networking.Networking.Arguments[2],120.05f),"命中广播没有携带拥有端的序号和坐标");
+        first.Emit(false); Check(ProjectileController.Last.seed==2,"同一拥有端投掷序号没有递增");
+        second.Emit(false); Check(ProjectileController.Last.seed==1,"不同拥有端共享了投掷序号");
+        int before=ProjectileController.Count,effects=AquabroWaterEffect.Calls;
+        first.DeliverTrident(false,1f,2f,400f,0f,0,99); first.DeliverImpact(1,true,999f,999f);
+        Check(ProjectileController.Count==before && AquabroWaterEffect.Calls==effects,"拥有端接收了另一端的生成或命中结果");
+        var remoteA=new AquabroProbe { IsMine=false }; var remoteB=new AquabroProbe { IsMine=false };
+        Networking.Networking.Calls=0; AquabroProbe.DamageCalls=0;
+        remoteA.DeliverTrident(true,300f,115f,-664f,0f,0,1); var expired=(PredabroSpear)ProjectileController.Last;
+        before=ProjectileController.Count; remoteA.DeliverTrident(true,300f,115f,-664f,0f,0,1);
+        remoteA.DeliverTrident(false,300f,115f,400f,0f,0,0);
+        Check(ProjectileController.Count==before,"重复或旧生成RPC再次创建长矛");
+        remoteB.DeliverTrident(false,300f,115f,400f,0f,1,1); var other=ProjectileController.Last;
+        AquabroProbe.Contact(expired,remoteA); AquabroProbe.Contact(expired,remoteA);
+        Check(expired.gameObject.Destroyed && AquabroWaterEffect.Calls==effects && AquabroProbe.DamageCalls==0 &&
+              Networking.Networking.Calls==0,"远端自行碰撞或到期产生水花、伤害或命中广播");
+        remoteA.DeliverImpact(1,true,120.05f,115f);
+        Check(AquabroWaterEffect.Calls==effects+1 && Near(AquabroWaterEffect.X,120.05f) && Near(AquabroWaterEffect.Y,115f) &&
+              AquabroWaterEffect.Charged && !other.gameObject.Destroyed,"本地先销毁后丢失权威结果，或误毁另一拥有者同序号长矛");
+        remoteA.DeliverImpact(1,true,999f,999f); remoteA.DeliverTrident(true,300f,115f,-664f,0f,0,1);
+        Check(AquabroWaterEffect.Calls==effects+1 && ProjectileController.Count==before+1,"已消费结果被重复播放或整批重发重新生成长矛");
+        remoteB.DeliverImpact(1,false,420f,115f);
+        Check(other.gameObject.Destroyed && AquabroWaterEffect.Calls==effects+2,"尚存视觉矛未按拥有者和序号清理");
+        var unordered=new AquabroProbe { IsMine=false };
+        unordered.DeliverTrident(false,300f,115f,400f,0f,0,10); var older=ProjectileController.Last;
+        unordered.DeliverTrident(true,300f,115f,-664f,0f,0,11); var newer=ProjectileController.Last;
+        unordered.DeliverImpact(11,true,120f,115f);
+        Check(newer.gameObject.Destroyed && !older.gameObject.Destroyed,"逆序结果清理了错误长矛");
+        unordered.DeliverImpact(10,false,420f,115f);
+        Check(older.gameObject.Destroyed && AquabroWaterEffect.Calls==effects+4,"先投后命中的合法旧序号结果被丢弃");
+        unordered.DeliverImpact(10,false,0f,0f); unordered.DeliverImpact(11,true,0f,0f); unordered.DeliverImpact(99,true,0f,0f);
+        Check(AquabroWaterEffect.Calls==effects+4 && AquabroProbe.DamageCalls==0 && Networking.Networking.Calls==0,
+              "重复或未知结果再次播放，或远端结果调用伤害/转发RPC");
+    }
     public static int Main() {
         try {
             for (int f = 0; f < 6; f++)
@@ -236,6 +382,21 @@ class ChargeTests {
             count = ProjectileController.Count;
             p.Tick(true, 1.4f); p.Tick(false, 0.01f);
             Check(ProjectileController.Count == count, "非拥有端重复生成长矛");
+            var remote = new AquabroProbe { IsMine = false };
+            Networking.Networking.Calls = 0;
+            int remoteSpawnStart = ProjectileController.InstantiateCalls;
+            remote.DeliverTrident(false, 22f, 33f, 400f, 0f, 2, 4242);
+            Check(ProjectileController.InstantiateCalls == remoteSpawnStart + 1 && object.ReferenceEquals(ProjectileController.LastPrefab, HeroController.Prefab.projectile), "加入端没有按广播类型本地生成普通长矛");
+            Check(Near(ProjectileController.Last.X, 22f) && Near(ProjectileController.Last.Y, 33f) && Near(ProjectileController.Last.xI, 400f) &&
+                  ProjectileController.Last.playerNum == 2 && ProjectileController.Last.seed == 4242, "加入端普通长矛没有初始化坐标、速度、玩家编号或种子");
+            Check(object.ReferenceEquals(ProjectileController.Last.firedBy, remote) && ProjectileController.Last.Sprite.meshRender.material.ToString() == "Aquabro/trident.png", "加入端没有初始化本地发射者或应用自定义贴图");
+            remote.DeliverTrident(true, 24f, 35f, -664f, 0f, 2, 4243);
+            Check(ProjectileController.InstantiateCalls == remoteSpawnStart + 2 && object.ReferenceEquals(ProjectileController.LastPrefab, HeroController.Prefab.chargedSpearProectilePrefab) &&
+                  Near(ProjectileController.Last.xI, -664f) && Near(ProjectileController.Last.yI, 0f), "加入端没有按广播类型生成蓄力长矛或速度错误");
+            Check(object.ReferenceEquals(ProjectileController.Last.firedBy, remote) && ProjectileController.Last.Sprite.meshRender.material.ToString() == "Aquabro/trident.png", "加入端蓄力长矛没有初始化本地发射者或应用自定义贴图");
+            remote.Tick(true, 1.4f); remote.Tick(false, 0.01f);
+            Check(ProjectileController.InstantiateCalls == remoteSpawnStart + 2 && Networking.Networking.Calls == 0, "加入端自行开火或重复广播了长矛");
+            count = ProjectileController.Count;
             p = new AquabroProbe();
             p.Tick(true, 0f); p.Tick(false, 0f);
             Check(ProjectileController.Count == count, "零时间步产生攻击");
@@ -254,7 +415,8 @@ class ChargeTests {
             var otherProjectile = new Projectile();
             AquabroProbe.Visual(otherProjectile, p);
             Check(otherProjectile.Sprite.meshRender.material == null, "修改了其他类型的投射物");
-            Console.WriteLine("PASS: 水花时序、蓄力/连续投掷/打断、原版长矛与外观、拥有端、零时间步；长按近战丢兵/短按前刺/不可丢目标/15-120 FPS及长帧");
+            ImpactAuthority();
+            Console.WriteLine("PASS: 水花时序、蓄力/连续投掷/打断、双端长矛生成/数据/外观、远端不自行开火、零时间步；近战丢兵/前刺/15-120 FPS；拥有端命中、贴墙顺序、提前销毁、重发去重、双owner序号和逆序结果消费");
             return 0;
         } catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
     }
@@ -263,7 +425,7 @@ class ChargeTests {
 $testSource = Join-Path $env:TEMP ('Aquabro-Charge-' + [Guid]::NewGuid().ToString('N') + '.cs')
 $testExe = [System.IO.Path]::ChangeExtension($testSource, '.exe')
 try {
-    [System.IO.File]::WriteAllText($testSource, $harness.Replace('__CONSTANTS__', $constantText).Replace('__METHODS__', $methods).Replace('AquabroProbe', 'Aquabro'))
+    [System.IO.File]::WriteAllText($testSource, $harness.Replace('__CONSTANTS__', $constantText).Replace('__TRIDENT_FIELDS__', $tridentFields).Replace('__METHODS__', $methods).Replace('AquabroProbe', 'Aquabro'), [System.Text.UTF8Encoding]::new($true))
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v3.5\csc.exe'
     & $compiler /nologo /nowarn:0649,0414 /target:exe "/out:$testExe" $testSource
     if ($LASTEXITCODE -ne 0) { throw '蓄力回归测试编译失败' }

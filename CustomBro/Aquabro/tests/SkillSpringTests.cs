@@ -21,6 +21,8 @@ public static class SkillSpringTests
     {
         try
         {
+            if(args.Length==1 && args[0]=="--skill-hud") {CheckSkillHud();return;}
+            if(args.Length==1 && args[0]=="--skill-network") {CheckSkillHud();CheckSkillNetwork();return;}
             CheckAcid();
             PixelMaskTests.Run();
             CheckCastStart();
@@ -33,6 +35,7 @@ public static class SkillSpringTests
             BossSkillDamageTests.Run();
             SkillOcclusionTests.Run();
             CheckSkillHud();
+            CheckSkillNetwork();
         }
         catch (Exception error) { Console.WriteLine("FAIL: " + error); Environment.Exit(1); }
     }
@@ -516,6 +519,8 @@ public static class SkillSpringTests
 
     private static void CheckSkillHud()
     {
+        Networking.Connect.IsOffline=false;
+        Networking.Networking.SelectionCalls=0;
         HeroController.players=new Player[4];
         Aquabro first=new Aquabro(),second=new Aquabro();second.playerNum=1;
         HeroController.players[0]=new Player {character=first,hud=new PlayerHUD()};
@@ -524,7 +529,15 @@ public static class SkillSpringTests
         {
             for(int i=0;i<4;i++)
             {
+                int before=owner.SelectedSkill,calls=Networking.Networking.SelectionCalls;
                 owner.SetGestureAnimation(GestureElement.Gestures.Flex);
+                Check(owner.SelectedSkill==(before+1)%Aquabro.SkillAssets.Length,"Owner Flex did not advance exactly once");
+                Check(Networking.Networking.SelectionCalls==calls+1 &&
+                    Networking.Networking.SelectionTarget==Networking.PID.TargetOthers &&
+                    Networking.Networking.SelectionCallback.Target==owner &&
+                    Networking.Networking.SelectionCallback.Method.Name=="ReceiveSkillSelection" &&
+                    Networking.Networking.SelectionValue==owner.SelectedSkill,
+                    "Owner Flex did not broadcast the selected value once to the other peers");
                 string expected="special-"+Aquabro.SkillAssets[owner.SelectedSkill]+".png";
                 foreach(var icon in HeroController.players[owner.playerNum].hud.grenadeIcons)
                     Check(icon.meshRender.sharedMaterial.name==expected,"HUD failed to follow selected skill/player");
@@ -546,10 +559,106 @@ public static class SkillSpringTests
         typeof(Aquabro).GetMethod("RefreshSkillHud",Private).Invoke(first,null);
         Check(HeroController.players[0].hud.grenadeIcons[0].meshRender.sharedMaterial==saved[0],"Respawn/replaced HUD lost selection");
         first.IsMine=false;HeroController.players[0].hud=new PlayerHUD();
-        typeof(Aquabro).GetMethod("RefreshSkillHud",Private).Invoke(first,null);
-        Check(HeroController.players[0].hud.grenadeIcons[0].meshRender.sharedMaterial==null,"Remote hero changed local HUD");
+        MethodInfo receive=typeof(Aquabro).GetMethod("ReceiveSkillSelection",Private);
+        Check(receive.IsDefined(typeof(Networking.AllowedRPCAttribute),true),"Selection receive method is not allowed as an RPC");
+        int callsBeforeReceive=Networking.Networking.SelectionCalls;
+        int otherSkill=second.SelectedSkill;
+        for(int syncedSkill=0;syncedSkill<Aquabro.SkillAssets.Length;syncedSkill++)
+        {
+            receive.Invoke(first,new object[] {syncedSkill});
+            string syncedIcon="special-"+Aquabro.SkillAssets[syncedSkill]+".png";
+            Check(first.SelectedSkill==syncedSkill,"Remote selection sync did not update selected skill");
+            foreach(var icon in HeroController.players[0].hud.grenadeIcons)
+                Check(icon.meshRender.sharedMaterial!=null && icon.meshRender.sharedMaterial.name==syncedIcon,
+                    "Remote selection sync did not refresh all skill HUD icons");
+            Check(first.CurrentSpecialMaterials.Count==1 && first.CurrentSpecialMaterials[0].name==syncedIcon,
+                "Remote selection sync did not update the material list BroMaker reads");
+            Check(Networking.Networking.SelectionCalls==callsBeforeReceive &&
+                second.SelectedSkill==otherSkill && second.CurrentSpecialMaterials[0]==other,
+                "Applying the remote value rebroadcast or changed another player's selection");
+            receive.Invoke(first,new object[] {syncedSkill});
+            Check(first.SelectedSkill==syncedSkill && Networking.Networking.SelectionCalls==callsBeforeReceive,
+                "Duplicate selection delivery incremented or rebroadcast the skill");
+        }
+        Material remoteMaterial=first.CurrentSpecialMaterials[0];
+        int remoteSkill=first.SelectedSkill;
+        first.SetGestureAnimation(GestureElement.Gestures.Flex);
+        Check(first.SelectedSkill==remoteSkill && first.CurrentSpecialMaterials[0]==remoteMaterial,
+            "Remote Flex animation incremented selection again before the synced value arrived");
+        Check(Networking.Networking.SelectionCalls==callsBeforeReceive,"Remote Flex rebroadcast the selection");
+        first.IsMine=true;
+        receive.Invoke(first,new object[] {(remoteSkill+1)%Aquabro.SkillAssets.Length});
+        Check(first.SelectedSkill==remoteSkill,"Owner accepted a remote selection");
+        Networking.Connect.IsOffline=true;
+        first.SetGestureAnimation(GestureElement.Gestures.Flex);
+        Check(first.SelectedSkill==(remoteSkill+1)%Aquabro.SkillAssets.Length &&
+            Networking.Networking.SelectionCalls==callsBeforeReceive,"Offline selection sent a network RPC");
+        Aquabro respawn=new Aquabro();respawn.IsMine=false;
+        HeroController.players[0]=new Player {character=respawn,hud=new PlayerHUD()};
+        typeof(Aquabro).GetMethod("RefreshSkillHud",Private).Invoke(respawn,null);
+        Check(respawn.SelectedSkill==first.SelectedSkill &&
+            respawn.CurrentSpecialMaterials[0]==first.CurrentSpecialMaterials[0],"New hero instance lost the player's saved selection");
+        Check(second.CurrentSpecialMaterials[0]==other,"Remote player's selection sync changed the other player's icon");
         HeroController.players=null;
-        Console.WriteLine("PASS skill HUD: four icons; per-player switch; BroMaker material source; empty ammo/visibility preserved; cached refresh; replacement HUD; remote guard");
+        Networking.Connect.IsOffline=false;
+        Console.WriteLine("PASS skill HUD: four icons; per-player switch; BroMaker material source; empty ammo/visibility preserved; cached refresh; replacement HUD/respawn; one selection RPC; remote value application without rebroadcast or increment; offline selection");
+    }
+
+    private static void CheckSkillNetwork()
+    {
+        Reset();Physics.SharkTerrainEnabled=false;Physics.SceneTerrain=new Collider[0];
+        MethodInfo press=typeof(Aquabro).GetMethod("PressSpecial",Private);
+        MethodInfo use=typeof(Aquabro).GetMethod("UseSpecial",Private);
+        MethodInfo animate=typeof(Aquabro).GetMethod("AnimateSpecial",Private);
+        MethodInfo receive=typeof(Aquabro).GetMethod("ReceiveSkillCast",Private);
+        MethodInfo state=typeof(Aquabro).GetMethod("ReceiveSharkState",Private);
+        FieldInfo visuals=typeof(Aquabro).GetField("skillVisuals",Private);
+        FieldInfo active=typeof(Aquabro).GetField("activeShark",Private);
+        for(int skill=0;skill<4;skill++)
+        {
+            Aquabro remote=new Aquabro();remote.IsMine=false;remote.SelectedSkillSynced=skill;
+            var effects=(List<AquabroSkillVisual>)visuals.GetValue(remote);
+            press.Invoke(remote,null);
+            Check(remote.usingSpecial && remote.TestBodyCell==384+skill*8 && !remote.TestGunVisible,
+                "Remote input no longer plays the skill cast animation");
+            remote.frame=2;animate.Invoke(remote,null);use.Invoke(remote,null);
+            Check(effects.Count==0 && remote.SpecialAmmo==3,"Remote animation/input created an effect or consumed ammo");
+            receive.Invoke(remote,new object[] {skill,0f,0f,1f});
+            int expected=skill==3?7:1;
+            Check(effects.Count==expected && remote.SpecialAmmo==3,"One cast RPC did not create exactly one remote cast");
+            remote.usingSpecial=false;press.Invoke(remote,null);
+            for(int i=0;i<5;i++) {remote.specialResolved=false;use.Invoke(remote,null);}
+            Check(effects.Count==expected && remote.SpecialAmmo==3,"Remote input after the cast RPC duplicated effects or consumed ammo");
+            typeof(Aquabro).GetMethod("ClearSkillPreview",Private).Invoke(remote,null);
+        }
+        Aquabro owner=new Aquabro();owner.SelectedSkillSynced=1;
+        press.Invoke(owner,null);use.Invoke(owner,null);
+        var ownerEffects=(List<AquabroSkillVisual>)visuals.GetValue(owner);
+        AquabroSkillVisual ownerShark=(AquabroSkillVisual)active.GetValue(owner);
+        Check(ownerShark!=null && ownerShark.SharkControlled && owner.SpecialAmmo==2,"Owner shark launch failed");
+        Networking.Networking.BreachCalls=0;
+        press.Invoke(owner,null);press.Invoke(owner,null);
+        Check(!ownerShark.SharkControlled && ownerEffects.Count==1 && owner.SpecialAmmo==2,
+            "Shark second press recreated the shark or spent another charge");
+        Check(Networking.Networking.BreachCalls==1 && Networking.Networking.BreachFlags==4 &&
+            Networking.Networking.BreachTarget==Networking.PID.TargetOthers &&
+            Networking.Networking.BreachCallback.Target==owner &&
+            Networking.Networking.BreachCallback.Method.Name=="ReceiveSharkState",
+            "Shark breach did not send exactly one reliable state event to the other peers");
+        Aquabro observer=new Aquabro();observer.IsMine=false;
+        receive.Invoke(observer,new object[] {1,0f,0f,1f});
+        AquabroSkillVisual remoteShark=(AquabroSkillVisual)active.GetValue(observer);
+        press.Invoke(observer,null);
+        Check(remoteShark.SharkControlled,"Remote input breached before the owner's reliable event");
+        object[] breach={Networking.Networking.BreachState,Networking.Networking.BreachFlags};
+        state.Invoke(observer,breach);state.Invoke(observer,breach);
+        Check(!remoteShark.SharkControlled && ((List<AquabroSkillVisual>)visuals.GetValue(observer)).Count==1 &&
+            observer.SpecialAmmo==3 && Networking.Networking.BreachCalls==1,
+            "Remote breach event duplicated/rebroadcast the shark or consumed ammo");
+        typeof(Aquabro).GetMethod("ClearSkillPreview",Private).Invoke(owner,null);
+        typeof(Aquabro).GetMethod("ClearSkillPreview",Private).Invoke(observer,null);
+        owner.SelectedSkillSynced=0;Reset();
+        Console.WriteLine("PASS skill network: remote cast animations preserved; four skills created only by received cast; no remote ammo consumption; one reliable shark breach; no duplicate shark or breach rebroadcast");
     }
 
     private static Collider TerrainBox(float left,float bottom,float right,float top)
@@ -1396,6 +1505,7 @@ namespace AquabroMod
         public float speed=130,jumpTime;
         protected float controllingProjectileDelay;
         public SpriteSM sprite=new SpriteSM();
+        public bool special,wasSpecial;
         public float chargeTime,throwDelay,frameRate;public int SpecialAmmo=3,originalSpecialAmmo=3,frame,pressSpecialFacingDirection;
         public ActionState actionState;
         public Transform transform=new Transform();public TestInfo Info=new TestInfo();
@@ -1416,4 +1526,45 @@ namespace AquabroMod
     }
     public class TestInfo {public string path="";}
     public partial class Aquabro : TestHero {}
+}
+namespace Networking
+{
+    [AttributeUsage(AttributeTargets.Property)]
+    public sealed class SyncronizeAttribute : Attribute
+    {
+        public bool Interpolate { get; set; }
+    }
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class AllowedRPCAttribute : Attribute {}
+    public static class Connect { public static bool IsOffline; }
+    public enum PID { TargetOthers }
+    public delegate void RpcSignature<T1>(T1 first);
+    public delegate void RpcSignature<T1,T2>(T1 first,T2 second);
+    public delegate void RpcSignature<T1,T2,T3,T4>(T1 first,T2 second,T3 third,T4 fourth);
+    public static class Networking
+    {
+        public static int SelectionCalls,SelectionValue;
+        public static PID SelectionTarget;
+        public static Delegate SelectionCallback;
+        public static int BreachCalls,BreachFlags;
+        public static Vector3 BreachState;
+        public static PID BreachTarget;
+        public static Delegate BreachCallback;
+        public static void RPC<T1>(PID target,bool immediate,bool ignoreSessionID,
+            RpcSignature<T1> callback,T1 first)
+        {
+            SelectionCalls++;SelectionTarget=target;SelectionCallback=callback;
+            SelectionValue=(int)(object)first;
+        }
+        public static void RPC<T1,T2>(PID target,bool immediate,bool ignoreSessionID,
+            RpcSignature<T1,T2> callback,T1 first,T2 second)
+        {
+            BreachCalls++;BreachTarget=target;BreachCallback=callback;
+            BreachState=(Vector3)(object)first;BreachFlags=(int)(object)second;
+        }
+        public static void RPC<T1,T2,T3,T4>(PID target,bool reliable,bool runLocally,
+            RpcSignature<T1,T2,T3,T4> callback,T1 first,T2 second,T3 third,T4 fourth) {}
+        public static void UnreliableRPC<T1,T2>(PID target,bool reliable,bool runLocally,
+            RpcSignature<T1,T2> callback,T1 first,T2 second) {}
+    }
 }

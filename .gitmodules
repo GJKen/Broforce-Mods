@@ -1,0 +1,3 @@
+[submodule "BroMakerMultiplayer"]
+	path = BroMakerMultiplayer
+	url = https://github.com/GJKen/Bro-Maker.git

@@ -1,4 +1,4 @@
-# 本机配置不进入 Git；工具脚本共享同一组路径设置。
+﻿# 本机配置不进入 Git；工具脚本共享同一组路径设置。
 function Get-AquabroBuildSettings {
     param(
         [Parameter(Mandatory = $true)][string]$ProjectRoot,
