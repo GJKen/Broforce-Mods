@@ -1,3 +1,7 @@
 [submodule "BroMakerMultiplayer"]
 	path = BroMakerMultiplayer
 	url = https://github.com/GJKen/Bro-Maker.git
+[submodule "RocketLibMultiplayer"]
+	path = RocketLibMultiplayer
+	url = https://github.com/GJKen/RocketLib.git
+	branch = codex/rocketlib-network-phase1
