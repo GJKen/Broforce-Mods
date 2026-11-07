@@ -472,6 +472,16 @@ namespace CustomMapMultiplayer
                         position.SpawnViaAirDrop,
                         spawnPosition,
                         false);
+
+                    // BroBase.Start waits for directional input; Workshop physics can move an idle spawn first.
+                    if (IsConfiguredWorkshopSceneActive() && player.IsAliveAndSpawnedHero() &&
+                        player.character.IsMine && !player.character.Syncronize)
+                    {
+                        player.character.EnableSyncing(true, true);
+                        DiagnosticLog.Info(
+                            "Enabled native Workshop character sync after spawn: player=" + index + ".");
+                    }
+
                     rebroadcastCount++;
                 }
                 catch (Exception exception)

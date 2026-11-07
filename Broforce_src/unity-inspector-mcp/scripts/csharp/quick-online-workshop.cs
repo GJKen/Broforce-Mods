@@ -114,7 +114,22 @@ public static class QuickOnlineWorkshop
             primaryController = 0;
         }
 
-        HeroController.AddLocalPlayer(-1, primaryController);
+        var platform = SingletonMono<Utility.Platforms.Platform>.Instance;
+        var playerName = platform.GetControllerUserName(primaryController);
+        if (string.IsNullOrEmpty(playerName))
+        {
+            playerName = PlayerOptions.Instance.PlayerName;
+        }
+        if (string.IsNullOrEmpty(playerName))
+        {
+            playerName = HeroController.GetDefaultPlayerName(1);
+        }
+
+        typeof(JoinScreen).GetMethod("IncrementJoinRequests",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Invoke(null, null);
+        Networking.Networking.RPC<int, PID, string>(PID.TargetServer,
+            new RpcSignature<int, PID, string>(JoinScreen.RequestJoin),
+            primaryController, PID.MyID, playerName, true);
     }
 
     private static void BindNativeHostTransition()
@@ -360,8 +375,9 @@ public static class QuickOnlineWorkshop
                 return;
             }
 
+            // newJoin registers slots through JoinScreen; HeroController exists only in the game scene.
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name !=
-                LevelSelectionController.JoinScene)
+                LevelSelectionController.JoinScene || SingletonNetObj<JoinScreen>.Instance == null)
             {
                 return;
             }
@@ -384,7 +400,7 @@ public static class QuickOnlineWorkshop
             RequestLocalHostJoin();
             joinRequested = true;
             joinRetryAt = now + 3f;
-            ScriptContext.Logger("Requested the local host P1 through HeroController.AddLocalPlayer.");
+            ScriptContext.Logger("Requested the local host P1 through the native JoinScreen.RequestJoin flow.");
         }
 
         private void ContinueThroughNativeOnlineTransition()

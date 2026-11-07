@@ -32,7 +32,7 @@ mcp__unity_inspector__execute_script(
     args={workshopId:"3715087178", playerLimit:"3"})
 ```
 
-脚本读取 Mod 的 Workshop 注入配置，复用原生街机 Normal、Online、创建房间、`newJoin` 和 `AddLocalPlayer` 流程；地图由 Mod 在联机状态切换时注入，不再打开原生 Workshop 地图列表。已有线上房主会话时只继续原生进入地图流程。调用结束后只检查一次 `game_state`，验收 `scene=Test Evan2`、`playerCount>=1`，必要时再截图。脚本属于 Unity Inspector 测试辅助，不进入 Mod DLL；只有脚本失败或需要定位中间状态时，才使用下方的逐步 MCP 观测流程。
+脚本读取 Mod 的 Workshop 注入配置，复用原生街机 Normal、Online、创建房间、`newJoin` 和 `JoinScreen.RequestJoin` 流程；地图由 Mod 在联机状态切换时注入，不再打开原生 Workshop 地图列表。准备界面只登记参与槽位，不能调用关卡内的 `HeroController.AddLocalPlayer`，因为此时没有 `HeroController` 实例。已有线上房主会话时只继续原生进入地图流程。调用结束后只检查一次 `game_state`，验收 `scene=Test Evan2`、`playerCount>=1`，必要时再截图。脚本属于 Unity Inspector 测试辅助，不进入 Mod DLL；只有脚本失败或需要定位中间状态时，才使用下方的逐步 MCP 观测流程。
 
 ## 本机一键加入已有三方图房间
 
