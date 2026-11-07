@@ -20,20 +20,15 @@ $methods = @(
     Read-Method 'private void SetupTridentPrefabs()'
     Read-Method 'protected override void RunFiring()'
     Read-Method 'private void FireTrident()'
-    Read-Method 'private void SpawnTridentLocally(bool charged, float x, float y, float speedX, float speedY,'
-    Read-Method 'private void ReceiveTrident(bool charged, float x, float y, float speedX, float speedY,'
-    Read-Method 'private void ReceiveTridentImpact('
     Read-Method 'private static void ApplyTridentVisual('
     Read-Method 'private static int GetAnimationFrame('
     Read-Method 'private static bool AllowOriginalSpearTrail('
     Read-Method 'private static int GetChargeAnimationFrame('
     Read-Method 'private static int GetRunningChargeAnimationFrame('
 ) -join "`r`n"
-# Compile the production ownership/RPC gate; combat settlement has its own zone tests.
-$impact = Read-Method 'private static void ResolveWaterImpact('
-$methods += "`r`n" + $impact.Substring(0, $impact.IndexOf('float radius')) + "DamageCalls++;`r`n}"
-$tridentFields = [regex]::Match($source, 'private int tridentSequence, lastReceivedTrident;').Value + "`r`n" +
-    [regex]::Match($source, 'private readonly HashSet<int> pendingTridentImpacts = new HashSet<int>\(\);').Value
+foreach ($removed in @('SpawnTridentLocally(', 'ReceiveTrident(', 'ReceiveTridentImpact(')) {
+    if ($source.Contains($removed)) { throw "Unexpected obsolete Trident protocol: $removed" }
+}
 $constants = [regex]::Matches($source, 'private const float (FullChargeDuration|ThrowCooldown|ThrowAnimationDuration|MeleeSpeedMultiplier|MeleeHitTime|MeleeDuration|RunningChargeLoopDuration|RunningChargeFrameDuration) = [^;]+;')
 $constantText = ($constants | ForEach-Object { $_.Value }) -join "`r`n"
 $constantText += "`r`n" + [regex]::Match($source, 'private static readonly float\[\] ChargedFrameDurations = \{[^}]+\};').Value
@@ -160,13 +155,23 @@ class Transform {
     public class Scale { public float x = 1f; }
 }
 class ProjectileController {
-    public static int Count, LocalSpawnCalls, InstantiateCalls;
+    public static int Count, LocalSpawnCalls, InstantiateCalls, NativeSpawnCalls, SeedAtFire;
     public static List<Projectile> Instances=new List<Projectile>();
     public static Projectile Last;
     public static Projectile LastPrefab;
     public static MonoBehaviour LastOwner;
     public static bool LastSynced;
     public static float X, Y, Speed;
+    public static Projectile SpawnProjectileOverNetwork(Projectile p, MonoBehaviour owner, float x, float y,
+        float speed, float verticalSpeed, bool synced, int player, bool target, bool immediate, float z) {
+        NativeSpawnCalls++;
+        Last = UnityEngine.Object.Instantiate(p, new Vector3(x,y,0f), Quaternion.identity);
+        LastOwner = owner; LastSynced = synced;
+        Networking.Networking.Events.Add("Instantiate"); SeedAtFire = Last.seed;
+        Last.Fire(x,y,speed,verticalSpeed,z,player,owner);
+        Networking.Networking.Events.Add("Fire"); Last.SetSeed(4242);
+        Networking.Networking.Events.Add("SetSeed"); return Last;
+    }
     public static Projectile SpawnProjectileLocally(Projectile p, MonoBehaviour owner, float x, float y,
         float speed, float verticalSpeed, bool synced, int player, bool target, bool immediate, float z) {
         Count++; LocalSpawnCalls++; LastPrefab = p; LastOwner = owner; LastSynced = synced;
@@ -184,7 +189,6 @@ class SimulationBase : MonoBehaviour {
 }
 class AquabroProbe : SimulationBase {
     __CONSTANTS__
-    __TRIDENT_FIELDS__
     static float[] ChargeLoopDurations = { .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f };
     static Projectile normalTridentPrefab, chargedTridentPrefab;
     static SoundHolder tridentSoundHolder;
@@ -203,12 +207,6 @@ class AquabroProbe : SimulationBase {
     public Transform transform = new Transform();
     public CustomInfo Info = new CustomInfo();
     public AquabroProbe() { SetupTridentPrefabs(); }
-    public void DeliverTrident(bool charged, float x, float y, float speedX, float speedY, int projectilePlayerNum, int seed) {
-        ReceiveTrident(charged, x, y, speedX, speedY, projectilePlayerNum, seed);
-    }
-    public void DeliverImpact(int seed,bool charged,float x,float y) { ReceiveTridentImpact(seed,charged,x,y); }
-    public void Emit(bool charged) { chargeTime=charged?FullChargeDuration:0f; FireTrident(); }
-    public static void Contact(PredabroSpear shot,AquabroProbe owner) { ResolveWaterImpact(shot,owner,120.05f,115f,null); }
     bool IsIncapacitated() { return Incapacitated; }
     bool CanShowTridentPose() { return PoseAllowed; }
     void ActivateGun() { GunVisible = true; }
@@ -236,6 +234,7 @@ class ChargeTests {
         ProjectileController.LocalSpawnCalls = 0;
         ProjectileController.InstantiateCalls = 0;
         Networking.Networking.Calls = 0;
+        Networking.Networking.Events.Clear(); ProjectileController.NativeSpawnCalls = 0;
         var p = new AquabroProbe { ducking = ducking };
         p.transform.localScale.x = left ? -1f : 1f;
         p.Tick(true, held);
@@ -246,15 +245,12 @@ class ChargeTests {
         float direction = left ? -1f : 1f;
         Check(Near(ProjectileController.Speed, direction * (charged ? 664f : 400f)), "弹速不符合 Predabro");
         Check(Near(ProjectileController.X, 100f + direction * 14f) && Near(ProjectileController.Y, ducking ? 58f : 61f), "发射位置不符合 Predabro");
-        Check(ProjectileController.InstantiateCalls == 1 && ProjectileController.LocalSpawnCalls == 0, "拥有端没有手动生成长矛并在Fire前初始化");
-        Check(object.ReferenceEquals(ProjectileController.LastOwner, p) && object.ReferenceEquals(ProjectileController.Last.firedBy, p) &&
-              ProjectileController.Last.playerNum == p.playerNum && Near(ProjectileController.Last.yI, 0f), "拥有端长矛没有初始化发射者、玩家编号或竖直速度");
-        Check(ProjectileController.Last.seed == 1 && ProjectileController.Last.Sprite.meshRender.material.ToString() == "Aquabro/trident.png", "拥有端没有递增种子或应用自定义贴图");
-        Check(Networking.Networking.Calls == 1 && Networking.Networking.Target == PID.TargetOthers, "拥有端没有且仅广播一次长矛");
-        Check((bool)Networking.Networking.Arguments[0] == charged && Near((float)Networking.Networking.Arguments[1], ProjectileController.X) &&
-              Near((float)Networking.Networking.Arguments[2], ProjectileController.Y) && Near((float)Networking.Networking.Arguments[3], ProjectileController.Speed) &&
-              Near((float)Networking.Networking.Arguments[4], 0f) && (int)Networking.Networking.Arguments[5] == p.playerNum &&
-              (int)Networking.Networking.Arguments[6] == 1, "广播没有携带完整的投掷数据与共享序号");
+        Check(ProjectileController.NativeSpawnCalls == 1 && ProjectileController.InstantiateCalls == 1 && ProjectileController.LocalSpawnCalls == 0, "拥有端未且仅调用一次公共网络生成入口");
+        Check(object.ReferenceEquals(ProjectileController.LastOwner,p) && ProjectileController.Last.playerNum==p.playerNum && Near(ProjectileController.Last.yI,0f), "原生生成参数丢失");
+        Check(ProjectileController.SeedAtFire==0 && ProjectileController.Last.seed==4242, "未遵循原生 Fire 后 SetSeed 时序");
+        Check(string.Join(",",Networking.Networking.Events.ToArray())=="Instantiate,Fire,SetSeed", "公共路径调用顺序错误");
+        Check(Networking.Networking.Calls==0, "角色另发了独立生成 RPC");
+        Check(ProjectileController.Last.Sprite.meshRender.material.ToString()=="Aquabro/trident.png", "公共路径未应用自定义贴图");
         Check(Near(p.chargeTime, 0f) && Near(p.fireDelay, 0.4f), "发射后未重置");
         p.Tick(false, 0.02f);
         Check(ProjectileController.Count == 1, "松键重复发射");
@@ -299,52 +295,6 @@ class ChargeTests {
         paused.Tick(false, 0f);
         Check(paused.ThrowCalls == 0 && paused.KnifeHits == 0, "暂停时仍丢兵或前刺");
     }
-    static void ImpactAuthority() {
-        Networking.Networking.Calls=0; Networking.Networking.Events.Clear(); AquabroProbe.DamageCalls=0; AquabroWaterEffect.Calls=0;
-        var first=new AquabroProbe(); var second=new AquabroProbe();
-        Projectile.FireHook=delegate(Projectile shot) {
-            Check(shot.seed==1,"贴墙Fire尚未设置投掷序号");
-            Check(Networking.Networking.Calls==1 && Networking.Networking.Events[0]=="ReceiveTrident","贴墙Fire早于生成广播");
-            AquabroProbe.Contact((PredabroSpear)shot,first); AquabroProbe.Contact((PredabroSpear)shot,first);
-        };
-        first.Emit(true); Projectile.FireHook=null;
-        Check(Networking.Networking.Events.Count==2 && Networking.Networking.Events[1]=="ReceiveTridentImpact" &&
-              AquabroProbe.DamageCalls==1,"贴墙重复回调没有只发送一次拥有端命中结果");
-        Check((int)Networking.Networking.Arguments[0]==1 && (bool)Networking.Networking.Arguments[1] &&
-              Near((float)Networking.Networking.Arguments[2],120.05f),"命中广播没有携带拥有端的序号和坐标");
-        first.Emit(false); Check(ProjectileController.Last.seed==2,"同一拥有端投掷序号没有递增");
-        second.Emit(false); Check(ProjectileController.Last.seed==1,"不同拥有端共享了投掷序号");
-        int before=ProjectileController.Count,effects=AquabroWaterEffect.Calls;
-        first.DeliverTrident(false,1f,2f,400f,0f,0,99); first.DeliverImpact(1,true,999f,999f);
-        Check(ProjectileController.Count==before && AquabroWaterEffect.Calls==effects,"拥有端接收了另一端的生成或命中结果");
-        var remoteA=new AquabroProbe { IsMine=false }; var remoteB=new AquabroProbe { IsMine=false };
-        Networking.Networking.Calls=0; AquabroProbe.DamageCalls=0;
-        remoteA.DeliverTrident(true,300f,115f,-664f,0f,0,1); var expired=(PredabroSpear)ProjectileController.Last;
-        before=ProjectileController.Count; remoteA.DeliverTrident(true,300f,115f,-664f,0f,0,1);
-        remoteA.DeliverTrident(false,300f,115f,400f,0f,0,0);
-        Check(ProjectileController.Count==before,"重复或旧生成RPC再次创建长矛");
-        remoteB.DeliverTrident(false,300f,115f,400f,0f,1,1); var other=ProjectileController.Last;
-        AquabroProbe.Contact(expired,remoteA); AquabroProbe.Contact(expired,remoteA);
-        Check(expired.gameObject.Destroyed && AquabroWaterEffect.Calls==effects && AquabroProbe.DamageCalls==0 &&
-              Networking.Networking.Calls==0,"远端自行碰撞或到期产生水花、伤害或命中广播");
-        remoteA.DeliverImpact(1,true,120.05f,115f);
-        Check(AquabroWaterEffect.Calls==effects+1 && Near(AquabroWaterEffect.X,120.05f) && Near(AquabroWaterEffect.Y,115f) &&
-              AquabroWaterEffect.Charged && !other.gameObject.Destroyed,"本地先销毁后丢失权威结果，或误毁另一拥有者同序号长矛");
-        remoteA.DeliverImpact(1,true,999f,999f); remoteA.DeliverTrident(true,300f,115f,-664f,0f,0,1);
-        Check(AquabroWaterEffect.Calls==effects+1 && ProjectileController.Count==before+1,"已消费结果被重复播放或整批重发重新生成长矛");
-        remoteB.DeliverImpact(1,false,420f,115f);
-        Check(other.gameObject.Destroyed && AquabroWaterEffect.Calls==effects+2,"尚存视觉矛未按拥有者和序号清理");
-        var unordered=new AquabroProbe { IsMine=false };
-        unordered.DeliverTrident(false,300f,115f,400f,0f,0,10); var older=ProjectileController.Last;
-        unordered.DeliverTrident(true,300f,115f,-664f,0f,0,11); var newer=ProjectileController.Last;
-        unordered.DeliverImpact(11,true,120f,115f);
-        Check(newer.gameObject.Destroyed && !older.gameObject.Destroyed,"逆序结果清理了错误长矛");
-        unordered.DeliverImpact(10,false,420f,115f);
-        Check(older.gameObject.Destroyed && AquabroWaterEffect.Calls==effects+4,"先投后命中的合法旧序号结果被丢弃");
-        unordered.DeliverImpact(10,false,0f,0f); unordered.DeliverImpact(11,true,0f,0f); unordered.DeliverImpact(99,true,0f,0f);
-        Check(AquabroWaterEffect.Calls==effects+4 && AquabroProbe.DamageCalls==0 && Networking.Networking.Calls==0,
-              "重复或未知结果再次播放，或远端结果调用伤害/转发RPC");
-    }
     public static int Main() {
         try {
             for (int f = 0; f < 6; f++)
@@ -383,19 +333,11 @@ class ChargeTests {
             p.Tick(true, 1.4f); p.Tick(false, 0.01f);
             Check(ProjectileController.Count == count, "非拥有端重复生成长矛");
             var remote = new AquabroProbe { IsMine = false };
-            Networking.Networking.Calls = 0;
-            int remoteSpawnStart = ProjectileController.InstantiateCalls;
-            remote.DeliverTrident(false, 22f, 33f, 400f, 0f, 2, 4242);
-            Check(ProjectileController.InstantiateCalls == remoteSpawnStart + 1 && object.ReferenceEquals(ProjectileController.LastPrefab, HeroController.Prefab.projectile), "加入端没有按广播类型本地生成普通长矛");
-            Check(Near(ProjectileController.Last.X, 22f) && Near(ProjectileController.Last.Y, 33f) && Near(ProjectileController.Last.xI, 400f) &&
-                  ProjectileController.Last.playerNum == 2 && ProjectileController.Last.seed == 4242, "加入端普通长矛没有初始化坐标、速度、玩家编号或种子");
-            Check(object.ReferenceEquals(ProjectileController.Last.firedBy, remote) && ProjectileController.Last.Sprite.meshRender.material.ToString() == "Aquabro/trident.png", "加入端没有初始化本地发射者或应用自定义贴图");
-            remote.DeliverTrident(true, 24f, 35f, -664f, 0f, 2, 4243);
-            Check(ProjectileController.InstantiateCalls == remoteSpawnStart + 2 && object.ReferenceEquals(ProjectileController.LastPrefab, HeroController.Prefab.chargedSpearProectilePrefab) &&
-                  Near(ProjectileController.Last.xI, -664f) && Near(ProjectileController.Last.yI, 0f), "加入端没有按广播类型生成蓄力长矛或速度错误");
-            Check(object.ReferenceEquals(ProjectileController.Last.firedBy, remote) && ProjectileController.Last.Sprite.meshRender.material.ToString() == "Aquabro/trident.png", "加入端蓄力长矛没有初始化本地发射者或应用自定义贴图");
-            remote.Tick(true, 1.4f); remote.Tick(false, 0.01f);
-            Check(ProjectileController.InstantiateCalls == remoteSpawnStart + 2 && Networking.Networking.Calls == 0, "加入端自行开火或重复广播了长矛");
+            var remoteSpear = new PredabroSpear();
+            remoteSpear.Fire(22f,33f,400f,0f,0f,2,remote); remoteSpear.SetSeed(4242);
+            Check(object.ReferenceEquals(remoteSpear.firedBy,remote) && remoteSpear.Sprite.meshRender.material.ToString()=="Aquabro/trident.png", "原生远端 Fire 未应用对应外观");
+            remote.Tick(true,1.4f); remote.Tick(false,.01f);
+            Check(ProjectileController.Count==count, "接收端输入重放重复生成长矛");
             count = ProjectileController.Count;
             p = new AquabroProbe();
             p.Tick(true, 0f); p.Tick(false, 0f);
@@ -415,8 +357,7 @@ class ChargeTests {
             var otherProjectile = new Projectile();
             AquabroProbe.Visual(otherProjectile, p);
             Check(otherProjectile.Sprite.meshRender.material == null, "修改了其他类型的投射物");
-            ImpactAuthority();
-            Console.WriteLine("PASS: 水花时序、蓄力/连续投掷/打断、双端长矛生成/数据/外观、远端不自行开火、零时间步；近战丢兵/前刺/15-120 FPS；拥有端命中、贴墙顺序、提前销毁、重发去重、双owner序号和逆序结果消费");
+            Console.WriteLine("PASS: 水花帧时序、蓄力/连续投掷/打断、公共生成入口与原生 Fire/SetSeed 顺序、远端不自行开火、外观和零时间步；近战丢兵/前刺/15-120 FPS。传输和命中权威另由双端实机与水爆测试验证。");
             return 0;
         } catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
     }
@@ -425,7 +366,7 @@ class ChargeTests {
 $testSource = Join-Path $env:TEMP ('Aquabro-Charge-' + [Guid]::NewGuid().ToString('N') + '.cs')
 $testExe = [System.IO.Path]::ChangeExtension($testSource, '.exe')
 try {
-    [System.IO.File]::WriteAllText($testSource, $harness.Replace('__CONSTANTS__', $constantText).Replace('__TRIDENT_FIELDS__', $tridentFields).Replace('__METHODS__', $methods).Replace('AquabroProbe', 'Aquabro'), [System.Text.UTF8Encoding]::new($true))
+    [System.IO.File]::WriteAllText($testSource, $harness.Replace('__CONSTANTS__', $constantText).Replace('__METHODS__', $methods).Replace('AquabroProbe', 'Aquabro'), [System.Text.UTF8Encoding]::new($true))
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v3.5\csc.exe'
     & $compiler /nologo /nowarn:0649,0414 /target:exe "/out:$testExe" $testSource
     if ($LASTEXITCODE -ne 0) { throw '蓄力回归测试编译失败' }

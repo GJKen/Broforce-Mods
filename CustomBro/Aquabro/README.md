@@ -5,6 +5,7 @@
 | 想查什么 | 入口 |
 | --- | --- |
 | 部署版本、已验证结果与待确认问题 | [当前状态](当前角色实际应用状态.md) |
+| 联机适配代码、依赖与验证范围（English） | [Multiplayer integration](docs/networking.md) |
 | 在游戏里逐种检查敌人 | [Utility Mod 验证指南](docs/UtilityMod验证指南.md) |
 | 代码判定、动画参数与构建依赖 | [机制实现细节](docs/机制实现细节.md) |
 | 自动精简操作与验收历史 | [使用说明](docs/自动精简使用说明.md) · [验收记录](docs/自动精简历史.md) |

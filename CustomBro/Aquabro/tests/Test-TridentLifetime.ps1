@@ -16,6 +16,7 @@ $methods = @(
     Read-Method 'private static bool LimitTridentStep('
     Read-Method 'private static void RestoreTridentStep('
     Read-Method 'private static bool AllowOriginalSpearWalls('
+    Read-Method 'private static bool RunTridentLife('
 ) -join "`r`n"
 $flight = [regex]::Match($source, 'public class AquabroTridentFlight : MonoBehaviour\s*\{[^}]*\}').Value
 if (!$flight) { throw 'Missing production flight fields' }
@@ -25,12 +26,14 @@ public class MonoBehaviour { }
 class Time { public static int frameCount; }
 class Mathf { public static float Min(float a,float b) { return Math.Min(a,b); } public static float Max(float a,float b) { return Math.Max(a,b); } }
 class GameObject { public object value; public T AddComponent<T>() where T:new() { T v=new T(); value=v; return v; } }
-class PredabroSpear {
+class Projectile {
  public object firedBy; public float life=.3f,X,xI,t; public bool hitWall;
  public GameObject gameObject=new GameObject(); public T GetComponent<T>() where T:class { return gameObject.value as T; }
 }
+class PredabroSpear : Projectile { }
 __FLIGHT__
 public class Aquabro : MonoBehaviour {
+ public bool IsMine=true;
 __METHODS__
  static int checks;
  static void Check(bool ok,string name) { checks++; if(!ok) throw new Exception(name); }
@@ -76,6 +79,13 @@ __METHODS__
   Check(!AllowOriginalSpearWalls(sample),"Aquabro horizontal precheck suppressed");
   PredabroSpear contact=new PredabroSpear { firedBy=new Aquabro(), xI=400f, life=.01f, t=.02f };
   Time.frameCount++; Step(contact,27.5f); Check(contact.hitWall,"wall inside final 24px tip still contacted");
+  var remote=new PredabroSpear {firedBy=new Aquabro {IsMine=false},life=.01f,t=.02f,xI=400f};
+  Check(!RunTridentLife(remote,remote.t),"Remote must wait for native owner impact notification");
+  Near(remote.life,-.01f,"Remote life accounting");Time.frameCount++;Step(remote,float.PositiveInfinity);
+  Near(remote.X,0f,"Remote expired projectile stopped");
+  Check(RunTridentLife(contact,contact.t),"Owner keeps original RunLife");
+  Check(RunTridentLife(native,native.t),"Native spear keeps original RunLife");
+  Check(RunTridentLife(new Projectile {firedBy=new Aquabro {IsMine=false}},.01f),"Non-spear projectile keeps original RunLife");
   return "PASS: "+checks+" trident lifetime checks; production methods and flight fields extracted.";
  }
 }

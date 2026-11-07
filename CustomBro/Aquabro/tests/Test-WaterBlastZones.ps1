@@ -36,16 +36,22 @@ $constants = ([regex]::Matches($source, 'private const float (WaterBlast(Range|D
 $harness = @'
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using AquabroMod;
 using System.Drawing;
 using Networking;
 namespace Networking {
  enum PID { TargetOthers }
- delegate void RpcSignature<T1,T2,T3,T4>(T1 a,T2 b,T3 c,T4 d);
+ delegate void RpcSignature<T1,T2,T3,T4,T5,T6>(T1 a,T2 b,T3 c,T4 d,T5 e,T6 f);
  static class Connect { public static bool IsOffline=true; }
+ class NonStaticRPCObject { public string methodName;public int targetID; }
+ static class RPCController { public static object CurrentRPC;public static int LastSender; }
  static class Networking {
-  public static void RPC<T1,T2,T3,T4>(PID target,bool immediate,bool ignoreSessionID,
-   RpcSignature<T1,T2,T3,T4> method,T1 a,T2 b,T3 c,T4 d) { }
+  public static int sends; public static float x,y;
+  public static void RPC<T1,T2,T3,T4,T5,T6>(PID target,
+   RpcSignature<T1,T2,T3,T4,T5,T6> method,T1 a,T2 b,T3 c,T4 d,T5 e,T6 f,bool immediate) {
+   sends++;x=Convert.ToSingle(b);y=Convert.ToSingle(c);
+  }
  }
 }
 class MonoBehaviour { }
@@ -62,6 +68,7 @@ class GameObject {
  public T GetComponent<T>() where T:class {object value;return components.TryGetValue(typeof(T),out value)?value as T:(Contact==null?null:Contact.relay as T);}
 }
 class Projectile {
+ public int Nid=123,Owner=7;
  public float X,Y,xI,yI;
  public int playerNum=-1,damageInternal=13,damage=13,seed;
  public MonoBehaviour firedBy;
@@ -69,7 +76,7 @@ class Projectile {
  public GameObject gameObject=new GameObject();
  public T GetComponent<T>() where T : class { return gameObject.GetComponent<T>(); }
 }
-class PredabroSpear : Projectile { }
+class PredabroSpear : Projectile { private void MakeEffects(bool p,float x,float y,bool s,Vector3 a,Vector3 b) {} }
 public enum DamageType { Explosion, Melee, Crush, Drill, Unholy, None }
 class Block { public int health=100; }
 class FallingBlock : Block { }
@@ -94,6 +101,7 @@ class TestVanDammeAnim : Unit { public float headHeight=18; }
 class MookBigGuy : Unit { }
 class MookGrenadier : Unit { }
 struct Vector3 {
+ public static Vector3 zero {get {return new Vector3();}}
  public float x,y,z;
  public Vector3(float x,float y,float z) { this.x=x;this.y=y;this.z=z; }
  public float magnitude {get {return (float)Math.Sqrt(x*x+y*y+z*z);}}
@@ -146,7 +154,7 @@ class Aquabro : MonoBehaviour {
  public int playerNum;
  public float X,Y;
  public Info Info=new Info();
- private void ReceiveTridentImpact(int seed,bool charged,float x,float y) { }
+ private static readonly MethodInfo tridentImpactMethod=typeof(PredabroSpear).GetMethod("MakeEffects",BindingFlags.NonPublic|BindingFlags.Instance);
  __CONSTANTS__
  __METHOD__
  public static void Impact(PredabroSpear p, Aquabro a, object direct) { ResolveWaterImpact(p,a,0,0,direct); }
@@ -425,7 +433,22 @@ class Tests {
    Reset();Unit remote=At(0,0);Map.units.Add(remote);AquabroWaterEffect.Last=null;
    Aquabro.Impact(new PredabroSpear { xI=664 },new Aquabro { IsMine=false },remote);
    Check(remote.hits==0,"Remote owner repeats damage");
-   Check(AquabroWaterEffect.Last==null,"Remote collision starts an independent splash");
+  Check(AquabroWaterEffect.Last==null,"Remote collision starts an independent splash");
+   Connect.IsOffline=false;Networking.Networking.sends=0;
+   var owner=new Aquabro();var sent=new PredabroSpear {xI=400};
+   Aquabro.Impact(sent,owner,null);Aquabro.Impact(sent,owner,null);
+   Check(Networking.Networking.sends==1,"Owner native impact notification must be sent once");
+   var received=new PredabroSpear {xI=400};var remoteOwner=new Aquabro {IsMine=false};
+   AquabroWaterEffect.Last=null;
+   RPCController.CurrentRPC=new NonStaticRPCObject {methodName="MakeEffects",targetID=999};RPCController.LastSender=7;
+   Aquabro.Impact(received,remoteOwner,null);Check(AquabroWaterEffect.Last==null,"Wrong NID accepted");
+   RPCController.CurrentRPC=new NonStaticRPCObject {methodName="MakeEffects",targetID=received.Nid};RPCController.LastSender=8;
+   Aquabro.Impact(received,remoteOwner,null);Check(AquabroWaterEffect.Last==null,"Wrong owner accepted");
+   RPCController.LastSender=7;Aquabro.Impact(received,remoteOwner,null);
+   Check(AquabroWaterEffect.Last!=null,"Owner native impact notification rejected");
+   var first=AquabroWaterEffect.Last;Aquabro.Impact(received,remoteOwner,null);
+   Check(Object.ReferenceEquals(first,AquabroWaterEffect.Last) && Networking.Networking.sends==1,"Remote impact repeated or echoed");
+   RPCController.CurrentRPC=null;Connect.IsOffline=true;
    Console.WriteLine("PASS: close+overlap throws / crouch+both directions / behind excluded / tip+head+swept hits / 600ms late entry / pause / once / inner70% damage / outer30% knock / normal / remote");return 0;
   } catch(Exception ex) { Console.Error.WriteLine(ex.Message);return 1; }
  }

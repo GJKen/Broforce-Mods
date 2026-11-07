@@ -128,8 +128,8 @@ namespace AquabroMod
         private static Projectile chargedTridentPrefab;
         private static SoundHolder tridentSoundHolder;
         private static bool tridentVisualPatchInstalled;
-        private int tridentSequence, lastReceivedTrident;
-        private readonly HashSet<int> pendingTridentImpacts = new HashSet<int>();
+        private static readonly MethodInfo tridentImpactMethod = typeof(PredabroSpear).GetMethod("MakeEffects",
+            BindingFlags.NonPublic | BindingFlags.Instance);
 
         private float chargeTime;
         private float throwDelay;
@@ -166,6 +166,8 @@ namespace AquabroMod
                     BindingFlags.NonPublic | BindingFlags.Instance),
                     new HarmonyMethod(typeof(Aquabro).GetMethod("LimitTridentStep", BindingFlags.NonPublic | BindingFlags.Static)),
                     new HarmonyMethod(typeof(Aquabro).GetMethod("RestoreTridentStep", BindingFlags.NonPublic | BindingFlags.Static)), null, null);
+                visualHarmony.Patch(typeof(Projectile).GetMethod("RunLife", BindingFlags.NonPublic | BindingFlags.Instance),
+                    new HarmonyMethod(typeof(Aquabro).GetMethod("RunTridentLife", BindingFlags.NonPublic | BindingFlags.Static)), null, null, null);
                 WaterProjectileBarrier.Install(visualHarmony);
                 tridentVisualPatchInstalled = true;
             }
@@ -233,6 +235,16 @@ namespace AquabroMod
         {
             // RunLife 仍按原整帧耗时扣寿命，不能重复扣除子步时间。
             ___t = __state;
+        }
+
+        private static bool RunTridentLife(Projectile __instance, float ___t)
+        {
+            Aquabro owner = __instance.firedBy as Aquabro;
+            if (!(__instance is PredabroSpear) || owner == null || owner.IsMine) return true;
+            // 接收端到期后由截步停止飞行，保留 NID 接收原生 MakeEffects 结果。
+            // 不在本端先销毁，否则稍后到达的 owner 通知找不到投射物。
+            __instance.life -= ___t;
+            return false;
         }
 
         private static void PatchWaterMethod(Harmony harmony, string method, string prefix)
@@ -374,7 +386,11 @@ namespace AquabroMod
         {
             Aquabro owner = __instance.firedBy as Aquabro;
             if (owner == null) return true;
-            if (!particles) ResolveWaterHit(__instance, owner, x, y);
+            if (!particles)
+            {
+                if (owner.IsMine) ResolveWaterHit(__instance, owner, x, y);
+                else ResolveWaterImpact(__instance, owner, x, y, null);
+            }
             return false;
         }
 
@@ -401,18 +417,23 @@ namespace AquabroMod
 
         private static void ResolveWaterImpact(PredabroSpear shot, Aquabro owner, float x, float y, object directTarget)
         {
-            if (shot.GetComponent<AquabroWaterImpact>() != null) return;
-            shot.gameObject.AddComponent<AquabroWaterImpact>();
             if (!owner.IsMine)
             {
-                // 另一端只结束飞行，水花由操作者的可靠命中结果决定。
-                UnityEngine.Object.Destroy(shot.gameObject);
-                return;
+                NonStaticRPCObject rpc = RPCController.CurrentRPC as NonStaticRPCObject;
+                if (rpc == null || rpc.methodName != "MakeEffects" || rpc.targetID != shot.Nid ||
+                    RPCController.LastSender != shot.Owner) return;
+            }
+            if (shot.GetComponent<AquabroWaterImpact>() != null) return;
+            shot.gameObject.AddComponent<AquabroWaterImpact>();
+            if (owner.IsMine && !Connect.IsOffline)
+            {
+                // 复用已登记长矛的原生实例 RPC；不再建立角色专属命中协议。
+                var makeEffects = (RpcSignature<bool, float, float, bool, Vector3, Vector3>)Delegate.CreateDelegate(
+                    typeof(RpcSignature<bool, float, float, bool, Vector3, Vector3>), shot, tridentImpactMethod);
+                Networking.Networking.RPC<bool, float, float, bool, Vector3, Vector3>(PID.TargetOthers,
+                    makeEffects, false, x, y, false, Vector3.zero, Vector3.zero, false);
             }
             bool charged = Mathf.Abs(shot.xI) > 500f;
-            if (!Connect.IsOffline)
-                Networking.Networking.RPC<int, bool, float, float>(PID.TargetOthers, false, false,
-                    new RpcSignature<int, bool, float, float>(owner.ReceiveTridentImpact), shot.seed, charged, x, y);
             float radius = charged ? WaterBlastRange : 12f;
             float damageRadius = charged ? radius * WaterBlastDamageRatio : radius;
             int blastDamage = charged ? 14 : 8;
@@ -1305,9 +1326,6 @@ namespace AquabroMod
 
         private void FireTrident()
         {
-            if (!IsMine)
-                return;
-
             bool charged = chargeTime >= FullChargeDuration;
             Projectile prefab = charged ? chargedTridentPrefab : normalTridentPrefab;
             if (prefab == null)
@@ -1316,60 +1334,13 @@ namespace AquabroMod
             float x = X + transform.localScale.x * 14f;
             float y = Y + (ducking ? 8f : 11f);
             float speed = transform.localScale.x * 400f * (charged ? 1.66f : 1f);
-            int seed = ++tridentSequence;
-            // 贴墙时 Fire 内就可能命中；生成通知必须排在命中通知前面。
-            if (!Connect.IsOffline)
+            if (IsMine)
             {
-                Networking.Networking.RPC<bool, float, float, float, float, int, int>(PID.TargetOthers,
-                    false, false,
-                    new RpcSignature<bool, float, float, float, float, int, int>(ReceiveTrident),
-                    charged, x, y, speed, 0f, playerNum, seed);
+                ProjectileController.SpawnProjectileOverNetwork(prefab, this, x, y, speed, 0f, false, playerNum, false, false, 0f);
             }
-            SpawnTridentLocally(charged, x, y, speed, 0f, playerNum, seed);
 
             PlayAttackSound();
             Map.DisturbWildLife(X, Y, 120f, playerNum);
-        }
-
-        private void SpawnTridentLocally(bool charged, float x, float y, float speedX, float speedY,
-            int projectilePlayerNum, int seed)
-        {
-            Projectile prefab = charged ? chargedTridentPrefab : normalTridentPrefab;
-            if (prefab == null)
-                return;
-
-            // 与原版本地生成相同，但身份需在 Fire 的出生点碰撞前设置。
-            Projectile projectile = UnityEngine.Object.Instantiate<Projectile>(prefab, new Vector3(x, y, 0f), Quaternion.identity);
-            projectile.SetSeed(seed);
-            projectile.Fire(x, y, speedX, speedY, 0f, projectilePlayerNum, this);
-        }
-
-        [AllowedRPC]
-        private void ReceiveTrident(bool charged, float x, float y, float speedX, float speedY,
-            int projectilePlayerNum, int seed)
-        {
-            if (IsMine || seed <= lastReceivedTrident)
-                return;
-
-            lastReceivedTrident = seed;
-            pendingTridentImpacts.Add(seed);
-            SpawnTridentLocally(charged, x, y, speedX, speedY, projectilePlayerNum, seed);
-        }
-
-        [AllowedRPC]
-        private void ReceiveTridentImpact(int seed, bool charged, float x, float y)
-        {
-            // 游戏重发整批 RPC 时也只消费一次；命中顺序可与投掷顺序不同。
-            if (IsMine || !pendingTridentImpacts.Remove(seed)) return;
-            foreach (PredabroSpear shot in UnityEngine.Object.FindObjectsOfType(typeof(PredabroSpear)))
-                if (shot.firedBy == this && shot.seed == seed)
-                {
-                    if (shot.GetComponent<AquabroWaterImpact>() == null)
-                        shot.gameObject.AddComponent<AquabroWaterImpact>();
-                    UnityEngine.Object.Destroy(shot.gameObject);
-                }
-            AquabroWaterEffect.Play(Info.path, charged ? "water-rocket-explosion.png" : "water-hit-small.png",
-                x, y, charged ? 64 : 48, charged ? 6 : 12, charged);
         }
 
         protected override void PlayAttackSound(float volume)
