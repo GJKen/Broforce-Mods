@@ -19,6 +19,24 @@ namespace CustomMapMultiplayer
             ResetStalePauseStateForWorkshopSession("SteamLayer.JoinLobby completed");
         }
 
+        private static bool ShouldSuppressRepeatedWorkshopLobbyJoin(object[] arguments)
+        {
+            if ((!_lateJoinPending && (!_lateJoinStarted || _lateJoinAutoJoinCompleted)) ||
+                DateTime.UtcNow > _lateJoinDeadlineUtc)
+                return false;
+
+            var room = arguments[0] as SteamLayer.SteamGameInfo;
+            if (room == null || Connect.IsOffline ||
+                !object.Equals(GetFieldOrPropertyValue(room, "Match"),
+                    GetFieldOrPropertyValue(SteamLayer.Instance, "LobbySteamId")))
+                return false;
+
+            // Rejoining this lobby destroys the pending campaign download and peer
+            // manifests. Keep the first join until it completes or times out.
+            DiagnosticLog.Info("Ignored repeated join to the current Workshop lobby while its map is loading.");
+            return true;
+        }
+
         private static void ObserveLifecycleBeforeTrace(
             MethodBase method,
             object instance,

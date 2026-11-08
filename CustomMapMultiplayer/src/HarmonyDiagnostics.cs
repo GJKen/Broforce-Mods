@@ -497,6 +497,11 @@ namespace CustomMapMultiplayer
         {
             try
             {
+                if (__originalMethod.DeclaringType == typeof(SteamLayer) &&
+                    __originalMethod.Name == "JoinLobby" && ShouldSuppressRepeatedWorkshopLobbyJoin(__args))
+                {
+                    return false;
+                }
                 ShowFullFrpRoomNoticeIfNeeded(__originalMethod, __args);
                 if (ShouldBlockNativeMainMenuExitTransition(__originalMethod, __args))
                 {

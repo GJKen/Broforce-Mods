@@ -1,0 +1,82 @@
+{
+  "initialHost": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"Test Evan2\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": true,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": \"Two Random Guys Save The Princess\",\n  \"timeScale\": 1,\n  \"playerCount\": 1,\n  \"players\": [\n    {\n      \"playerIndex\": 0,\n      \"playerNum\": 0,\n      \"broName\": \"Rambo(Clone) [local]\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Rambro\",\n      \"position\": {\n        \"x\": 106.999863,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    }\n  ]\n}"
+      }
+    ]
+  },
+  "initialClient": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"MainMenu\",\n  \"gameMode\": \"NotSet\",\n  \"isInGame\": false,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": null,\n  \"timeScale\": 1,\n  \"playerCount\": 0,\n  \"players\": []\n}"
+      }
+    ]
+  },
+  "initialMapSelection": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"result\": \"forcedBro=Random; forcedBros=Brommando,Rambro; alwaysChosen=True; ignoreForced=True; selected=None\",\n  \"resultSet\": true,\n  \"output\": \"\"\n}"
+      }
+    ]
+  },
+  "beforeHost": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; lobby=109775243949370262; host=True; offline=False; pauseStream=False\",\n    \"BroMaker disabledSpawning=False; override=False; next=Cobro; forced=False\",\n    \"Swap enabled=True; manual=False; chosen=True; ignoreForced=True\",\n    \"slot=0; pid=6 JKChan (Server); playing=True; player=PlayerPrefab(Clone) [local] (Player); bro=True; selection=Cobro; replacement=False\",\n    \"slot=1; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"slot=2; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"slot=3; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"Cobro unavailable=\"\n  ]\n}"
+      }
+    ]
+  },
+  "beforeClient": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=MainMenu; lobby=0; host=True; offline=True; pauseStream=False\",\n    \"BroMaker disabledSpawning=False; override=False; next=Aquabro; forced=False\",\n    \"Swap enabled=True; manual=False; chosen=True; ignoreForced=True\",\n    \"slot=0; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"slot=1; pid=NoID; playing=False; player=; bro=none; selection=Aquabro; replacement=False\",\n    \"slot=2; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"slot=3; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"Cobro unavailable=\"\n  ]\n}"
+      }
+    ]
+  },
+  "successfulSingleJoinHost": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"Test Evan2\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": true,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": \"Two Random Guys Save The Princess\",\n  \"timeScale\": 1,\n  \"playerCount\": 2,\n  \"players\": [\n    {\n      \"playerIndex\": 0,\n      \"playerNum\": 0,\n      \"broName\": \"BM_Cobro(Clone) [local]\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Cobro\",\n      \"position\": {\n        \"x\": 106.999863,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    },\n    {\n      \"playerIndex\": 1,\n      \"playerNum\": 1,\n      \"broName\": \"BM_Aquabro(Clone)\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Aquabro\",\n      \"position\": {\n        \"x\": 72,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    }\n  ]\n}"
+      }
+    ]
+  },
+  "successfulSingleJoinClient": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"Test Evan2\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": true,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": \"Two Random Guys Save The Princess\",\n  \"timeScale\": 1,\n  \"playerCount\": 2,\n  \"players\": [\n    {\n      \"playerIndex\": 0,\n      \"playerNum\": 0,\n      \"broName\": \"BM_Cobro(Clone)\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Cobro\",\n      \"position\": {\n        \"x\": 106.999863,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    },\n    {\n      \"playerIndex\": 1,\n      \"playerNum\": 1,\n      \"broName\": \"BM_Aquabro(Clone) [local]\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Aquabro\",\n      \"position\": {\n        \"x\": 72,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    }\n  ]\n}"
+      }
+    ]
+  },
+  "repeatedJoinClient": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"MainMenu\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": false,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": null,\n  \"timeScale\": 1,\n  \"playerCount\": 0,\n  \"players\": []\n}"
+      }
+    ]
+  },
+  "repeatedJoinHost": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; lobby=109775243949370262; host=True; offline=False; pauseStream=False\",\n    \"BroMaker disabledSpawning=False; override=False; next=Cobro; forced=False\",\n    \"Swap enabled=True; manual=False; chosen=True; ignoreForced=True\",\n    \"slot=0; pid=6 JKChan (Server); playing=True; player=PlayerPrefab(Clone) [local] (Player); bro=Cobro.Cobro; selection=Cobro; replacement=False\",\n    \"slot=1; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"slot=2; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"slot=3; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"Cobro unavailable=a peer has not published a BroMaker manifest\",\n    \"native SwapToSpecificBro=True\"\n  ]\n}"
+      }
+    ]
+  },
+  "fallbackAfterRepeatedJoin": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"Test Evan2\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": true,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": \"Two Random Guys Save The Princess\",\n  \"timeScale\": 1,\n  \"playerCount\": 1,\n  \"players\": [\n    {\n      \"playerIndex\": 0,\n      \"playerNum\": 0,\n      \"broName\": \"Rambo(Clone) [local]\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Rambro\",\n      \"position\": {\n        \"x\": 106.999863,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    }\n  ]\n}"
+      }
+    ]
+  }
+}

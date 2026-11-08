@@ -12,8 +12,8 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=cbb700946327d5123def50f2cad33ab05ad793e970b50662641937427b2114f0` |
-| DLL SHA-256 | `641055454B0350690C468990DDCE8175B348F731E6534F8EB7BB7DD721AC4D09` |
+| Current distributed build | `buildHash=352369deeb227e77255856bc8e82abdd3a884a5fb5cafd1442df63cce8667ffd` |
+| DLL SHA-256 | `24FA715356F354575D4BCFF7EA01C6EB7D0546217E3E8126065EF6A9CCA384C7` |
 | DLL assembly version | `0.5.0.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |

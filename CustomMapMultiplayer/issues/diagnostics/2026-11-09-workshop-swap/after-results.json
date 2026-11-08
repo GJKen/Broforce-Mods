@@ -1,0 +1,50 @@
+{
+  "repeatedJoinClientState": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"Test Evan2\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": true,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": \"Two Random Guys Save The Princess\",\n  \"timeScale\": 1,\n  \"playerCount\": 2,\n  \"players\": [\n    {\n      \"playerIndex\": 0,\n      \"playerNum\": 0,\n      \"broName\": \"BM_Aquabro(Clone)\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Aquabro\",\n      \"position\": {\n        \"x\": 64,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    },\n    {\n      \"playerIndex\": 1,\n      \"playerNum\": 1,\n      \"broName\": \"BM_Aquabro(Clone) [local]\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Aquabro\",\n      \"position\": {\n        \"x\": 72,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    }\n  ]\n}"
+      }
+    ]
+  },
+  "repeatedJoinClientSnapshot": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; lobby=109775243950178647; host=False; offline=False; pauseStream=False\",\n    \"BroMaker disabledSpawning=False; override=False; next=Aquabro; forced=False\",\n    \"Swap enabled=True; manual=False; chosen=True; ignoreForced=True\",\n    \"slot=0; pid=6 JKChan (Server); playing=True; player=PlayerPrefab(Clone) (Player); bro=AquabroMod.Aquabro; selection=Rambro; replacement=False\",\n    \"slot=1; pid=7 moumentai; playing=True; player=PlayerPrefab(Clone) [local] (Player); bro=AquabroMod.Aquabro; selection=Aquabro; replacement=False\",\n    \"slot=2; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"slot=3; pid=NoID; playing=False; player=; bro=none; selection=Rambro; replacement=False\",\n    \"Cobro unavailable=\"\n  ]\n}"
+      }
+    ]
+  },
+  "hostSwapRequest": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"swap-regression\",\n  \"output\": [\n    \"slot=0; requested=Cobro; swapResult=True; actual=Cobro.Cobro\"\n  ]\n}"
+      }
+    ]
+  },
+  "clientSwapRequest": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"swap-regression\",\n  \"output\": [\n    \"slot=1; requested=Bronobi; swapResult=True; actual=BronobiMod.Bronobi\"\n  ]\n}"
+      }
+    ]
+  },
+  "hostFinal": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"Test Evan2\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": true,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": \"Two Random Guys Save The Princess\",\n  \"timeScale\": 1,\n  \"playerCount\": 2,\n  \"players\": [\n    {\n      \"playerIndex\": 0,\n      \"playerNum\": 0,\n      \"broName\": \"BM_Cobro(Clone) [local]\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Cobro\",\n      \"position\": {\n        \"x\": 64,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    },\n    {\n      \"playerIndex\": 1,\n      \"playerNum\": 1,\n      \"broName\": \"BM_Bronobi(Clone)\",\n      \"heroType\": \"Blade\",\n      \"className\": \"Bronobi\",\n      \"position\": {\n        \"x\": 72,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    }\n  ]\n}"
+      }
+    ]
+  },
+  "clientFinal": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"scene\": \"Test Evan2\",\n  \"gameMode\": \"Campaign\",\n  \"isInGame\": true,\n  \"levelFinished\": false,\n  \"pauseState\": \"UnPaused\",\n  \"levelIndex\": 0,\n  \"campaignName\": \"Two Random Guys Save The Princess\",\n  \"timeScale\": 1,\n  \"playerCount\": 2,\n  \"players\": [\n    {\n      \"playerIndex\": 0,\n      \"playerNum\": 0,\n      \"broName\": \"BM_Cobro(Clone)\",\n      \"heroType\": \"Rambro\",\n      \"className\": \"Cobro\",\n      \"position\": {\n        \"x\": 64,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    },\n    {\n      \"playerIndex\": 1,\n      \"playerNum\": 1,\n      \"broName\": \"BM_Bronobi(Clone) [local]\",\n      \"heroType\": \"Blade\",\n      \"className\": \"Bronobi\",\n      \"position\": {\n        \"x\": 72,\n        \"y\": 72\n      },\n      \"health\": 1,\n      \"isAlive\": true,\n      \"lives\": 1\n    }\n  ]\n}"
+      }
+    ]
+  }
+}

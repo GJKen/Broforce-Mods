@@ -52,6 +52,8 @@ FRP Direct 的房主退出仍按现有协议结束房间，不支持主机迁移
 
 ## 晚加入与重入
 
+Workshop 地图加载期间再次加入当前同一 Steam 房间时，保留第一次请求，避免清除仍在使用的下载状态及角色兼容清单。切换房间、已完成加入和超时后的重试仍正常执行。复现及验证见[重复加入问题记录](../issues/ISSUES-2026-11-09-Workshop加载中重复加入导致换人与入图失败.md)。
+
 晚加入流程等待玩家列表稳定 250ms，再用本机主控制器调用一次 `HeroController.AddLocalPlayer(-1, controllerId)`。已有本地槽位或待处理请求时复用，避免重复生成 P2-P4；45 秒内没有观察到本地 `Player.Start` 或 `SetPlayerCharacter` 时允许重试一次。创建方仍在 `newJoin`/选关界面时不启动地图加载，进入 Workshop 过场后最长等待约 120 秒。
 
 每次本地 Workshop `Player.Start` 成功后，清理 `WorkshopLocalJoinRequests` 及关联槽位请求，而不是只在首次晚加入完成时清理。已完成请求不会阻挡下一次主动 AFK 返回；尚未创建 Player 的请求仍使用原有 10 秒重复加入保护。这与首次晚加入流程的 45 秒观察窗口不同。
