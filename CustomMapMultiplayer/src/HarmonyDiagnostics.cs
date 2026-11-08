@@ -375,7 +375,7 @@ namespace CustomMapMultiplayer
             PatchMainMenuMenuActiveSetter();
             PatchMainMenuShowRoutineCompletion();
             NotifySceneLoaded(SceneManager.GetActiveScene());
-            OptionalBroModDiagnostics.LogCompatibilitySnapshot("diagnostics-start");
+            SwapBrosCompatibility.LogCompatibilitySnapshot("diagnostics-start");
 
             DiagnosticLog.Info("Harmony method tracing enabled; patched methods=" + patchedCount + ".");
         }
@@ -553,7 +553,7 @@ namespace CustomMapMultiplayer
                         __originalMethod.DeclaringType.Name + "." + __originalMethod.Name,
                         __originalMethod.Name == "CreateMatch" ? "host" : "client");
                     PerformanceTelemetry.Reset();
-                    OptionalBroModDiagnostics.LogCompatibilitySnapshot("network-session-start");
+                    SwapBrosCompatibility.LogCompatibilitySnapshot("network-session-start");
                     Interlocked.Exchange(ref _sequence, 0);
                     lock (Sync)
                     {
@@ -579,12 +579,12 @@ namespace CustomMapMultiplayer
                 }
 
                 var sequence = Interlocked.Increment(ref _sequence);
-                var traceBuildStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.TraceBuild);
+                var traceBuildStartedAt = PerformanceTelemetry.Begin();
                 var message = BuildTraceMessage(__originalMethod, __instance, __args);
                 PerformanceTelemetry.End(PerformanceMetric.TraceBuild, traceBuildStartedAt);
                 var key = DescribeMethod(__originalMethod);
                 string suppressionSummary;
-                var traceDedupStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.TraceDedup);
+                var traceDedupStartedAt = PerformanceTelemetry.Begin();
                 var shouldWrite = ShouldWrite(key, message, out suppressionSummary);
                 PerformanceTelemetry.End(PerformanceMetric.TraceDedup, traceDedupStartedAt);
                 if (shouldWrite)
@@ -638,20 +638,19 @@ namespace CustomMapMultiplayer
 
         internal static void Update()
         {
-            TryCompleteCachedWorkshopLoad();
             ObserveOnlineHostRole();
             TrySynchronizeClientWorkshopIdentity(false, "periodic room check");
-            var acidAuthorityStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidAuthority);
+            var acidAuthorityStartedAt = PerformanceTelemetry.Begin();
             TryApplyWorkshopRemoteHeroAcid();
             PerformanceTelemetry.End(PerformanceMetric.AcidAuthority, acidAuthorityStartedAt);
             TryRebroadcastWorkshopSpawns();
-            var entityPendingStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.EntityPending);
+            var entityPendingStartedAt = PerformanceTelemetry.Begin();
             TryApplyPendingEntityFinalStates();
             PerformanceTelemetry.End(PerformanceMetric.EntityPending, entityPendingStartedAt);
-            var entitySubmitStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.EntitySubmit);
+            var entitySubmitStartedAt = PerformanceTelemetry.Begin();
             TrySubmitEntityFinalStates();
             PerformanceTelemetry.End(PerformanceMetric.EntitySubmit, entitySubmitStartedAt);
-            var entityPruneStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.EntityPrune);
+            var entityPruneStartedAt = PerformanceTelemetry.Begin();
             TryPruneEntityFinalStates();
             PerformanceTelemetry.End(PerformanceMetric.EntityPrune, entityPruneStartedAt);
             TryApplyPendingMcBroverTurkeyDetonations();

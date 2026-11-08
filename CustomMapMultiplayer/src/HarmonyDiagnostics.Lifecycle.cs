@@ -127,11 +127,6 @@ namespace CustomMapMultiplayer
             return IsWorkshopOnlineSession() && !IsOnlineHost();
         }
 
-        private static bool IsWorkshopOnlineHostSession()
-        {
-            return IsWorkshopOnlineSession() && IsOnlineHost();
-        }
-
         private static void ClearLifecycleState()
         {
             ClearWorkshopAcidAuthorityState();

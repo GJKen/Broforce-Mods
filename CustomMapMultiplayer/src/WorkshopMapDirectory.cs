@@ -574,15 +574,11 @@ namespace CustomMapMultiplayer
             {
                 if (ItemsInternal[index].TitleReadPending)
                 {
-                    MarkTitleReadFailed(ItemsInternal[index].WorkshopId);
+                    var workshopId = ItemsInternal[index].WorkshopId;
+                    UpdateItemTitle(workshopId, GetFallbackTitle(workshopId), true);
                 }
             }
             _isRefreshing = false;
-        }
-
-        private static void MarkTitleReadFailed(ulong workshopId)
-        {
-            UpdateItemTitle(workshopId, GetFallbackTitle(workshopId), true);
         }
 
         private static void UpdateItemTitle(ulong workshopId, string title, bool failed)

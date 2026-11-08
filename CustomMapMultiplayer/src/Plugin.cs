@@ -218,7 +218,7 @@ namespace CustomMapMultiplayer
                     PositionMode.After,
                     "OPTIONS",
                     0,
-                    menu => CanShowPauseMenuAfkAction());
+                    menu => HarmonyDiagnostics.CanShowManualAfkMenuItem());
                 DiagnosticLog.Info(
                     "Registered RocketLib PauseMenu action: Enter AFK now after OPTIONS.");
             }
@@ -228,11 +228,6 @@ namespace CustomMapMultiplayer
                     "RocketLib PauseMenu AFK action registration failed",
                     exception);
             }
-        }
-
-        private static bool CanShowPauseMenuAfkAction()
-        {
-            return HarmonyDiagnostics.CanShowManualAfkMenuItem();
         }
 
         private static bool OnToggle(UnityModManager.ModEntry modEntry, bool enabled)
@@ -1009,7 +1004,7 @@ namespace CustomMapMultiplayer
                 SelectWorkshopMap(item);
             }
 
-            var favorite = IsWorkshopMapFavorite(item.WorkshopId);
+            var favorite = ParseWorkshopIdList(Settings.WorkshopFavoriteIds).Contains(item.WorkshopId);
             GUILayout.BeginVertical(
                 GUILayout.Width(WorkshopMapFavoriteColumnWidth),
                 GUILayout.Height(WorkshopMapCardButtonHeight));
@@ -1164,11 +1159,6 @@ namespace CustomMapMultiplayer
 
             AddRecentWorkshopMap(workshopId);
             SaveSettings(_modEntry);
-        }
-
-        private static bool IsWorkshopMapFavorite(ulong workshopId)
-        {
-            return ParseWorkshopIdList(Settings.WorkshopFavoriteIds).Contains(workshopId);
         }
 
         private static void ToggleWorkshopMapFavorite(ulong workshopId)
@@ -1861,12 +1851,10 @@ namespace CustomMapMultiplayer
         {
             if (_settingsStatusStyle == null)
             {
-                _settingsStatusStyle = new GUIStyle(GUI.skin.box);
-                _settingsStatusStyle.normal.background = GetSettingsSolidBackground(
-                    ref _settingsSectionPanelBackground,
-                    SettingsSectionPanelColor);
-                _settingsStatusStyle.border = new RectOffset(7, 7, 7, 7);
+                _settingsStatusStyle = new GUIStyle(GetSettingsSectionPanelStyle());
                 _settingsStatusStyle.padding = new RectOffset(8, 8, 7, 7);
+                _settingsStatusStyle.margin.left = GUI.skin.box.margin.left;
+                _settingsStatusStyle.margin.right = GUI.skin.box.margin.right;
             }
             return _settingsStatusStyle;
         }
@@ -2267,11 +2255,6 @@ namespace CustomMapMultiplayer
                 return Settings != null &&
                        Settings.EnableFrpDirect;
             }
-        }
-
-        internal static FrpDirectTransport GetFrpDirectTransport()
-        {
-            return _behaviour == null ? null : _behaviour.GetFrpDirectTransport();
         }
 
         private static void SaveSettings(UnityModManager.ModEntry modEntry)

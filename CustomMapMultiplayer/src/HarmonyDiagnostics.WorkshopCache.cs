@@ -6,18 +6,14 @@ using System.Reflection;
 
 namespace CustomMapMultiplayer
 {
-    // 优先复用 Steam 已安装或已缓存的 Workshop 内容，并阻止加载动画中的重复请求。
+    // 检查 Workshop 本地地图状态、记录最近地图，并保留退出期间的加载保护。
     internal static partial class HarmonyDiagnostics
     {
         private const int WorkshopCacheFolderBufferSize = 4096;
         private const long WorkshopCacheMaxFileBytes = 512L * 1024L * 1024L;
-        private const int WorkshopLoadRequestTimeoutSeconds = 120;
 
         private static bool _workshopLoadRequestPending;
         private static ulong _workshopLoadRequestId;
-        private static DateTime _workshopLoadRequestStartedAtUtc;
-        private static bool _cachedWorkshopCompletionPending;
-        private static Campaign _cachedWorkshopCampaign;
 
         private static void PatchWorkshopLoadCache()
         {
@@ -129,7 +125,6 @@ namespace CustomMapMultiplayer
                     {
                         _workshopLoadRequestPending = true;
                         _workshopLoadRequestId = workshopId;
-                        _workshopLoadRequestStartedAtUtc = DateTime.UtcNow;
                     }
                     else
                     {
@@ -184,80 +179,6 @@ namespace CustomMapMultiplayer
             {
                 Plugin.RecordWorkshopMapUsage(workshopId);
             }
-        }
-
-        private static void QueueCachedWorkshopCompletion(
-            Campaign campaign,
-            string cacheSource,
-            ulong workshopId)
-        {
-            if (campaign == null)
-            {
-                ClearWorkshopLoadRequest();
-                return;
-            }
-
-            _cachedWorkshopCampaign = campaign;
-            _cachedWorkshopCompletionPending = true;
-            DiagnosticLog.Info(
-                "Workshop cache hit; reusing local campaign before Steam download: id=" +
-                workshopId + "; source=" + cacheSource + ".");
-        }
-
-        private static void TryCompleteCachedWorkshopLoad()
-        {
-            if (!_cachedWorkshopCompletionPending || _cachedWorkshopCampaign == null)
-            {
-                return;
-            }
-
-            var campaign = _cachedWorkshopCampaign;
-            _cachedWorkshopCampaign = null;
-            _cachedWorkshopCompletionPending = false;
-            try
-            {
-                var steamControllerType = AccessTools.TypeByName("SteamController");
-                var completionMethod = FindStaticMethod(steamControllerType, "OnLevelLoadComplete", 1);
-                if (completionMethod == null)
-                {
-                    DiagnosticLog.Warning(
-                        "Workshop cache completion could not find SteamController.OnLevelLoadComplete.");
-                    ClearWorkshopLoadRequest();
-                    return;
-                }
-
-                completionMethod.Invoke(null, new object[] { campaign });
-            }
-            catch (Exception exception)
-            {
-                DiagnosticLog.Warning("Workshop cache completion failed: " + exception);
-                ClearWorkshopLoadRequest();
-            }
-        }
-
-        internal static bool TryLoadInstalledWorkshopCampaign(
-            object publishedFileId,
-            out Campaign campaign,
-            out string cacheSource)
-        {
-            campaign = null;
-            cacheSource = string.Empty;
-            string folder;
-            if (!TryGetInstalledWorkshopFolder(publishedFileId, out folder))
-            {
-                return false;
-            }
-
-            if (!TryLoadCampaignFromFolder(folder, out campaign))
-            {
-                DiagnosticLog.Trace(
-                    "Steam reported an installed Workshop folder without a readable campaign: " +
-                    folder + ".");
-                return false;
-            }
-
-            cacheSource = "installed-folder";
-            return true;
         }
 
         internal static WorkshopMapLocalState GetWorkshopMapLocalState(object publishedFileId)
@@ -365,56 +286,6 @@ namespace CustomMapMultiplayer
             }
         }
 
-        private static bool TryReadCachedUgcCampaign(
-            object fileHandle,
-            int fileSize,
-            out Campaign campaign)
-        {
-            campaign = null;
-            if (fileHandle == null || fileSize <= 0 || fileSize > WorkshopCacheMaxFileBytes)
-            {
-                return false;
-            }
-
-            var steamStorageType = AccessTools.TypeByName("Steamworks.SteamRemoteStorage");
-            var ugcRead = steamStorageType == null
-                ? null
-                : FindStaticMethod(steamStorageType, "UGCRead", 5);
-            if (ugcRead == null)
-            {
-                return false;
-            }
-
-            try
-            {
-                var readActionType = ugcRead.GetParameters()[4].ParameterType;
-                var readAction = Enum.Parse(
-                    readActionType,
-                    "k_EUGCReadAction_ContinueReadingUntilFinished");
-                var bytes = new byte[fileSize];
-                var bytesRead = Convert.ToInt32(ugcRead.Invoke(
-                    null,
-                    new object[] { fileHandle, bytes, fileSize, (uint)0, readAction }));
-                if (bytesRead <= 0)
-                {
-                    return false;
-                }
-
-                if (bytesRead < bytes.Length)
-                {
-                    Array.Resize(ref bytes, bytesRead);
-                }
-
-                campaign = FileIO.LoadCampaignBytes(bytes, true, true);
-                return campaign != null;
-            }
-            catch
-            {
-                campaign = null;
-                return false;
-            }
-        }
-
         internal static bool TryGetPublishedFileId(object value, out ulong workshopId)
         {
             workshopId = 0;
@@ -440,9 +311,6 @@ namespace CustomMapMultiplayer
         {
             _workshopLoadRequestPending = false;
             _workshopLoadRequestId = 0;
-            _workshopLoadRequestStartedAtUtc = DateTime.MinValue;
-            _cachedWorkshopCompletionPending = false;
-            _cachedWorkshopCampaign = null;
         }
     }
 }

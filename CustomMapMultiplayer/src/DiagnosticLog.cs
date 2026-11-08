@@ -290,9 +290,6 @@ namespace CustomMapMultiplayer
                     break;
                 case "full":
                 case "complete":
-                    categories = AllCategories;
-                    normalized = "full";
-                    break;
                 default:
                     categories = AllCategories;
                     normalized = "full";
@@ -479,7 +476,7 @@ namespace CustomMapMultiplayer
 
         private static void Write(string level, string message, bool trace, bool writeToUnity)
         {
-            var performanceStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.DiagnosticWrite);
+            var performanceStartedAt = PerformanceTelemetry.Begin();
             var safeMessage = SanitizeUtf16(message);
             var line = string.Empty;
             var written = false;

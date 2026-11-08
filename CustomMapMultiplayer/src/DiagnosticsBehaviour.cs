@@ -120,11 +120,6 @@ namespace CustomMapMultiplayer
             }
         }
 
-        internal FrpDirectTransport GetFrpDirectTransport()
-        {
-            return _frpDirectTransport;
-        }
-
         internal void ShowWorkshopNotice(string message)
         {
             _workshopNotice = message ?? string.Empty;

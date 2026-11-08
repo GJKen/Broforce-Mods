@@ -26,13 +26,8 @@ namespace CustomMapMultiplayer
             WorkshopCampaign = string.Empty;
         }
 
-        internal FrpDirectRoomInfo(FrpDirectLayer layer, string encodedRoom)
+        internal FrpDirectRoomInfo(FrpDirectLayer layer, string encodedRoom) : this(layer)
         {
-            _layer = layer;
-            WorkshopPhase = string.Empty;
-            WorkshopId = string.Empty;
-            WorkshopScene = string.Empty;
-            WorkshopCampaign = string.Empty;
             ApplyEncodedRoom(encodedRoom);
         }
 

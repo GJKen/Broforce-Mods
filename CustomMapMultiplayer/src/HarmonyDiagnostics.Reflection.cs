@@ -16,7 +16,6 @@ namespace CustomMapMultiplayer
         private static Type _connectTypeCache;
         private static MethodInfo _connectLayerGetterCache;
         private static MethodInfo _connectIsHostGetterCache;
-        private static MethodInfo _connectIsOfflineGetterCache;
         private static Type _connectionLayerTypeCache;
         private static MethodInfo _connectionLayerRoomGetterCache;
 
@@ -66,16 +65,6 @@ namespace CustomMapMultiplayer
             }
 
             return _connectIsHostGetterCache;
-        }
-
-        private static MethodInfo GetConnectIsOfflineGetterCached(Type connectType)
-        {
-            if (_connectIsOfflineGetterCache == null && connectType != null)
-            {
-                _connectIsOfflineGetterCache = AccessTools.PropertyGetter(connectType, "IsOffline");
-            }
-
-            return _connectIsOfflineGetterCache;
         }
 
         private static Type GetConnectionLayerTypeCached()
@@ -312,12 +301,7 @@ namespace CustomMapMultiplayer
 
         private static bool IsOnline()
         {
-            return ReadConnectionOnlineState().IsOnline;
-        }
-
-        private static ConnectionOnlineState ReadConnectionOnlineState()
-        {
-            return ReadConnectionOnlineState(false);
+            return ReadConnectionOnlineState(false).IsOnline;
         }
 
         private static ConnectionOnlineState ReadConnectionOnlineState(bool includeReflectionMetadata)

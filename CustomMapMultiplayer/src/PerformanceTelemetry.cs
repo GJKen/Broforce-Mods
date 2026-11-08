@@ -56,7 +56,7 @@ namespace CustomMapMultiplayer
             }
         }
 
-        internal static long Begin(PerformanceMetric metric)
+        internal static long Begin()
         {
             return EnsureEnabled() ? Stopwatch.GetTimestamp() : 0L;
         }

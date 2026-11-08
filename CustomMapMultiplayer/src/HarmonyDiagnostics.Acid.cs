@@ -224,7 +224,7 @@ namespace CustomMapMultiplayer
             }
 
             PerformanceTelemetry.Miss(PerformanceMetric.AcidHeroCache);
-            var scanStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidHeroScan);
+            var scanStartedAt = PerformanceTelemetry.Begin();
             var hasAcid = false;
             var acidPools = GetWorkshopAcidPools();
             PerformanceTelemetry.AddItems(PerformanceMetric.AcidHeroScan, acidPools.Length);
@@ -287,7 +287,7 @@ namespace CustomMapMultiplayer
                 return _workshopAcidPools;
             }
 
-            var refreshStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidPoolRefresh);
+            var refreshStartedAt = PerformanceTelemetry.Begin();
             try
             {
                 var discoveredPools = UnityEngine.Object.FindObjectsOfType<DoodadAcidPool>();
@@ -894,7 +894,7 @@ namespace CustomMapMultiplayer
             TestVanDammeAnim character,
             int requestedPlayerNum)
         {
-            var observationStartedAt = PerformanceTelemetry.Begin(PerformanceMetric.AcidObservation);
+            var observationStartedAt = PerformanceTelemetry.Begin();
             try
             {
                 var player = GetAcidPlayer(character);

@@ -49,7 +49,6 @@ namespace CustomMapMultiplayer
         private static float _chatViewportLayoutPixelsPerUnit;
         private static int[] _chatViewportLineStarts;
         private static int[] _chatViewportLineEnds;
-        private static float _chatViewportLineHeight;
         private static int _chatViewportVisibleLineCount;
         private static int _chatViewportFirstLine;
         private static bool _chatViewportStateInitialized;
@@ -1402,7 +1401,6 @@ namespace CustomMapMultiplayer
 
             var lines = _chatMessageTextGenerator.lines;
             var lineCount = lines == null ? 0 : lines.Count;
-            var generatedLineHeight = lineCount > 0 ? lines[0].height : 0;
             if (lineCount == 0)
             {
                 lineCount = 1;
@@ -1434,9 +1432,6 @@ namespace CustomMapMultiplayer
                 }
             }
 
-            _chatViewportLineHeight = generatedLineHeight > 0
-                ? generatedLineHeight / pixelsPerUnit
-                : Mathf.Max(1f, fontSize);
             var visibleLineCount = _chatVisibleTextGenerator.lines == null
                 ? 0
                 : _chatVisibleTextGenerator.lines.Count;

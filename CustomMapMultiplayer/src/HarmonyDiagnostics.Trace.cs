@@ -250,7 +250,7 @@ namespace CustomMapMultiplayer
                 case "GameModeController":
                     return FormatFields(value, GameModeControllerTraceFields);
                 case "HeroController":
-                    return FormatHeroControllerState(value);
+                    return FormatFields(value, HeroControllerTraceFields);
                 case "Player":
                     return FormatPlayerState(value);
                 case "PID":
@@ -266,11 +266,6 @@ namespace CustomMapMultiplayer
                 default:
                     return string.Empty;
             }
-        }
-
-        private static string FormatHeroControllerState(object value)
-        {
-            return FormatFields(value, HeroControllerTraceFields);
         }
 
         private static string FormatPlayerState(object value)

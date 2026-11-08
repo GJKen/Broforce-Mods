@@ -233,14 +233,6 @@ namespace CustomMapMultiplayer
             return UnityEngine.Object.FindObjectOfType(mainMenuType);
         }
 
-        private static bool IsWorkshopLobbyReady()
-        {
-            return string.Equals(
-                GetWorkshopLobbyData(WorkshopLobbyReadyKey),
-                "1",
-                StringComparison.Ordinal);
-        }
-
         private static void RefreshWorkshopLobbyDataIfNeeded(string context)
         {
             if (_sessionIsHost || DateTime.UtcNow < _lateJoinLobbyRefreshAtUtc)

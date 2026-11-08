@@ -1028,7 +1028,7 @@ namespace CustomMapMultiplayer
             }
 
             HeroType selectedHeroType;
-            var querySucceeded = OptionalBroModDiagnostics.TryGetAlwaysChosenHeroType(
+            var querySucceeded = SwapBrosCompatibility.TryGetAlwaysChosenHeroType(
                     __instance.playerNum,
                     out selectedHeroType);
             DiagnosticLog.Trace(
