@@ -72,3 +72,7 @@ Scripts outside this directory can be executed via absolute path. They won't app
 - `quick-join-workshop-lobby.cs`: join an existing host's Steam Lobby and wait for its Workshop map. Read the host's current `SteamLayer.Instance.LobbySteamId` first, then execute the script once on the joining client with only `lobbyId`; it defaults to Workshop `3715087178` and scene `Test Evan2`.
 
 Both scripts create asynchronous runners. A successful `execute_script` response means the runner was submitted, not that map loading is complete. Wait about 8–12 seconds, then make one final `game_state` check.
+
+### Workshop 地图自动适配（2026-11-01 实测纠正）
+
+加入方会依据真实大厅广播的Workshop地图检查已有订阅并自动适配；不要求双方本地配置ID相同。上面的 `3715087178` 是既有默认值，不是加入前的ID一致性门槛，也不能用helper默认值与房主当前配置不同判失败。客户端使用本轮真实 `lobbyId` / `hostName`，以ready大厅metadata和实际同图进入结果确认；不改配置、不自动订阅、不因ID差异重试helper。该规则只修正文档，不改变脚本本身。

@@ -28,9 +28,11 @@ const remoteLaunchUser = process.env.UNITY_INSPECTOR_REMOTE_LAUNCH_USER?.trim();
 const remoteLaunchPassword = process.env.UNITY_INSPECTOR_REMOTE_LAUNCH_PASSWORD;
 const remoteLaunchTask = process.env.UNITY_INSPECTOR_REMOTE_LAUNCH_TASK?.trim();
 const remoteProcessScope = process.env.UNITY_INSPECTOR_PROCESS_SCOPE?.trim().toLowerCase() === 'remote';
+const localLaunchShortcut = process.env.UNITY_INSPECTOR_LOCAL_LAUNCH_URL?.trim()
+  || path.join(os.homedir(), 'Desktop', 'Broforce.url');
 const launchGameDescription = isRemoteLaunchConfigured()
   ? 'Launch Broforce on the configured remote Windows machine through schtasks.exe. Never launches a local game process.'
-  : 'Launch Broforce locally using the bf command. Waits for the game to become responsive.';
+  : 'Launch Broforce locally through the desktop Broforce.url shortcut. Waits for the game to become responsive.';
 
 function isRemoteLaunchConfigured() {
   return Boolean(remoteLaunchHost && remoteLaunchTask);
@@ -1055,6 +1057,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "list_bromaker_bros",
+        description:
+          "List custom BroMaker characters and whether each is available on every negotiated peer.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "switch_bromaker_bro",
+        description:
+          "Switch an active player through BroMaker's normal StoredHero.LoadBro GUI path, including its online availability check and networked hero spawn.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            broName: {
+              type: "string",
+              description: "Exact BroMaker character name (use list_bromaker_bros).",
+            },
+            playerNum: {
+              type: "number",
+              description: "Active player number 0-3 (default: 0).",
+            },
+          },
+          required: ["broName"],
+        },
+      },
+      {
         name: "restart_level",
         description:
           "Restart the current level from the beginning. Clears checkpoints and trigger state for a full reset.",
@@ -1431,6 +1461,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         break;
 
+      case "list_bromaker_bros":
+        result = await unityClient.sendCommand("list_bromaker_bros", {});
+        break;
+
+      case "switch_bromaker_bro":
+        if (!args.broName) {
+          throw new Error("BroMaker character name is required");
+        }
+        result = await unityClient.sendCommand("switch_bromaker_bro", {
+          broName: args.broName,
+          playerNum: args.playerNum ?? 0,
+        });
+        break;
+
       case "restart_level":
         result = await unityClient.sendCommand("restart_level", {});
         break;
@@ -1662,18 +1706,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             await triggerRemoteLaunch();
           } else {
-            // Launch bf in background with stdio detached to avoid corrupting MCP's stdio transport
-            const bfArgs = args.vanilla ? ["--vanilla"] : [];
-            const bfProcess = spawn("bf", bfArgs, {
+            // The local Windows install is launched through the same Steam shortcut
+            // the user uses, so Steam/r2modman starts the configured mod profile.
+            const localCommand = process.platform === 'win32' ? 'explorer.exe' : 'bf';
+            const localArgs = process.platform === 'win32'
+              ? [localLaunchShortcut]
+              : (args.vanilla ? ["--vanilla"] : []);
+            if (process.platform === 'win32' && args.vanilla) {
+              throw new Error('Local desktop shortcut does not support vanilla mode.');
+            }
+            const localProcess = spawn(localCommand, localArgs, {
               detached: true,
               stdio: "ignore",
               windowsHide: true,
             });
             await new Promise((resolve, reject) => {
-              bfProcess.once('error', reject);
-              bfProcess.once('spawn', resolve);
+              localProcess.once('error', reject);
+              localProcess.once('spawn', resolve);
             });
-            bfProcess.unref();
+            localProcess.unref();
           }
 
           // Wait for the game to become responsive

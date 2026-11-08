@@ -144,6 +144,10 @@ type = "stdio"
 - `simulate_input` - 模拟键盘/控制器输入
 - `execute_code` - 在 Unity 上下文中执行 C# 表达式
 - `take_screenshot` - 截取游戏截图
+- `list_bromaker_bros` - 列出 BroMaker 自定义角色及已协商的双端可用性
+- `switch_bromaker_bro` - 通过 BroMaker 的 `Switch to Bro` 加载路径切换当前角色；参数为 `broName` 和 `playerNum`（0–3），仅允许当前端拥有的活动玩家
+
+BroMaker 命令依赖包含对应游戏端处理器的 Inspector DLL，以及现有 BroMaker/RocketLib 联网接入；不经过 Swap Bros API，也不以原生 `HeroType` 选择自定义角色。先从 `game_state` 的 `[local]` 和玩家归属确认槽位，切换后再从另一端核对角色和归属。本批只验证 Drunken Broster 的双端切换，不代表其他角色、解锁规则或技能行为均已验证。若当前客户端未刷新工具列表，可用 `run_test_script` 转发同名游戏端命令。
 
 ### 测试自动化
 - `list_test_scripts` - 列出所有可用的测试脚本

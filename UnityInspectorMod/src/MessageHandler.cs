@@ -42,6 +42,8 @@ namespace Unity_Inspector_Mod
                 ["swap_bro"] = HandleSwapBro,
                 ["set_bro"] = HandleSetBro,
                 ["list_bros"] = HandleListBros,
+                ["list_bromaker_bros"] = HandleListBroMakerBros,
+                ["switch_bromaker_bro"] = HandleSwitchBroMakerBro,
                 ["restart_level"] = HandleRestartLevel
             };
         }
@@ -671,6 +673,18 @@ namespace Unity_Inspector_Mod
         {
             var playerNum = parameters?["playerNum"]?.Value<int>() ?? 0;
             return StateModifier.ListBros( playerNum );
+        }
+
+        private object HandleListBroMakerBros( JObject parameters )
+        {
+            return BroMakerIntegration.ListBros();
+        }
+
+        private object HandleSwitchBroMakerBro( JObject parameters )
+        {
+            var broName = parameters?["broName"]?.ToString();
+            var playerNum = parameters?["playerNum"]?.Value<int>() ?? 0;
+            return BroMakerIntegration.SwitchBro( broName, playerNum );
         }
 
         private object HandleRestartLevel( JObject parameters )
