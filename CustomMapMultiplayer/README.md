@@ -154,6 +154,8 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 
 标准脚本会读取并保留 `Release\UMM\Mods\CustomMapMultiplayer\Info.json`，生成 `Release\CustomMapMultiplayer.zip` 并部署到本机 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署时会同步覆盖 DLL 和 `Info.json`，使名称、版本和入口与当前构建一致；DLL 程序集版本从该 `Info.json` 的版本自动生成。可选测试部署目录仅从未提交的 `LocalBroforcePath.props` 读取；不要把测试机地址、共享路径或用户名写入仓库。UNC 测试部署目标会先按主机名检查 SMB（TCP 445），目标机器不通时自动跳过远端部署；目标机器可达但目录创建或 DLL 复制失败时，构建仍视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
 
+部署前脚本会自动终止本机和可达测试端的 `Broforce.exe`、`Broforce_beta.exe`，确认退出后再更新文件；无需 AI、MCP 或手动关闭游戏，部署后不自动启动。远端进程控制使用当前 Windows 账户的 WMI 权限，机器名从 UNC 部署路径读取；停止失败时不继续部署。只构建且保留双端游戏运行时，使用 `-SkipDeploy`。详细说明见[构建与部署](docs/BUILD.md)。
+
 ## 项目结构与文档
 
 | 路径 | 说明 |

@@ -18,11 +18,15 @@
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 ```
 
+普通运行会在构建成功后自动查询本机及可达的 UNC 测试部署端，终止 `Broforce.exe` 和 `Broforce_beta.exe`，确认两端进程退出后再复制 DLL 和 `Info.json`，无需 AI、MCP 或手动关游戏。游戏未运行时直接部署；部署后保持关闭，不自动重启。远端机器名从 `TestDeployModPath` 的 UNC 路径读取，进程控制使用 Windows PowerShell 的 WMI 和当前 Windows 账户，要求该账户具备远端 WMI 查询及终止进程权限。查询失败、终止失败或十秒内未退出时，脚本报错并停止部署。
+
 仅生成项目安装包而不复制到本机或内网 UMM 目录时，使用：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Release -SkipDeploy
 ```
+
+`-SkipDeploy` 同时跳过进程查询和终止，不影响正在运行的双端游戏。
 
 有效输出位置：
 

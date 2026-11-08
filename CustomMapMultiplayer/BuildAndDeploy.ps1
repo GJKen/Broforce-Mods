@@ -117,6 +117,41 @@ function Test-RemoteDeploymentTarget([string]$path) {
     return $true
 }
 
+function Stop-BroforceForDeployment([string]$path) {
+    $processQuery = @{
+        Class = 'Win32_Process'
+        Filter = "Name='Broforce_beta.exe' OR Name='Broforce.exe'"
+    }
+    $computerName = $env:COMPUTERNAME
+    if ($path -match '^\\\\(?<computerName>[^\\]+)\\') {
+        $computerName = $Matches['computerName']
+        $processQuery.ComputerName = $computerName
+    }
+
+    $gameProcesses = @(Get-WmiObject @processQuery)
+    if ($gameProcesses.Count -eq 0) {
+        Write-Host "No Broforce process is running on $computerName."
+        return
+    }
+
+    foreach ($gameProcess in $gameProcesses) {
+        Write-Host "Stopping $($gameProcess.Name) (PID $($gameProcess.ProcessId)) on $computerName."
+        $termination = $gameProcess.Terminate()
+        if ($termination.ReturnValue -ne 0) {
+            throw "Failed to stop Broforce on ${computerName}: WMI returned $($termination.ReturnValue)."
+        }
+    }
+
+    $exitDeadline = [DateTime]::UtcNow.AddSeconds(10)
+    while (@(Get-WmiObject @processQuery).Count -gt 0) {
+        if ([DateTime]::UtcNow -ge $exitDeadline) {
+            throw "Broforce is still running on $computerName; deployment stopped."
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    Write-Host "Broforce has exited on $computerName."
+}
+
 $manifestLines = New-Object System.Collections.Generic.List[string]
 foreach ($sourceFile in $sourceFiles) {
     $sourceItem = Get-Item -LiteralPath $sourceFile
@@ -216,12 +251,13 @@ else {
     if (-not [string]::IsNullOrWhiteSpace($testDeployModPath)) {
         $deploymentPaths += $testDeployModPath.Trim()
     }
-    $deploymentPaths = @($deploymentPaths | Select-Object -Unique)
+    $deploymentPaths = @($deploymentPaths | Select-Object -Unique |
+        Where-Object { Test-RemoteDeploymentTarget $_ })
     foreach ($deploymentPath in $deploymentPaths) {
-        if (-not (Test-RemoteDeploymentTarget $deploymentPath)) {
-            continue
-        }
+        Stop-BroforceForDeployment $deploymentPath
+    }
 
+    foreach ($deploymentPath in $deploymentPaths) {
         New-Item -ItemType Directory -Force -Path $deploymentPath | Out-Null
         $destinationPath = Join-Path $deploymentPath 'CustomMapMultiplayer.dll'
         Copy-Item -LiteralPath $outputPath -Destination $destinationPath -Force
