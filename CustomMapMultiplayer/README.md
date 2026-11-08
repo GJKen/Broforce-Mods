@@ -20,6 +20,7 @@
 
 ### 已验证
 
+- 官方与 Workshop 的“按开枪键加入游戏”提示仅在本端旁观时显示，重新加入后隐藏；支持实际参与控制器与主控制器不同，详见[联机加入提示记录](issues/ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md)。
 - 双端进入、晚加入、当前地图的退出/重入，以及双方独立角色和控制，详见 [Workshop 与游戏状态](docs/WORKSHOP.md)。
 - Steam 与 FRP 直连 的 Esc 彩色延迟名单和动态房主名；FRP 的三机基础联机、静态 `1` 人房满员提示及 Host/Client 配置自动应用，详见 [网络与房间](docs/NETWORKING.md) 和 [FRP Direct 实施与验收记录](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
 - Workshop 地图身份由房主发布，加入方自动采用；缺少订阅时显示提示并停止加载；注入可热关闭并恢复官方地图，详见 [Workshop 与游戏状态](docs/WORKSHOP.md)、[Workshop 缺图加载记录](issues/archive/ISSUES-2026-09-04-Workshop缺图仍进入加载动画.md) 和 [关闭 Workshop 注入记录](issues/archive/ISSUES-2026-08-28-关闭Workshop注入后恢复官方地图.md)。

@@ -1,0 +1,42 @@
+{
+  "before": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; custom=False; id=; primary=0; holding=True; showing=True; messageIndex=1; title=按开枪键加入游戏\",\n    \"slot=0; pid=6 JKChan (Server); mine=True; playing=True; controller=1; player=PlayerPrefab(Clone) [local] (Player)\",\n    \"slot=1; pid=7 moumentai; mine=False; playing=True; controller=0; player=PlayerPrefab(Clone) (Player)\",\n    \"slot=2; pid=NoID; mine=False; playing=False; controller=-1; player=\",\n    \"slot=3; pid=NoID; mine=False; playing=False; controller=-1; player=\"\n  ]\n}"
+      }
+    ]
+  },
+  "active": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; custom=False; id=; primary=0; holding=False; showing=False; messageIndex=0; title=<inactive>\",\n    \"slot=0; pid=6 JKChan (Server); mine=True; playing=True; controller=1; player=PlayerPrefab(Clone) [local] (Player)\",\n    \"slot=1; pid=7 moumentai; mine=False; playing=True; controller=4; player=PlayerPrefab(Clone) (Player)\",\n    \"slot=2; pid=NoID; mine=False; playing=False; controller=-1; player=\",\n    \"slot=3; pid=NoID; mine=False; playing=False; controller=-1; player=\"\n  ]\n}"
+      }
+    ]
+  },
+  "spectatorHost": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; custom=False; id=; primary=0; holding=True; showing=True; messageIndex=1; title=按开枪键加入游戏\",\n    \"slot=0; pid=NoID; mine=False; playing=False; controller=-1; player=\",\n    \"slot=1; pid=7 moumentai; mine=False; playing=True; controller=4; player=PlayerPrefab(Clone) (Player)\",\n    \"slot=2; pid=NoID; mine=False; playing=False; controller=-1; player=\",\n    \"slot=3; pid=NoID; mine=False; playing=False; controller=-1; player=\"\n  ]\n}"
+      }
+    ]
+  },
+  "activeClient": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; custom=False; id=; primary=0; holding=False; showing=False; messageIndex=0; title=<inactive>\",\n    \"slot=0; pid=NoID; mine=False; playing=False; controller=-1; player=\",\n    \"slot=1; pid=7 moumentai; mine=True; playing=True; controller=4; player=PlayerPrefab(Clone) [local] (Player)\",\n    \"slot=2; pid=NoID; mine=False; playing=False; controller=-1; player=\",\n    \"slot=3; pid=NoID; mine=False; playing=False; controller=-1; player=\"\n  ]\n}"
+      }
+    ]
+  },
+  "rejoinedHost": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": true,\n  \"executed\": true,\n  \"scriptName\": \"snapshot\",\n  \"output\": [\n    \"scene=Test Evan2; custom=False; id=; primary=0; holding=False; showing=False; messageIndex=0; title=<inactive>\",\n    \"slot=0; pid=6 JKChan (Server); mine=True; playing=True; controller=4; player=PlayerPrefab(Clone) [local] (Player)\",\n    \"slot=1; pid=7 moumentai; mine=False; playing=True; controller=4; player=PlayerPrefab(Clone) (Player)\",\n    \"slot=2; pid=NoID; mine=False; playing=False; controller=-1; player=\",\n    \"slot=3; pid=NoID; mine=False; playing=False; controller=-1; player=\"\n  ]\n}"
+      }
+    ]
+  }
+}

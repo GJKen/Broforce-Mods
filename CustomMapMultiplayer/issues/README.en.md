@@ -14,6 +14,7 @@ This directory contains current issues, log evidence, experimental changes, and 
 
 | Document | Status | Reading notes |
 | --- | --- | --- |
+| [联机加入提示按本端旁观状态显示](ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md) | 已通过官方图与 Workshop 双端 MCP 回归 | 按本端参与槽位判断，只有旁观端显示加入提示，重新加入后隐藏；官方图加入方保持禁用 Mod。 |
 | [Conservative code cleanup](ISSUES-2026-11-08-多人联机分阶段保守精简.md) | Eight stages removed 221 source lines; net reduction is 211 after the idle synchronization fix. Favorite-map testing passed. | Cleanup and related records are consolidated into one local commit; the synchronization fix and deployment script remain separate. Backup branch and validation limits are recorded; not pushed. |
 | `ISSUES-2026-10-26-死亡后主动AFK与返回状态.md` | Fixed and verified with the local host and LAN client | Dead AFK returns preserve zero lives and the previous dead avatar, including random variants and dual portraits; unified localized notices, native rescue and spawning after a level restart verified. Successful joins clear completed requests; four rapid consecutive returns per side passed without waiting for the 10-second timeout. Test exceptions and coverage limits are recorded in the issue. |
 | `ISSUES-2026-09-10-联机加入方可踢出房主.md` | Fixed and accepted in user testing, including a joining player without the Mod | `6d3761c9...` rejects unauthorized `KickRPC`, the associated `DropoutRPC`, and the native lobby kick notification on the Host; the user confirmed that an unmodded joining player cannot kick the Host and the Host side has no kick explosion. |

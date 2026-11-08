@@ -856,16 +856,5 @@ namespace CustomMapMultiplayer
                 source + ".");
         }
 
-        private static bool LevelTitleShowTextPrefix(string s)
-        {
-            if (!ShouldSuppressWorkshopJoinPrompt(s))
-            {
-                return true;
-            }
-
-            HideActiveWorkshopJoinPrompt();
-            DiagnosticLog.Info("Suppressed the in-game Press To Join banner for the Workshop client.");
-            return false;
-        }
     }
 }

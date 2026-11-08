@@ -1115,70 +1115,19 @@ namespace CustomMapMultiplayer
             return builder.ToString();
         }
 
-        private static void HideActiveWorkshopJoinPrompt()
+        private static int GetOnlineJoinPromptController(Utility.Platforms.Platform platform)
         {
-            try
+            // HeroController.Update compares the primary controller with joined slots.
+            // A local participant can use another controller; keep the native banner
+            // state machine, but let its comparison recognize that participant too.
+            for (var index = 0; index < 4; index++)
             {
-                var levelTitleType = AccessTools.TypeByName("LevelTitle");
-                var levelTitle = levelTitleType == null
-                    ? null
-                    : UnityEngine.Object.FindObjectOfType(levelTitleType) as Component;
-                if (levelTitle != null && levelTitle.gameObject.activeSelf)
-                {
-                    levelTitle.gameObject.SetActive(false);
-                }
-            }
-            catch (Exception exception)
-            {
-                DiagnosticLog.Warning("Active Workshop join-prompt hide failed: " + exception.Message);
-            }
-        }
-
-        private static bool ShouldSuppressWorkshopJoinPrompt(string text)
-        {
-            var settings = Plugin.Settings;
-            if (settings == null || !settings.EnableOnlineWorkshopInjection ||
-                !IsWorkshopOnlineSession() || string.IsNullOrEmpty(text))
-            {
-                return false;
+                var pid = HeroController.PIDS[index];
+                if (HeroController.IsPlayerPlaying(index) && pid != null && pid.IsMine)
+                    return HeroController.playerControllerIDs[index];
             }
 
-            try
-            {
-                var languageManagerType = AccessTools.TypeByName("Localisation.LanguageManager");
-                var getLocalisedString = languageManagerType == null
-                    ? null
-                    : languageManagerType.GetMethod(
-                        "GetLocalisedString",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                        null,
-                        new[] { typeof(string) },
-                        null);
-                if (languageManagerType == null || getLocalisedString == null)
-                {
-                    return false;
-                }
-
-                // Instance is declared on LanguageManager's generic base class.
-                // Find the live Unity object instead of depending on inherited
-                // static-property reflection, which differs between game builds.
-                var languageManager = UnityEngine.Object.FindObjectOfType(languageManagerType);
-                if (languageManager == null)
-                {
-                    return false;
-                }
-
-                var joinPrompt = getLocalisedString.Invoke(
-                    languageManager,
-                    new object[] { PressToJoinLocalizationKey }) as string;
-                return !string.IsNullOrEmpty(joinPrompt) &&
-                    string.Equals(text, joinPrompt, StringComparison.Ordinal);
-            }
-            catch (Exception exception)
-            {
-                DiagnosticLog.Warning("Workshop join-prompt comparison failed: " + exception.Message);
-                return false;
-            }
+            return platform.GetPrimaryUserController();
         }
     }
 }

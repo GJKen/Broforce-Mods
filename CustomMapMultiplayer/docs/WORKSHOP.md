@@ -21,6 +21,10 @@
 
 关闭注入时必须清理 `_injectedForSession`、`GameState.loadCustomCampaign`、`customLevelID`、`sceneToLoad`、Workshop Lobby 元数据及暂停/切关状态。统一入口为 `ClearInjectedWorkshopRuntimeState`，覆盖 UMM 关闭开关、停用/卸载 Mod 和 Steam `LeaveMatch`。热关闭不会主动切换当前场景；退出并重新创建官方房间后恢复原生选图。
 
+## 联机加入提示
+
+官方与 Workshop 联机均按本端实际参与槽位判断“按开枪键加入游戏”提示。本端仍有参与玩家时隐藏；本端无人参与、处于旁观时由原生逻辑显示，重新加入后隐藏。死亡或等待复活仍视为参与，不再全面屏蔽 Workshop 提示。双端验证范围见[联机加入提示记录](../issues/ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md)。
+
 ## Workshop 地图目录与选择页
 
 UMM 左侧的 `Workshop 地图配置` 页面同时支持手工 ID 和已订阅地图选择。点击“选择已订阅地图”后，Workshop 配置内容区切换为地图选择页，不使用 `GUI.Window` 或屏幕坐标浮层；右上角 `X` 或 `Esc` 返回配置页。选择地图后只保存 `Settings.WorkshopId`，不会自动返回，也不会覆盖战役名或场景名。

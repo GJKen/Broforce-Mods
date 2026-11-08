@@ -20,6 +20,7 @@ The current version is experimental `0.5.0` and is not yet a stable release.
 
 ### Verified
 
+- 官方与 Workshop 加入提示按本端旁观状态显示，重新加入后隐藏，实际控制器与主控制器不一致时也能识别参与者；见[验证记录](issues/ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md)。
 - Two-player entry, late joining, leaving and rejoining the current map, and independent character control on both sides. See [Workshop and game state](docs/WORKSHOP.md).
 - The colored latency list and animated host name in the Esc menu for Steam and FRP Direct; three-player FRP Direct play, the static full-room notice for a `1`-player room, and automatic Host/Client configuration application. See [networking and rooms](docs/NETWORKING.md) and the [FRP Direct acceptance record](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md).
 - The host publishes the Workshop map identity and joining players use it automatically. Missing subscriptions show a notice and stop loading. Injection can be disabled while running and the official map flow is restored. See [Workshop and game state](docs/WORKSHOP.md), the [missing-map loading record](issues/archive/ISSUES-2026-09-04-Workshop缺图仍进入加载动画.md), and the [injection disablement record](issues/archive/ISSUES-2026-08-28-关闭Workshop注入后恢复官方地图.md).

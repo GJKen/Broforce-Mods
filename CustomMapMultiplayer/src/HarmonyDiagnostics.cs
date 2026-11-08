@@ -24,7 +24,6 @@ namespace CustomMapMultiplayer
         private const int LateJoinTimeoutSeconds = 120;
         private const int WorkshopLobbyReadyPollMilliseconds = 500;
         private const int WorkshopLobbyDataRefreshMilliseconds = 1000;
-        private const string PressToJoinLocalizationKey = "LOC_HUD_PRESSTOJOIN";
         private const string WorkshopLobbyReadyKey = "GJKen_BroforceOnline_WorkshopReady";
         private const string WorkshopLobbyPhaseKey = "GJKen_BroforceOnline_WorkshopPhase";
         private const string WorkshopLobbyPhaseIdle = "idle";
@@ -352,7 +351,7 @@ namespace CustomMapMultiplayer
             PatchWorkshopLoadCache();
             PatchLateHeroResponseGuard();
             PatchWorkshopHeroTypePreservation();
-            PatchWorkshopJoinPromptSuppression();
+            PatchOnlineJoinPrompt();
             PatchWorkshopPickupSynchronization();
             PatchOnlineAfkPrevention();
             PatchPlayerOverlapHighFiveBehavior();

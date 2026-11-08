@@ -913,34 +913,44 @@ namespace CustomMapMultiplayer
             return -1;
         }
 
-        private static void PatchWorkshopJoinPromptSuppression()
+        private static void PatchOnlineJoinPrompt()
         {
-            var type = AccessTools.TypeByName("LevelTitle");
-            var method = type == null
-                ? null
-                : type.GetMethod(
-                    "ShowText",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
-                    null,
-                    new[] { typeof(string), typeof(float), typeof(bool) },
-                    null);
+            var method = typeof(HeroController).GetMethod(
+                "Update", BindingFlags.NonPublic | BindingFlags.Instance);
             if (method == null)
             {
-                DiagnosticLog.Warning("Workshop join-prompt suppression target not found.");
+                DiagnosticLog.Warning("Online join-prompt target not found.");
                 return;
             }
 
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "LevelTitleShowTextPrefix",
+            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
+                "OnlineJoinPromptTranspiler",
                 BindingFlags.NonPublic | BindingFlags.Static);
             try
             {
-                _harmony.Patch(method, new HarmonyMethod(prefixMethod), null, null, null);
-                DiagnosticLog.Info("Workshop join-prompt suppression enabled.");
+                _harmony.Patch(method, null, null, new HarmonyMethod(transpilerMethod), null);
+                DiagnosticLog.Info("Online join-prompt participant detection enabled.");
             }
             catch (Exception exception)
             {
-                DiagnosticLog.Warning("Workshop join-prompt suppression patch failed: " + exception);
+                DiagnosticLog.Warning("Online join-prompt patch failed: " + exception);
+            }
+        }
+
+        private static IEnumerable<CodeInstruction> OnlineJoinPromptTranspiler(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            var primaryController = typeof(Utility.Platforms.Platform).GetMethod("GetPrimaryUserController");
+            var joinController = typeof(HarmonyDiagnostics).GetMethod(
+                "GetOnlineJoinPromptController", BindingFlags.NonPublic | BindingFlags.Static);
+            foreach (var instruction in instructions)
+            {
+                if (instruction.Calls(primaryController))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = joinController;
+                }
+                yield return instruction;
             }
         }
 
