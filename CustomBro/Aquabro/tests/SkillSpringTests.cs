@@ -23,6 +23,12 @@ public static class SkillSpringTests
         {
             if(args.Length==1 && args[0]=="--skill-hud") {CheckSkillHud();return;}
             if(args.Length==1 && args[0]=="--skill-network") {CheckSkillHud();CheckSkillNetwork();return;}
+            if(args.Length==2 && args[0]=="--wave-network")
+            {
+                CheckSkillNetwork(); CheckWaveNetwork();
+                using (System.Drawing.Bitmap atlas = new System.Drawing.Bitmap(args[1])) CheckTidalWave(atlas);
+                BossSkillDamageTests.RunWave(); return;
+            }
             CheckAcid();
             PixelMaskTests.Run();
             CheckCastStart();
@@ -36,6 +42,7 @@ public static class SkillSpringTests
             SkillOcclusionTests.Run();
             CheckSkillHud();
             CheckSkillNetwork();
+            CheckWaveNetwork();
         }
         catch (Exception error) { Console.WriteLine("FAIL: " + error); Environment.Exit(1); }
     }
@@ -604,6 +611,12 @@ public static class SkillSpringTests
         Console.WriteLine("PASS skill HUD: four icons; per-player switch; BroMaker material source; empty ammo/visibility preserved; cached refresh; replacement HUD/respawn; one selection RPC; remote value application without rebroadcast or increment; offline selection");
     }
 
+    private static void SetTestSkill(Aquabro hero,int skill)
+    {
+        ((int[])typeof(Aquabro).GetField("SkillSelections",BindingFlags.NonPublic|BindingFlags.Static).GetValue(null))
+            [Mathf.Clamp(hero.playerNum,0,3)]=skill;
+    }
+
     private static void CheckSkillNetwork()
     {
         Reset();Physics.SharkTerrainEnabled=false;Physics.SceneTerrain=new Collider[0];
@@ -616,14 +629,14 @@ public static class SkillSpringTests
         FieldInfo active=typeof(Aquabro).GetField("activeShark",Private);
         for(int skill=0;skill<4;skill++)
         {
-            Aquabro remote=new Aquabro();remote.IsMine=false;remote.SelectedSkillSynced=skill;
+            Aquabro remote=new Aquabro();remote.IsMine=false;SetTestSkill(remote,skill);
             var effects=(List<AquabroSkillVisual>)visuals.GetValue(remote);
             press.Invoke(remote,null);
             Check(remote.usingSpecial && remote.TestBodyCell==384+skill*8 && !remote.TestGunVisible,
                 "Remote input no longer plays the skill cast animation");
             remote.frame=2;animate.Invoke(remote,null);use.Invoke(remote,null);
             Check(effects.Count==0 && remote.SpecialAmmo==3,"Remote animation/input created an effect or consumed ammo");
-            receive.Invoke(remote,new object[] {skill,0f,0f,1f});
+            receive.Invoke(remote,new object[] {skill,0f,0f,1f,123});
             int expected=skill==3?7:1;
             Check(effects.Count==expected && remote.SpecialAmmo==3,"One cast RPC did not create exactly one remote cast");
             remote.usingSpecial=false;press.Invoke(remote,null);
@@ -631,7 +644,7 @@ public static class SkillSpringTests
             Check(effects.Count==expected && remote.SpecialAmmo==3,"Remote input after the cast RPC duplicated effects or consumed ammo");
             typeof(Aquabro).GetMethod("ClearSkillPreview",Private).Invoke(remote,null);
         }
-        Aquabro owner=new Aquabro();owner.SelectedSkillSynced=1;
+        Aquabro owner=new Aquabro();SetTestSkill(owner,1);
         press.Invoke(owner,null);use.Invoke(owner,null);
         var ownerEffects=(List<AquabroSkillVisual>)visuals.GetValue(owner);
         AquabroSkillVisual ownerShark=(AquabroSkillVisual)active.GetValue(owner);
@@ -643,22 +656,98 @@ public static class SkillSpringTests
         Check(Networking.Networking.BreachCalls==1 && Networking.Networking.BreachFlags==4 &&
             Networking.Networking.BreachTarget==Networking.PID.TargetOthers &&
             Networking.Networking.BreachCallback.Target==owner &&
-            Networking.Networking.BreachCallback.Method.Name=="ReceiveSharkState",
+            Networking.Networking.BreachCallback.Method.Name=="ReceiveSharkBreach",
             "Shark breach did not send exactly one reliable state event to the other peers");
         Aquabro observer=new Aquabro();observer.IsMine=false;
-        receive.Invoke(observer,new object[] {1,0f,0f,1f});
+        receive.Invoke(observer,new object[] {1,0f,0f,1f,0});
         AquabroSkillVisual remoteShark=(AquabroSkillVisual)active.GetValue(observer);
         press.Invoke(observer,null);
         Check(remoteShark.SharkControlled,"Remote input breached before the owner's reliable event");
-        object[] breach={Networking.Networking.BreachState,Networking.Networking.BreachFlags};
-        state.Invoke(observer,breach);state.Invoke(observer,breach);
+        object[] breach={Networking.Networking.BreachState};
+        MethodInfo breachReceive=typeof(Aquabro).GetMethod("ReceiveSharkBreach",Private);
+        breachReceive.Invoke(observer,breach);breachReceive.Invoke(observer,breach);
         Check(!remoteShark.SharkControlled && ((List<AquabroSkillVisual>)visuals.GetValue(observer)).Count==1 &&
             observer.SpecialAmmo==3 && Networking.Networking.BreachCalls==1,
             "Remote breach event duplicated/rebroadcast the shark or consumed ammo");
         typeof(Aquabro).GetMethod("ClearSkillPreview",Private).Invoke(owner,null);
         typeof(Aquabro).GetMethod("ClearSkillPreview",Private).Invoke(observer,null);
-        owner.SelectedSkillSynced=0;Reset();
+        SetTestSkill(owner,0);Reset();
         Console.WriteLine("PASS skill network: remote cast animations preserved; four skills created only by received cast; no remote ammo consumption; one reliable shark breach; no duplicate shark or breach rebroadcast");
+    }
+
+    private static void CheckWaveNetwork()
+    {
+        MethodInfo use=typeof(Aquabro).GetMethod("UseSpecial",Private);
+        MethodInfo cast=typeof(Aquabro).GetMethod("ReceiveSkillCast",Private);
+        MethodInfo state=typeof(Aquabro).GetMethod("ReceiveTidalState",Private);
+        MethodInfo tick=typeof(Aquabro).GetMethod("TickSkillPreview",Private);
+        MethodInfo clear=typeof(Aquabro).GetMethod("ClearSkillPreview",Private);
+        FieldInfo visuals=typeof(Aquabro).GetField("skillVisuals",Private);
+        foreach(int fps in new int[]{30,60,120})
+        foreach(float facing in new float[]{-1,1})
+        {
+            Reset();BossDamageTestStubs.Reset();Networking.Connect.IsOffline=false;
+            Physics.Blocked=Physics.SharkTerrainEnabled=false;Physics.SceneTerrain=new Collider[0];
+            Aquabro owner=new Aquabro(),remote=new Aquabro();remote.IsMine=false;
+            owner.transform.localScale=new Vector3(facing,1,1);
+            use.Invoke(owner,null);
+            object[] firstCast=Networking.Networking.CastArguments;
+            cast.Invoke(remote,firstCast);cast.Invoke(remote,firstCast);
+            var local=(List<AquabroSkillVisual>)visuals.GetValue(owner);
+            var copies=(List<AquabroSkillVisual>)visuals.GetValue(remote);
+            Check(local.Count==1 && copies.Count==1,"Repeated cast created another wave");
+            AquabroSkillVisual wave=local[0],copy=copies[0];
+            Check(wave.TidalNetworkId!=0 && wave.TidalNetworkId==copy.TidalNetworkId,"Wave cast lost identity");
+            BossPiece boss=new BossPiece();Collider contact=new Collider(facing*32,48,true);
+            contact.gameObject.SetComponent(boss);contact.bounds=new Bounds();
+            contact.bounds.min=new Vector3(facing>0?12:-80,1,0);
+            contact.bounds.max=new Vector3(facing>0?80:-12,100,0);
+            Physics.Contacts=new Collider[]{contact};
+            bool sawStop=false,sawResume=false;float stopped=0;
+            for(int frame=0;frame<fps*1.7f;frame++)
+            {
+                if(frame==fps/2) contact.enabled=false;
+                Networking.Networking.TidalStates.Clear();
+                wave.Tick(1f/fps);
+                int damage=BossDamageTestStubs.Damage.ContainsKey(boss)?BossDamageTestStubs.Damage[boss]:0;
+                copy.Tick(1f/fps);
+                Check((BossDamageTestStubs.Damage.ContainsKey(boss)?BossDamageTestStubs.Damage[boss]:0)==damage,
+                    "Remote wave repeated owner damage");
+                foreach(object[] packet in Networking.Networking.TidalStates)
+                {
+                    state.Invoke(remote,packet);
+                    Check(Math.Abs(copy.NetworkX-wave.NetworkX)<.001f,"Wave correction disagrees with owner");
+                    if((bool)packet[2] && frame<fps/2) {sawStop=true;stopped=wave.NetworkX;}
+                    if(!(bool)packet[2] && frame>=fps/2) sawResume=true;
+                }
+                if(frame>fps/4 && frame<fps/2)
+                    Check(Math.Abs(copy.NetworkX-stopped)<.001f,"Remote wave continued through blocker");
+            }
+            Check(sawStop && sawResume,"Owner did not publish stop and resume");
+            float end=copy.NetworkX;copy.Tick(.1f);
+            Check(Math.Abs(copy.NetworkX-end)<.001f,"Remote moved beyond 1.5s travel window");
+            Check(!copy.Tick(.3f),"Remote wave exceeded two-second lifetime");
+            Check(BossDamageTestStubs.Damage[boss]<=26,"Network state reset damage budget");
+            // A second cast and a different owner must not consume the first wave's updates.
+            owner.specialResolved=false;use.Invoke(owner,null);cast.Invoke(remote,Networking.Networking.CastArguments);
+            AquabroSkillVisual second=copies[1];float secondX=second.NetworkX;
+            Check(second.TidalNetworkId!=copy.TidalNetworkId,"Consecutive waves reused identity");
+            state.Invoke(remote,new object[]{copy.TidalNetworkId,new Vector3(999,0,.1f),false});
+            Check(copy.NetworkX==end && second.NetworkX==secondX,"Late state rewound or crossed waves");
+            Aquabro other=new Aquabro();other.IsMine=false;cast.Invoke(other,firstCast);
+            AquabroSkillVisual otherCopy=((List<AquabroSkillVisual>)visuals.GetValue(other))[0];
+            state.Invoke(remote,new object[]{second.TidalNetworkId,new Vector3(40,0,.2f),true});
+            Check(otherCopy.NetworkX==0 && copy.NetworkX==end,"Wave update crossed owner/instance");
+            clear.Invoke(remote,null);state.Invoke(remote,new object[]{second.TidalNetworkId,new Vector3(80,0,.3f),false});
+            Check(copies.Count==0,"Late state resurrected a disabled/dead wave");
+            remote.health=0;cast.Invoke(remote,firstCast);Check(copies.Count==0,"Dead owner received a new wave");
+            clear.Invoke(owner,null);clear.Invoke(other,null);
+            Aquabro offline=new Aquabro();Networking.Connect.IsOffline=true;
+            Networking.Networking.TidalStates.Clear();use.Invoke(offline,null);tick.Invoke(offline,new object[]{.1f});
+            Check(Networking.Networking.TidalStates.Count==0,"Offline wave sent network state");clear.Invoke(offline,null);
+        }
+        Reset();Networking.Connect.IsOffline=false;
+        Console.WriteLine("PASS wave network: both directions at 30/60/120 FPS; owner stop/resume and correction; no remote damage; travel/lifetime; repeated casts; late state; separate waves/owners; disable/death; offline");
     }
 
     private static Collider TerrainBox(float left,float bottom,float right,float top)
@@ -1540,7 +1629,9 @@ namespace Networking
     public enum PID { TargetOthers }
     public delegate void RpcSignature<T1>(T1 first);
     public delegate void RpcSignature<T1,T2>(T1 first,T2 second);
+    public delegate void RpcSignature<T1,T2,T3>(T1 first,T2 second,T3 third);
     public delegate void RpcSignature<T1,T2,T3,T4>(T1 first,T2 second,T3 third,T4 fourth);
+    public delegate void RpcSignature<T1,T2,T3,T4,T5>(T1 first,T2 second,T3 third,T4 fourth,T5 fifth);
     public static class Networking
     {
         public static int SelectionCalls,SelectionValue;
@@ -1550,9 +1641,13 @@ namespace Networking
         public static Vector3 BreachState;
         public static PID BreachTarget;
         public static Delegate BreachCallback;
+        public static object[] CastArguments;
+        public static readonly List<object[]> TidalStates=new List<object[]>();
         public static void RPC<T1>(PID target,bool immediate,bool ignoreSessionID,
             RpcSignature<T1> callback,T1 first)
         {
+            if(callback.Method.Name=="ReceiveSharkBreach")
+            { BreachCalls++;BreachTarget=target;BreachCallback=callback;BreachState=(Vector3)(object)first;BreachFlags=4;return; }
             SelectionCalls++;SelectionTarget=target;SelectionCallback=callback;
             SelectionValue=(int)(object)first;
         }
@@ -1564,6 +1659,12 @@ namespace Networking
         }
         public static void RPC<T1,T2,T3,T4>(PID target,bool reliable,bool runLocally,
             RpcSignature<T1,T2,T3,T4> callback,T1 first,T2 second,T3 third,T4 fourth) {}
+        public static void RPC<T1,T2,T3,T4,T5>(PID target,bool reliable,bool runLocally,
+            RpcSignature<T1,T2,T3,T4,T5> callback,T1 first,T2 second,T3 third,T4 fourth,T5 fifth)
+        { CastArguments=new object[]{first,second,third,fourth,fifth}; }
+        public static void RPC<T1,T2,T3>(PID target,bool reliable,bool runLocally,
+            RpcSignature<T1,T2,T3> callback,T1 first,T2 second,T3 third)
+        { TidalStates.Add(new object[]{first,second,third}); }
         public static void UnreliableRPC<T1,T2>(PID target,bool reliable,bool runLocally,
             RpcSignature<T1,T2> callback,T1 first,T2 second) {}
     }

@@ -14,6 +14,7 @@ namespace AquabroMod
         private static readonly string[] SkillNames = { "怒海狂潮", "深海猎杀", "深海漩涡", "深海涌泉" };
         internal static readonly string[] SkillAssets = { "tidal-wave", "shark-hunt", "maelstrom", "abyssal-spring" };
         private readonly List<AquabroSkillVisual> skillVisuals = new List<AquabroSkillVisual>();
+        private static int tidalSequence;
         private int castingSkill;
         internal int CurrentAcidStage;
         private static readonly System.Random AcidRandom = new System.Random();
@@ -203,21 +204,26 @@ namespace AquabroMod
             CurrentSpecialMaterialOffset = new Vector2(3f, 0f);
         }
 
-        private void BroadcastSkillCast(int skill, float x, float y, float facing)
+        private void BroadcastSkillCast(int skill, float x, float y, float facing, int tidalId)
         {
             if (!IsMine || Connect.IsOffline) return;
-            Networking.Networking.RPC<int, float, float, float>(PID.TargetOthers, false, false,
-                new RpcSignature<int, float, float, float>(ReceiveSkillCast), skill, x, y, facing);
+            Networking.Networking.RPC<int, float, float, float, int>(PID.TargetOthers, false, false,
+                new RpcSignature<int, float, float, float, int>(ReceiveSkillCast), skill, x, y, facing, tidalId);
         }
 
         [AllowedRPC]
-        private void ReceiveSkillCast(int skill, float x, float y, float facing)
+        private void ReceiveSkillCast(int skill, float x, float y, float facing, int tidalId)
         {
             if (IsMine || health <= 0 || skill < 0 || skill >= SkillAssets.Length) return;
             castingSkill = skill;
             specialResolved = true;
             if (skill == 0)
-                AddSkillVisual(0, x, y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f);
+            {
+                if (tidalId == 0) return;
+                foreach (AquabroSkillVisual effect in skillVisuals)
+                    if (effect.TidalNetworkId == tidalId) return;
+                AddSkillVisual(0, x, y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f).TidalNetworkId = tidalId;
+            }
             else if (skill == 1)
             {
                 if (activeShark != null) return;
@@ -239,6 +245,28 @@ namespace AquabroMod
                 AddSkillVisual(2, x, y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
             else
                 StartSpringColumns(x, y);
+        }
+
+        internal void BroadcastTidalState(AquabroSkillVisual wave, float age, bool blocked)
+        {
+            if (!IsMine || Connect.IsOffline || wave.TidalNetworkId == 0) return;
+            // Cast and motion use the same reliable RPC stream: creation arrives first.
+            Networking.Networking.RPC<int, Vector3, bool>(PID.TargetOthers, false, false,
+                new RpcSignature<int, Vector3, bool>(ReceiveTidalState), wave.TidalNetworkId,
+                new Vector3(wave.NetworkX, wave.NetworkY, age), blocked);
+        }
+
+        [AllowedRPC]
+        private void ReceiveTidalState(int tidalId, Vector3 state, bool blocked)
+        {
+            if (IsMine || health <= 0 || tidalId == 0) return;
+            foreach (AquabroSkillVisual effect in skillVisuals)
+                if (effect.TidalNetworkId == tidalId)
+                {
+                    effect.ApplyTidalNetworkState(state, blocked);
+                    return;
+                }
+            // An expired/cleared wave must not be recreated by a late motion update.
         }
 
         private void BroadcastSharkState()
@@ -322,8 +350,9 @@ namespace AquabroMod
             switch (castingSkill)
             {
                 case 0:
-                    AddSkillVisual(0, X, Y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f);
-                    BroadcastSkillCast(0, X, Y, facing);
+                    AquabroSkillVisual wave = AddSkillVisual(0, X, Y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f);
+                    wave.TidalNetworkId = ++tidalSequence;
+                    BroadcastSkillCast(0, X, Y, facing, wave.TidalNetworkId);
                     break;
                 case 1:
                     sharkDropInput = false;
@@ -331,7 +360,7 @@ namespace AquabroMod
                     if (!FindSharkFloor(X, Y, false, out sharkY)) sharkY = Y;
                     activeShark = new AquabroSkillVisual(this, 1, X, sharkY, facing, SharkControlDuration(), 0f, 1f);
                     skillVisuals.Add(activeShark);
-                    BroadcastSkillCast(1, X, sharkY, facing);
+                    BroadcastSkillCast(1, X, sharkY, facing, 0);
                     usingSpecial = usingPockettedSpecial = false;
                     pressSpecialFacingDirection = 0;
                     // UseSpecial can run before this tick's movement calculation.
@@ -350,11 +379,11 @@ namespace AquabroMod
                 case 2:
                     Vector2 center = FindMaelstromDestination(facing);
                     AddSkillVisual(2, center.x, center.y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
-                    BroadcastSkillCast(2, center.x, center.y, facing);
+                    BroadcastSkillCast(2, center.x, center.y, facing, 0);
                     break;
                 case 3:
                     StartSpringColumns();
-                    BroadcastSkillCast(3, X, Y, facing);
+                    BroadcastSkillCast(3, X, Y, facing, 0);
                     break;
             }
             PlayAttackSound(0.8f);
@@ -618,15 +647,17 @@ namespace AquabroMod
             Map.HitProjectiles(playerNum, 12, DamageType.Explosion, radius, x, y, forceX, forceY, 0.25f);
         }
 
-        private void AddSkillVisual(int kind, float x, float y, float facing, float lifetime, float delay, float scale)
+        private AquabroSkillVisual AddSkillVisual(int kind, float x, float y, float facing, float lifetime, float delay, float scale)
         {
-            AddSkillVisual(kind, x, y, facing, lifetime, delay, scale, null, null);
+            return AddSkillVisual(kind, x, y, facing, lifetime, delay, scale, null, null);
         }
 
-        private void AddSkillVisual(int kind, float x, float y, float facing, float lifetime, float delay, float scale,
+        private AquabroSkillVisual AddSkillVisual(int kind, float x, float y, float facing, float lifetime, float delay, float scale,
             HashSet<object> sharedHits, SpringDamageState sharedSpring)
         {
-            skillVisuals.Add(new AquabroSkillVisual(this, kind, x, y, facing, lifetime, delay, scale, sharedHits, sharedSpring));
+            AquabroSkillVisual effect = new AquabroSkillVisual(this, kind, x, y, facing, lifetime, delay, scale, sharedHits, sharedSpring);
+            skillVisuals.Add(effect);
+            return effect;
         }
 
         internal void SkillSpringBlast(float x, float y, float facing, float scale, int frame,
@@ -1274,6 +1305,17 @@ namespace AquabroMod
         private float x, y, elapsed, pulseTime;
         private bool resolved;
         private bool tidalBlocked;
+        internal int TidalNetworkId;
+        private float tidalNetworkTimer, tidalNetworkAge = -1f;
+        internal void ApplyTidalNetworkState(Vector3 state, bool blocked)
+        {
+            if (state.z <= tidalNetworkAge) return;
+            tidalNetworkAge = state.z;
+            x = state.x;
+            y = state.y;
+            elapsed = state.z;
+            tidalBlocked = blocked;
+        }
         private readonly WaveDamageState waveDamage = new WaveDamageState();
         private static readonly int[] Counts = {16,28,32,28};
         private float sharkBreachElapsed = -1f, sharkInput, sharkVelocityX, sharkVelocityY;
@@ -1602,9 +1644,16 @@ namespace AquabroMod
             if (kind == 0)
             {
                 float travelTime = Mathf.Max(0f, Mathf.Min(elapsed, TidalTravelDuration) - Mathf.Max(0f, previousElapsed));
-                if (tidalBlocked && elapsed < TidalTravelDuration)
+                bool wasBlocked = tidalBlocked;
+                if (owner.IsMine && tidalBlocked && elapsed < TidalTravelDuration)
                     tidalBlocked = !owner.SkillWaveContact(x, y, facing, scale, frame, hitUnits, hitObjects, waveDamage, elapsed);
-                if (!tidalBlocked && travelTime > 0f)
+                if (!owner.IsMine)
+                {
+                    // Predict only the owner's last motion; remote terrain/targets
+                    // never decide whether this wave stops or resumes.
+                    if (!tidalBlocked) x += facing * TidalSpeed * travelTime;
+                }
+                else if (!tidalBlocked && travelTime > 0f)
                 {
                     int steps = System.Math.Max(1, (int)System.Math.Ceiling(TidalSpeed * travelTime / 8f));
                     float step = facing * TidalSpeed * travelTime / steps;
@@ -1619,6 +1668,14 @@ namespace AquabroMod
                         }
                         x = next;
                     }
+                }
+                tidalNetworkTimer -= delta;
+                bool travelEnded = previousElapsed < TidalTravelDuration && elapsed >= TidalTravelDuration;
+                if (owner.IsMine && (wasBlocked != tidalBlocked || travelEnded ||
+                    (elapsed < TidalTravelDuration && tidalNetworkTimer <= 0f)))
+                {
+                    owner.BroadcastTidalState(this, elapsed, tidalBlocked || elapsed >= TidalTravelDuration);
+                    tidalNetworkTimer = .08f;
                 }
                 waterBarrier.MoveTo(x, y);
                 waterBarrier.SetFrame(frame);

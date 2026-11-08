@@ -41,9 +41,7 @@ internal static class BossSkillDamageTests
     }
     internal static void Run()
     {
-        CheckWaveBossContact();
-        CheckWaveResume();
-        CheckWaveBodyVehicles();
+        RunWave();
         CheckSawBlades();
         CheckGenericReceivers();
         Aquabro owner = new Aquabro();
@@ -353,6 +351,13 @@ internal static class BossSkillDamageTests
         }
         Reset();
         Console.WriteLine("PASS wave body vehicles: live truck geometry; vehicles keep periodic damage; Big Guy and Grenadier take one 26-damage hit and never block; both directions; 30/60/120 FPS");
+    }
+
+    internal static void RunWave()
+    {
+        CheckWaveBossContact();
+        CheckWaveResume();
+        CheckWaveBodyVehicles();
     }
 
     private static void CheckWaveResume()
