@@ -46,6 +46,8 @@
 
 普通脚本的临时源码和可执行文件结束后清理。综合测试将预览 PNG／蒙版保留在被 Git 忽略的临时预览目录；不会替换正式 DLL、部署资源或覆盖源稿。
 
+只构建水墙修复 DLL 可使用 [Build-Wave.ps1](../tools/Build-Wave.ps1)，沿用现有生成源码并显式引用 .NET 2.0/3.5，避免误用游戏不支持的 .NET 4 API。可传 `-ManagedDirectory`、`-UmmDirectory`、`-CompilerPath`；输出与编译日志位于 `bin/WaveNetwork`，脚本不部署。两个入口的默认游戏路径属于原开发环境；默认编译器来自仓库 UnityInspectorMod 的本地 Roslyn 工具，其他环境应传入实际路径。
+
 ## 综合测试文件与覆盖范围
 
 下列用例由 `Test-Spring.ps1` 统一编译执行；水花另编译 `BossWaterDamageTests.cs`，两者共用 `BossDamageTestStubs.cs`。
@@ -63,6 +65,8 @@
 | [PixelMaskTests.cs](PixelMaskTests.cs) | 公共像素查询的边缘／斜角、反向矩形、空帧及世界坐标平移、镜像、缩放、水线裁剪 |
 
 维护时保留这些关键边界：
+
+- **狂潮运动同步**：`SkillSpringTests --wave-network <skill-tidal-wave.png>` 定向入口复用实际生产源码，检查拥有端挡停/恢复、远端校正与无重复伤害、多个编号/角色隔离、晚到状态、清理与寿命，并运行原有狂潮及 Boss 水墙回归。由 AI 执行 [Test-Wave.ps1](Test-Wave.ps1)，使用现有 PNG/生成蒙版，无需重新导出素材；可传 `-HarmonyPath` 和 `-CompilerPath`，输出与日志位于被忽略的 `bin/WaveNetwork/tests`。离线网络桩不替代双端实机和用户手动验收。
 
 - **狂潮胖兵例外**：`CheckWaveMookFixedDamage` 覆盖 `MookBigGuy`、其子类与 `MookGrenadier`，低／高血量、双朝向、三种缩放下都只受一次 26 点，不按血量强杀，也不附加闪白／眩晕；存活时仍放行水墙。`CheckWaveBodyVehicles` 另以 30／60／120 FPS 的真实技能实例检查两类目标受击后水墙继续前进，其余载具仍按原周期伤害并在存活时挡停。
 - **Boss**：坦克、蛞蝓头部、撒旦头部／六臂及关联部件分别检查；装甲、关闭碰撞、免疫阶段不能被身体兜底绕过。持续伤害覆盖 30／60／120 FPS 和涌泉 28、漩涡 36、狂潮 26 的基础总额。
