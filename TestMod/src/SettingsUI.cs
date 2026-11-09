@@ -7,6 +7,8 @@ namespace TestMod
     public static partial class Plugin
     {
         private static SettingsUiStyles _uiStyles;
+        private static List<Resolution> _availableResolutions;
+        private static Vector2 _resolutionScroll;
         private static readonly float[] SpeedPresets = { 0.1f, 0.25f, 0.5f, 1f, 2f, 4f };
 
         private static void DrawSettingsUI(UnityModManager.ModEntry modEntry)
@@ -21,6 +23,7 @@ namespace TestMod
             DrawNavigation(modEntry, "speed", chinese ? "速度与动作帧" : "Speed & Frames");
             DrawNavigation(modEntry, "enemies", chinese ? "敌人清理" : "Enemy Cleanup");
             DrawNavigation(modEntry, "camera", chinese ? "镜头跟随" : "Camera Follow");
+            DrawNavigation(modEntry, "resolution", chinese ? "分辨率" : "Resolution");
             DrawNavigation(modEntry, "language", chinese ? "语言设置" : "Language");
             GUILayout.FlexibleSpace();
             DrawPlaybackStatus(chinese);
@@ -31,6 +34,7 @@ namespace TestMod
             {
                 case "enemies": DrawEnemySettings(chinese); break;
                 case "camera": DrawCameraSettings(modEntry, chinese); break;
+                case "resolution": DrawResolutionSettings(chinese); break;
                 case "language": DrawLanguageSettings(modEntry, chinese); break;
                 default: DrawGameSpeed(modEntry, chinese); break;
             }
@@ -273,6 +277,67 @@ namespace TestMod
             GUILayout.EndVertical();
         }
 
+        private static void DrawResolutionSettings(bool chinese)
+        {
+            _resolutionScroll = GUILayout.BeginScrollView(_resolutionScroll, GUILayout.ExpandWidth(true),
+                GUILayout.Height(460f));
+            DrawPageHeading(chinese ? "分辨率" : "Resolution",
+                chinese ? "选择游戏当前显示器支持的分辨率。" :
+                "Choose a resolution supported by the current display.");
+            BeginSettingsSection(chinese ? "当前分辨率" : "Current resolution");
+            GUILayout.Label(Screen.width + " x " + Screen.height, _uiStyles.Label);
+
+            if (_availableResolutions == null)
+                _availableResolutions = GetAvailableResolutions();
+
+            GUILayout.Space(8f);
+            for (var index = 0; index < _availableResolutions.Count; index++)
+            {
+                if (index % 3 == 0) GUILayout.BeginHorizontal();
+                var resolution = _availableResolutions[index];
+                var selected = resolution.width == Screen.width && resolution.height == Screen.height;
+                var style = selected ? _uiStyles.SelectedButton : _uiStyles.Button;
+                if (GUILayout.Button(resolution.width + " x " + resolution.height, style,
+                    GUILayout.ExpandWidth(true)))
+                    ApplyResolution(resolution);
+                if (index % 3 == 2 || index == _availableResolutions.Count - 1)
+                    GUILayout.EndHorizontal();
+            }
+
+            GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+        }
+
+        private static List<Resolution> GetAvailableResolutions()
+        {
+            var available = new List<Resolution>();
+            foreach (var resolution in Screen.resolutions)
+            {
+                var alreadyAdded = false;
+                for (var index = 0; index < available.Count; index++)
+                {
+                    if (available[index].width == resolution.width &&
+                        available[index].height == resolution.height)
+                    {
+                        alreadyAdded = true;
+                        break;
+                    }
+                }
+                if (!alreadyAdded) available.Add(resolution);
+            }
+            return available;
+        }
+
+        private static void ApplyResolution(Resolution resolution)
+        {
+            var options = PlayerOptions.Instance;
+            options.resolutionW = resolution.width;
+            options.resolutionH = resolution.height;
+            options.fullscreen = Screen.fullScreen;
+            Screen.SetResolution(resolution.width, resolution.height, options.fullscreen);
+            FileIO.SaveOptions(options);
+        }
+
         private static void DrawHotkey(UnityModManager.ModEntry modEntry, bool chinese,
             int target, string label, KeyCode key)
         {
@@ -316,6 +381,7 @@ namespace TestMod
 
         private static void ReleaseSettingsUI()
         {
+            _availableResolutions = null;
             if (_uiStyles == null) return;
             _uiStyles.Release();
             _uiStyles = null;

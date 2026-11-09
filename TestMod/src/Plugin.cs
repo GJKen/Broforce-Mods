@@ -272,7 +272,8 @@ namespace TestMod
         private static void NormalizeSettings()
         {
             if (Settings.SettingsPanel != "speed" && Settings.SettingsPanel != "enemies" &&
-                Settings.SettingsPanel != "camera" && Settings.SettingsPanel != "language")
+                Settings.SettingsPanel != "camera" && Settings.SettingsPanel != "resolution" &&
+                Settings.SettingsPanel != "language")
                 Settings.SettingsPanel = "speed";
             if (float.IsNaN(Settings.GameSpeed) || float.IsInfinity(Settings.GameSpeed))
                 Settings.GameSpeed = 1f;
