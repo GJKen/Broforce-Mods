@@ -89,6 +89,7 @@ namespace BroforceBugFix
 
             var previousMaster = Settings.EnableAllFixes;
             var previousDoodadCrate = Settings.EnableDoodadCrateReentryFix;
+            var previousLobbyJoinStream = Settings.EnableLobbyJoinStreamFix;
 
             Settings.EnableAllFixes = GUILayout.Toggle(
                 Settings.EnableAllFixes,
@@ -98,6 +99,9 @@ namespace BroforceBugFix
             Settings.EnableDoodadCrateReentryFix = GUILayout.Toggle(
                 Settings.EnableDoodadCrateReentryFix,
                 "Prevent recursive explosive-ammo crate collapse");
+            Settings.EnableLobbyJoinStreamFix = GUILayout.Toggle(
+                Settings.EnableLobbyJoinStreamFix,
+                "Clear a stalled previous room's network stream when joining");
 
             var doodadCrateActive = _modEnabled &&
                                     Settings.EnableAllFixes &&
@@ -107,7 +111,8 @@ namespace BroforceBugFix
                 (doodadCrateActive ? "active" : "inactive"));
 
             if (previousMaster != Settings.EnableAllFixes ||
-                previousDoodadCrate != Settings.EnableDoodadCrateReentryFix)
+                previousDoodadCrate != Settings.EnableDoodadCrateReentryFix ||
+                previousLobbyJoinStream != Settings.EnableLobbyJoinStreamFix)
             {
                 try
                 {
@@ -142,11 +147,18 @@ namespace BroforceBugFix
             {
                 DoodadCrateReentryFix.Remove();
             }
+
+            if (_modEnabled && settings != null &&
+                settings.EnableAllFixes && settings.EnableLobbyJoinStreamFix)
+                LobbyJoinStreamFix.Apply();
+            else
+                LobbyJoinStreamFix.Remove();
         }
 
         private static void RemoveAllFixes()
         {
             DoodadCrateReentryFix.Remove();
+            LobbyJoinStreamFix.Remove();
         }
 
         private static void SaveSettings(UnityModManager.ModEntry modEntry)

@@ -13,6 +13,7 @@
 - `src/Plugin.cs`：UMM 生命周期、启用和卸载。
 - `src/BugFixSettings.cs`：全部修复主开关和各修复的持久化独立开关。
 - `src/DoodadCrateReentryFix.cs`：`DoodadCrate.ActuallyCollapse` 单实例同步重入保护。
+- `src/LobbyJoinStreamFix.cs`：主菜单加入新房间时，清理上次未完成地图加载遗留的暂停 RPC 流。
 - `BuildAndDeploy.ps1`：使用 .NET Framework 3.5 编译器构建，并更新本机、内网测试端和项目安装包。
 - `issues/`：保存原始现象、日志结论、源码证据、修复边界和复测结果。
 
@@ -22,7 +23,7 @@
 GJKen.BroforceBugFix.DoodadCrateReentry
 ```
 
-卸载本插件时只移除该 ID 的补丁，不影响 `CustomMapMultiplayer` 或其它 Mod。
+加入房间修复使用独立 ID `GJKen.BroforceBugFix.LobbyJoinStream`。卸载本插件时只移除各修复自己的补丁，不影响 `CustomMapMultiplayer` 或其它 Mod。
 
 ## 开关模型
 

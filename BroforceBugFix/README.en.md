@@ -6,16 +6,16 @@ This is a Unity Mod Manager + Harmony bug-fix plugin for the Steam version of Br
 
 ## Current Fixes
 
-The current version is `0.2.0` and contains one fix:
+The current version is `0.3.0` and contains two fixes:
 
 - Prevents the same `DoodadCrate` from recursively entering `ActuallyCollapse` before the previous call has finished. This fixes infinite recursion, rapidly increasing explosion effects, severe frame drops, and `StackOverflowException` when adjacent explosive ammunition crates trigger one another.
+- Clears a previous room's paused RPC stream and queued messages when joining a new lobby from MainMenu. This prevents an unfinished Workshop load from blocking the next official-map join, independently of CustomMapMultiplayer.
 
 | Item | Current value |
 | --- | --- |
-| Version | `0.2.0` |
-| DLL SHA-256 | `B81902C1D59F6CD6845B76841C0A619B303137664BFE0E67783674F5561C025C` |
+| Version | `0.3.0` |
 | Static build | Passed |
-| In-game retest | Pending offline and official Steam two-sided retesting |
+| In-game retest | Lobby fix passed a two-machine official Steam retest; crate fix acceptance remains pending |
 
 The first collapse still runs the complete original logic, including the explosion, area damage, normal chain reaction, drops, and network RPCs. The patch only skips nested re-entry while the same instance has not finished exiting.
 
@@ -25,8 +25,9 @@ The UMM Mod enabled state is the outermost switch. The plugin panel has two addi
 
 - `Enable all bug fixes`: The plugin-level master switch. When disabled, all fixes are unloaded immediately while each individual toggle selection is retained.
 - `Prevent recursive explosive-ammo crate collapse`: The individual toggle for the explosive ammunition crate recursion fix.
+- `Clear a stalled previous room's network stream when joining`: The individual toggle for clearing a stalled stream at the new-lobby boundary.
 
-Both plugin-level toggles are enabled by default on first installation. The current fix takes effect only when all three conditions are enabled. Setting changes apply immediately and do not require a game restart. Future official bug fixes will each receive their own individual toggle and will all remain controlled by the master switch.
+All plugin-level toggles are enabled by default. Each fix requires UMM, the master switch, and its individual switch to be enabled. Setting changes apply immediately.
 
 ## Installation
 
@@ -36,7 +37,7 @@ Place `BroforceBugFix.dll` and `Info.json` from the project's `BroforceBugFix` p
 <UMM>\Mods\GJKen-BroforceBugFix\
 ```
 
-Restart the game and confirm that `Broforce Bug Fix 0.2.0` is enabled in UMM. The fix applies to crate-destruction logic executed locally; all participants should use the same version during multiplayer.
+Restart the game and confirm that `Broforce Bug Fix 0.3.0` is enabled in UMM. The lobby fix is required on the affected joining machine. All participants should use the same version for the crate fix.
 
 ## Build
 

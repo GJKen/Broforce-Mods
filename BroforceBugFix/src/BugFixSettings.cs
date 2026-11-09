@@ -6,5 +6,6 @@ namespace BroforceBugFix
     {
         public bool EnableAllFixes = true;
         public bool EnableDoodadCrateReentryFix = true;
+        public bool EnableLobbyJoinStreamFix = true;
     }
 }

@@ -2,7 +2,7 @@
   "Id": "BroforceBugFix",
   "DisplayName": "Broforce Bug Fix",
   "Author": "GJKen",
-  "Version": "0.2.0",
+  "Version": "0.3.0",
   "AssemblyName": "BroforceBugFix.dll",
   "EntryMethod": "BroforceBugFix.Plugin.Load"
 }

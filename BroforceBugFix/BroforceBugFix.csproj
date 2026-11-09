@@ -48,6 +48,7 @@
     <Compile Include="src\Plugin.cs" />
     <Compile Include="src\BugFixSettings.cs" />
     <Compile Include="src\DoodadCrateReentryFix.cs" />
+    <Compile Include="src\LobbyJoinStreamFix.cs" />
   </ItemGroup>
 
   <Target Name="DeployBroforceBugFix" AfterTargets="Build" Condition="'$(TargetPath)' != ''">
