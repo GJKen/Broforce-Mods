@@ -43,6 +43,58 @@ namespace TestMod
             get { return _speedController == null ? 0 : _speedController.SteppedFrames; }
         }
 
+        public static bool IsFocusedCameraEnabled
+        {
+            get { return Settings != null && Settings.EnableFocusedCamera; }
+        }
+
+        public static void SetFocusedCameraEnabled(bool enabled)
+        {
+            if (Settings == null) return;
+            Settings.EnableFocusedCamera = enabled;
+            SaveSettings(ModEntry);
+        }
+
+        public static void SetCameraFollowPlayer(int playerNumber)
+        {
+            if (Settings == null) return;
+            if (playerNumber < 0 || playerNumber > 3)
+                throw new ArgumentOutOfRangeException("playerNumber", "Use a player number from 0 to 3.");
+            Settings.CameraPlayerNumber = playerNumber;
+            SaveSettings(ModEntry);
+        }
+
+        internal static int GetCameraFollowPlayer()
+        {
+            if (Settings == null) return -1;
+            if (Connect.IsOffline) return Settings.CameraPlayerNumber;
+
+            for (var playerNumber = 0; playerNumber < 4; playerNumber++)
+            {
+                if (HeroController.IsPlaying(playerNumber) && HeroController.PIDS[playerNumber] != null &&
+                    HeroController.PIDS[playerNumber].IsMine)
+                    return playerNumber;
+            }
+
+            return -1;
+        }
+
+        internal static bool IsPlayerIncludedInCameraFollow(int playerNumber)
+        {
+            if (!HeroController.IsPlaying(playerNumber)) return false;
+            if (!IsFocusedCameraEnabled || Map.isEditing || GameModeController.LevelFinished)
+                return true;
+
+            var followPlayer = GetCameraFollowPlayer();
+            if (followPlayer < 0) return true;
+
+            var player = HeroController.players[followPlayer];
+            if (player != null && player.character != null && player.character.health <= 0)
+                return true;
+
+            return playerNumber == followPlayer;
+        }
+
         public static void SetGameSpeedEnabled(bool enabled)
         {
             if (Settings == null) return;
@@ -220,11 +272,13 @@ namespace TestMod
         private static void NormalizeSettings()
         {
             if (Settings.SettingsPanel != "speed" && Settings.SettingsPanel != "enemies" &&
-                Settings.SettingsPanel != "language") Settings.SettingsPanel = "speed";
+                Settings.SettingsPanel != "camera" && Settings.SettingsPanel != "language")
+                Settings.SettingsPanel = "speed";
             if (float.IsNaN(Settings.GameSpeed) || float.IsInfinity(Settings.GameSpeed))
                 Settings.GameSpeed = 1f;
             Settings.GameSpeed = Mathf.Clamp(Settings.GameSpeed, 0.01f, 4f);
             Settings.FrameStepRepeatRate = Mathf.Clamp(Settings.FrameStepRepeatRate, 1, 60);
+            Settings.CameraPlayerNumber = Mathf.Clamp(Settings.CameraPlayerNumber, 0, 3);
             if (!Enum.IsDefined(typeof(KeyCode), Settings.PauseKey)) Settings.PauseKey = KeyCode.None;
             if (!Enum.IsDefined(typeof(KeyCode), Settings.FrameStepKey) ||
                 Settings.FrameStepKey == Settings.PauseKey) Settings.FrameStepKey = KeyCode.None;

@@ -20,6 +20,7 @@ namespace TestMod
             GUILayout.Space(14f);
             DrawNavigation(modEntry, "speed", chinese ? "速度与动作帧" : "Speed & Frames");
             DrawNavigation(modEntry, "enemies", chinese ? "敌人清理" : "Enemy Cleanup");
+            DrawNavigation(modEntry, "camera", chinese ? "镜头跟随" : "Camera Follow");
             DrawNavigation(modEntry, "language", chinese ? "语言设置" : "Language");
             GUILayout.FlexibleSpace();
             DrawPlaybackStatus(chinese);
@@ -29,6 +30,7 @@ namespace TestMod
             switch (Settings.SettingsPanel)
             {
                 case "enemies": DrawEnemySettings(chinese); break;
+                case "camera": DrawCameraSettings(modEntry, chinese); break;
                 case "language": DrawLanguageSettings(modEntry, chinese); break;
                 default: DrawGameSpeed(modEntry, chinese); break;
             }
@@ -230,6 +232,43 @@ namespace TestMod
             GUILayout.EndHorizontal();
             GUILayout.Label(chinese ? "选择后立即生效，并在下次启动时保留。跟随系统会根据系统语言选择中文或英文。" :
                 "Changes apply immediately and are saved. Follow System chooses Chinese or English from the system language.",
+                _uiStyles.Help);
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawCameraSettings(UnityModManager.ModEntry modEntry, bool chinese)
+        {
+            DrawPageHeading(chinese ? "镜头跟随" : "Camera Follow",
+                chinese ? "让镜头只把指定的本地角色纳入跟随范围。" :
+                "Limit camera tracking to one local player.");
+            BeginSettingsSection(chinese ? "角色跟随" : "Player focus");
+            var enabled = GUILayout.Toggle(Settings.EnableFocusedCamera,
+                chinese ? "启用角色跟随" : "Enable player focus", _uiStyles.Toggle);
+            if (enabled != Settings.EnableFocusedCamera) SetFocusedCameraEnabled(enabled);
+
+            if (Connect.IsOffline)
+            {
+                GUILayout.Label(chinese ? "本地玩家" : "Local player", _uiStyles.Label);
+                GUILayout.BeginHorizontal();
+                for (var playerNumber = 0; playerNumber < 4; playerNumber++)
+                {
+                    var label = "P" + (playerNumber + 1);
+                    if (GUILayout.Button(label, Settings.CameraPlayerNumber == playerNumber ?
+                        _uiStyles.SelectedButton : _uiStyles.Button, GUILayout.ExpandWidth(true)))
+                        SetCameraFollowPlayer(playerNumber);
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.Label(chinese ? "离线本地玩家共用同一画面；选择后，镜头只跟随所选玩家。" :
+                    "Local players share one view. The camera follows the selected player.", _uiStyles.Help);
+            }
+            else
+            {
+                GUILayout.Label(chinese ? "联机时自动跟随本机控制的第一名玩家。" :
+                    "Online, the camera follows the first player controlled by this instance.", _uiStyles.Help);
+            }
+
+            GUILayout.Label(chinese ? "关闭此选项会恢复游戏原有的多人镜头跟随。关卡脚本控制镜头时仍由游戏接管。" :
+                "Turn this off to restore the game's shared camera. Scripted camera actions remain in control.",
                 _uiStyles.Help);
             GUILayout.EndVertical();
         }

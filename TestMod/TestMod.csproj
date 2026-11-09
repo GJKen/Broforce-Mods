@@ -50,6 +50,7 @@
     <Compile Include="src\TestModSettings.cs" />
     <Compile Include="src\GameSpeedController.cs" />
     <Compile Include="src\SettingsUI.cs" />
+    <Compile Include="src\CameraFollowPatch.cs" />
   </ItemGroup>
 
   <Target Name="CopyTestModMetadata" AfterTargets="Build">

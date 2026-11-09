@@ -14,6 +14,8 @@ namespace TestMod
         public KeyCode FrameStepKey;
         public bool HoldToStep;
         public int FrameStepRepeatRate;
+        public bool EnableFocusedCamera;
+        public int CameraPlayerNumber;
 
         public TestModSettings()
         {
@@ -25,6 +27,8 @@ namespace TestMod
             FrameStepKey = KeyCode.None;
             HoldToStep = true;
             FrameStepRepeatRate = 10;
+            EnableFocusedCamera = false;
+            CameraPlayerNumber = 0;
         }
     }
 }
