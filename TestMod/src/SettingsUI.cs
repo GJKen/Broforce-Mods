@@ -26,7 +26,6 @@ namespace TestMod
             DrawNavigation(modEntry, "resolution", chinese ? "分辨率" : "Resolution");
             DrawNavigation(modEntry, "language", chinese ? "语言设置" : "Language");
             GUILayout.FlexibleSpace();
-            DrawPlaybackStatus(chinese);
             GUILayout.EndVertical();
             GUILayout.Space(8f);
             GUILayout.BeginVertical(_uiStyles.ContentPanel, GUILayout.ExpandWidth(true), GUILayout.MinHeight(500f));
@@ -52,26 +51,6 @@ namespace TestMod
                 SaveSettings(modEntry);
             }
             GUILayout.Space(3f);
-        }
-
-        private static void DrawPlaybackStatus(bool chinese)
-        {
-            GUILayout.BeginVertical(_uiStyles.SectionPanel);
-            GUILayout.Label(chinese ? "当前状态" : "Current state", _uiStyles.SectionTitle);
-            var status = _speedController == null ? (chinese ? "Mod 未启用" : "Mod inactive") :
-                IsGamePaused ? (chinese ? "已暂停" : "Paused") :
-                Settings.EnableGameSpeed ? (chinese ? "正在播放" : "Playing") :
-                (chinese ? "原生游戏速度" : "Native game speed");
-            GUILayout.Label(status, _uiStyles.Label);
-            if (IsGameSpeedEnabled)
-                GUILayout.Label((chinese ? "播放倍率：" : "Playback: ") + Settings.GameSpeed.ToString("0.00") + "x",
-                    _uiStyles.Help);
-            if (IsGamePaused)
-            {
-                GUILayout.Label((chinese ? "已推进帧数：" : "Stepped frames: ") + SteppedFrames, _uiStyles.Help);
-                if (GUILayout.Button(chinese ? "恢复播放" : "Resume", _uiStyles.SelectedButton)) SetGamePaused(false);
-            }
-            GUILayout.EndVertical();
         }
 
         private static void DrawPageHeading(string title, string intro)
@@ -124,6 +103,14 @@ namespace TestMod
             GUILayout.Space(10f);
 
             BeginSettingsSection(chinese ? "暂停与逐帧查看" : "Pause & frame stepping");
+            var status = _speedController == null ? (chinese ? "Mod 未启用" : "Mod inactive") :
+                IsGamePaused ? (chinese ? "已暂停" : "Paused") :
+                Settings.EnableGameSpeed ? (chinese ? "正在播放" : "Playing") :
+                (chinese ? "原生游戏速度" : "Native game speed");
+            GUILayout.Label((chinese ? "当前状态：" : "Current state: ") + status, _uiStyles.Label);
+            if (IsGamePaused)
+                GUILayout.Label((chinese ? "已推进帧数：" : "Stepped frames: ") + SteppedFrames, _uiStyles.Help);
+            GUILayout.Space(5f);
             var guiEnabled = GUI.enabled;
             GUI.enabled = guiEnabled && _speedController != null;
             GUILayout.BeginHorizontal();
@@ -267,8 +254,10 @@ namespace TestMod
             }
             else
             {
-                GUILayout.Label(chinese ? "联机时自动跟随本机控制的第一名玩家。" :
-                    "Online, the camera follows the first player controlled by this instance.", _uiStyles.Help);
+                GUILayout.Label(chinese ? "联机时自动跟随本机控制的第一名玩家，并保护未开启此功能的队友画面。遥控技能期间暂时让出镜头目标。" :
+                    "Online, follow the first local player and protect teammates' views, even without this feature. Native remote-control skills temporarily take priority.", _uiStyles.Help);
+                GUILayout.Label(chinese ? "此兼容方式可能暂停跌出画面后的原生自动回位。" :
+                    "This compatibility mode may suspend the game's automatic recovery below the screen.", _uiStyles.Help);
             }
 
             GUILayout.Label(chinese ? "关闭此选项会恢复游戏原有的多人镜头跟随。关卡脚本控制镜头时仍由游戏接管。" :

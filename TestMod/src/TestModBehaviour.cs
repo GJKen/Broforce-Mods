@@ -6,6 +6,7 @@ namespace TestMod
     {
         private const float AutoKillRetryInterval = 0.1f;
 
+        private readonly CameraCompatibility _cameraCompatibility = new CameraCompatibility();
         private string _sceneName;
         private bool _autoKillDone;
         private float _nextAutoKillAt;
@@ -21,6 +22,7 @@ namespace TestMod
 
         internal void Stop()
         {
+            _cameraCompatibility.Release();
             if (gameObject != null)
             {
                 Destroy(gameObject);
@@ -35,6 +37,7 @@ namespace TestMod
 
         private void Update()
         {
+            UpdateCameraCompatibility();
             var sceneName = Application.loadedLevelName;
             if (sceneName != _sceneName)
             {
@@ -76,6 +79,11 @@ namespace TestMod
             }
 
             return KillVisibleEnemies(FindObjectsOfType<Mook>());
+        }
+
+        internal void UpdateCameraCompatibility()
+        {
+            _cameraCompatibility.Update();
         }
 
         private int KillVisibleEnemies(Mook[] mooks)

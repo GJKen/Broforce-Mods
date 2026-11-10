@@ -52,6 +52,7 @@ namespace TestMod
         {
             if (Settings == null) return;
             Settings.EnableFocusedCamera = enabled;
+            if (_behaviour != null) _behaviour.UpdateCameraCompatibility();
             SaveSettings(ModEntry);
         }
 
