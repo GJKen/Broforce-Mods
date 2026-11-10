@@ -731,6 +731,20 @@ namespace AquabroMod
             // Release is handled in RunFiring so holding fire can build charge.
         }
 
+        protected override void RunAvatarFiring()
+        {
+            if (health > 0 && fire && chargeTime > 0f)
+            {
+                // Keep the firing portrait throughout charge instead of flashing at the base fire rate.
+                avatarGunFireTime = 0.04f;
+                avatarAngryTime = 0.1f;
+                HeroController.SetAvatarFire(playerNum, usePrimaryAvatar);
+                return;
+            }
+
+            base.RunAvatarFiring();
+        }
+
         protected override void RunFiring()
         {
             if (health <= 0)
