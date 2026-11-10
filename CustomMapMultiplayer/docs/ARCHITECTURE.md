@@ -23,6 +23,7 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 - `src/DiagnosticLog.cs`：普通会话日志、Harmony 追踪、分类过滤和刷新。
 - `src/DiagnosticsBehaviour.cs`：场景、Unity 错误和英雄生成状态观察。
 - `src/HarmonyDiagnostics.cs`：大厅、关卡切换、Workshop 加载、玩家和英雄流程。
+- `src/HarmonyDiagnostics.SteamHost.cs`：同帧 Steam 房主身份查询缓存及回调失效；复用原版结果，不改变敌人更新范围。
 - `src/WorkshopMapDirectory.cs`：枚举 Steam 已订阅项目、读取本地地图状态、查询 Workshop 标题并维护选择页目录。
 - `src/HarmonyDiagnostics.WorkshopIdentity.cs`：房主地图身份发布、加入方会话配置采用、Steam 订阅检测和缺图加载保护。
 - `src/HarmonyDiagnostics.WorkshopPlayer.cs`：Workshop 本地玩家请求、控制器所有权、掉线重入和英雄类型恢复；死亡主动 AFK 返回不补生命或生成角色，并恢复原死亡头像；每次本地 `Player.Start` 成功后释放已完成的加入请求，保留进行中的重复请求保护。

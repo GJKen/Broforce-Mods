@@ -54,6 +54,10 @@
       <HintPath>$(BroforceManagedPath)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(BroforceManagedPath)\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="RocketLib">
       <HintPath>$(RocketLibPath)</HintPath>
       <Private>false</Private>
@@ -89,6 +93,7 @@
     <Compile Include="src\HarmonyDiagnostics.DemolitionBro.cs" />
     <Compile Include="src\HarmonyDiagnostics.McBrover.cs" />
     <Compile Include="src\HarmonyDiagnostics.NativeMapSafety.cs" />
+    <Compile Include="src\HarmonyDiagnostics.SteamHost.cs" />
     <Compile Include="src\SwapBrosCompatibility.cs" />
     <Compile Include="src\DiagnosticSettings.cs" />
     <Compile Include="src\PerformanceTelemetry.cs" />

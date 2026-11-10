@@ -41,6 +41,8 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Rel
 
 聊天功能依赖 `UnityEngine.UI.dll` 的 `UnityEngine.UI.Text`、`RectTransform` 和文本布局 API，碰撞器相关代码依赖 `UnityEngine.PhysicsModule.dll`。这些程序集必须同时出现在项目引用和标准构建脚本的必需文件、编译引用列表中；它们由 Broforce 从 `Broforce_beta_Data/Managed` 加载，不属于 Mod 安装包。缺失时应视为构建失败，不要使用缺少运行库的游戏安装或旧 DLL 进行验收。
 
+Steam 房主查询缓存额外引用游戏自带的 `Assembly-CSharp-firstpass.dll`，用于 `Steamworks` 类型与回调泵；项目及脚本同步引用，不复制该游戏运行库。
+
 ## 安装包结构
 
 ```text

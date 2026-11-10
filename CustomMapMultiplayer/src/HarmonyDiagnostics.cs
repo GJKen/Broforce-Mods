@@ -361,6 +361,7 @@ namespace CustomMapMultiplayer
             PatchChatMessageViewport();
             PatchPauseMenuAfkMenu();
             PatchOnlinePlayerListDisplay();
+            PatchSteamHostQueryCache();
             PatchLevelOutcomeDiagnostics();
             PatchAcidDiagnostics();
             PatchWorkshopLevelEndReentryGuard();
@@ -399,6 +400,7 @@ namespace CustomMapMultiplayer
             finally
             {
                 DisableChatIme();
+                ClearSteamHostQueryCache();
                 _harmony = null;
                 _injectedForSession = false;
                 _workshopCompletionHandledForSession = false;

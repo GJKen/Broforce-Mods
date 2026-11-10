@@ -14,6 +14,8 @@ This directory contains issue records, conclusions, boundaries, and acceptance e
 
 | Document | Status | Reading notes |
 | --- | --- | --- |
+| [Repeated Steam host queries](ISSUES-2026-11-11-Steam房主身份重复查询.md) | User confirmed stable high host FPS and normal joining-player FPS; fix integrated into 0.5.1 | Reuses the native result within a frame and invalidates around Steam callbacks; enemy bounds are unchanged. |
+| [Online host enemy update load](ISSUES-2026-11-11-联机房主敌人逐帧更新负载.md) | Historical culling experiment ineffective; excluded from integration | Preserves profiling, the failed approach, and the subsequent root cause. |
 | [Official lobby join blocked after disabling the multiplayer Mod](../../BroforceBugFix/issues/ISSUES-2026-11-09-未完成地图加载后加入官方房卡在主菜单.md) | Localized and passed two-sided retest after the BroforceBugFix repair | See the BroforceBugFix record for the permanent fix, reproduction, and two-sided verification; the initial incident record and raw screenshot remain local. |
 | [Workshop 加载中重复加入导致换人与入图失败](ISSUES-2026-11-09-Workshop加载中重复加入导致换人与入图失败.md) | 已通过双端 MCP 回归，待用户复测 | 加载中重复加入同一房间保留首次请求；修复后双方正常入图并切换 Cobro/Bronobi。 |
 | [联机加入提示按本端旁观状态显示](ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md) | 已通过官方图与 Workshop 双端 MCP 回归 | 按本端参与槽位判断，只有旁观端显示加入提示，重新加入后隐藏；官方图加入方保持禁用 Mod。 |

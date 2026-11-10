@@ -64,7 +64,8 @@ $requiredPaths = @(
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
     (Join-Path $unityModManagerPath '0Harmony.dll'),
     $rocketLibPath,
-    (Join-Path $broforceManagedPath 'Assembly-CSharp.dll')
+    (Join-Path $broforceManagedPath 'Assembly-CSharp.dll'),
+    (Join-Path $broforceManagedPath 'Assembly-CSharp-firstpass.dll')
 )
 foreach ($requiredPath in $requiredPaths) {
     if ([string]::IsNullOrWhiteSpace([string]$requiredPath) -or
@@ -93,7 +94,8 @@ $references = @(
     (Join-Path $unityModManagerPath 'UnityModManager.dll'),
     (Join-Path $unityModManagerPath '0Harmony.dll'),
     $rocketLibPath,
-    (Join-Path $broforceManagedPath 'Assembly-CSharp.dll')
+    (Join-Path $broforceManagedPath 'Assembly-CSharp.dll'),
+    (Join-Path $broforceManagedPath 'Assembly-CSharp-firstpass.dll')
 )
 
 function Get-Sha256Hex([string]$path) {

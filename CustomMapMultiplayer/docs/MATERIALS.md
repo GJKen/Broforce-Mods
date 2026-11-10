@@ -14,3 +14,12 @@
 原先已跟踪的七份附件保持原内容迁移；其余材料的提交范围不因迁移改变。旧 `issues/diagnostics/` 已搬空并移除。
 
 问题入口见 [问题索引](../issues/README.md)。
+
+2026-11-11 联机性能记录从 BroforceBugFix 迁入（路径相对仓库根）：
+
+| 原路径 | 当前路径 |
+| --- | --- |
+| `BroforceBugFix/issues/ISSUES-2026-11-11-Steam房主身份重复查询.md` | `CustomMapMultiplayer/issues/ISSUES-2026-11-11-Steam房主身份重复查询.md` |
+| `BroforceBugFix/issues/ISSUES-2026-11-11-联机房主敌人逐帧更新负载.md` | `CustomMapMultiplayer/issues/ISSUES-2026-11-11-联机房主敌人逐帧更新负载.md` |
+
+原始定位和失败方案保留；当前实现仅整合同帧 Steam 身份查询缓存，用户已确认稳定高帧。

@@ -8,18 +8,19 @@ When Workshop map injection or FRP Direct is used, every player must install the
 
 ## Current Status
 
-The current version is experimental `0.5.0` and is not yet a stable release.
+The current version is experimental `0.5.1` and is not yet a stable release.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=352369deeb227e77255856bc8e82abdd3a884a5fb5cafd1442df63cce8667ffd` |
-| DLL SHA-256 | `24FA715356F354575D4BCFF7EA01C6EB7D0546217E3E8126065EF6A9CCA384C7` |
-| DLL assembly version | `0.5.0.0` |
+| Current distributed build | `buildHash=df6cc152ed646ccbea82465c2b65f1c7928510933edcf8f360f7e2de3aab33b0` |
+| DLL SHA-256 | `78D811500368551D33D55A04A3AAB32D24360F35EF1A88B3C1D054224492AD49` |
+| DLL assembly version | `0.5.1.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |
 
 ### Verified
 
+- The Steam host query cache was simplified and integrated from BroforceBugFix. The user confirmed stable high FPS on the host and subsequently normal multiplayer frame rates on the joining player. Enemy update bounds remain native; see the [query performance record](issues/ISSUES-2026-11-11-Steam房主身份重复查询.md).
 - 官方与 Workshop 加入提示按本端旁观状态显示，重新加入后隐藏，实际控制器与主控制器不一致时也能识别参与者；见[验证记录](issues/ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md)。
 - Two-player entry, late joining, leaving and rejoining the current map, and independent character control on both sides. See [Workshop and game state](docs/WORKSHOP.md).
 - The colored latency list and animated host name in the Esc menu for Steam and FRP Direct; three-player FRP Direct play, the static full-room notice for a `1`-player room, and automatic Host/Client configuration application. See [networking and rooms](docs/NETWORKING.md) and the [FRP Direct acceptance record](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md).
