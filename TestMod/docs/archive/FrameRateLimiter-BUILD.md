@@ -1,5 +1,7 @@
 # FrameRateLimiter 构建说明
 
+> 历史说明：该独立构建入口已于 2026-11-11 移除。当前功能随 [TestMod](../../README.md) 统一构建部署，旧路径映射见[迁移说明](../FRAME-RATE-MIGRATION.md)。下文保留原构建方案。
+
 ## 本机配置
 
 复制项目根目录的 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props`，填写本机 Broforce `Managed` 目录和 UMM `Core` 目录。该文件只用于本机构建部署，已被 Git 忽略。

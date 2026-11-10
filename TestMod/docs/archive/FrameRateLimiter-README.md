@@ -1,5 +1,7 @@
 # Frame Rate Limiter
 
+> 历史说明：独立项目已于 2026-11-11 整合进 TestMod。当前使用方法见 [TestMod](../../README.md)，旧路径映射见[迁移说明](../FRAME-RATE-MIGRATION.md)。下文保留原独立版本的行为和路径。
+
 这是一个面向 Steam 版 Broforce 的 Unity Mod Manager 帧率限制插件。启用后通过 Unity 的 `Application.targetFrameRate` 限制本机渲染帧率，不修改游戏逻辑和联机协议。
 
 当前版本：`1.1.1`
@@ -69,7 +71,7 @@ Release\
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -SkipDeploy
 ```
 
-完整构建说明见 [docs/BUILD.md](docs/BUILD.md)。
+原独立版本构建说明见 [FrameRateLimiter-BUILD.md](FrameRateLimiter-BUILD.md)。
 
 ## 项目结构与文档
 

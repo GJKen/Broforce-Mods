@@ -9,7 +9,9 @@ namespace TestMod
         private static SettingsUiStyles _uiStyles;
         private static List<Resolution> _availableResolutions;
         private static Vector2 _resolutionScroll;
+        private static string _targetFrameRateText;
         private static readonly float[] SpeedPresets = { 0.1f, 0.25f, 0.5f, 1f, 2f, 4f };
+        private static readonly int[] FrameRatePresets = { 30, 60, 120, 144, 240, -1 };
 
         private static void DrawSettingsUI(UnityModManager.ModEntry modEntry)
         {
@@ -24,7 +26,7 @@ namespace TestMod
             DrawNavigation(modEntry, "enemies", chinese ? "敌人清理" : "Enemy Cleanup");
             DrawNavigation(modEntry, "camera", chinese ? "镜头跟随" : "Camera Follow");
             DrawNavigation(modEntry, "resolution", chinese ? "分辨率" : "Resolution");
-            DrawNavigation(modEntry, "fps", chinese ? "帧率显示" : "FPS Display");
+            DrawNavigation(modEntry, "fps", chinese ? "帧率设置" : "Frame Rate Settings");
             DrawNavigation(modEntry, "language", chinese ? "语言设置" : "Language");
             GUILayout.FlexibleSpace();
             GUILayout.EndVertical();
@@ -270,9 +272,9 @@ namespace TestMod
 
         private static void DrawFrameRateSettings(UnityModManager.ModEntry modEntry, bool chinese)
         {
-            DrawPageHeading(chinese ? "帧率显示" : "FPS Display",
-                chinese ? "在画面顶部正中显示当前渲染帧率。" :
-                "Show the current render frame rate at the top center of the screen.");
+            DrawPageHeading(chinese ? "帧率设置" : "Frame Rate Settings",
+                chinese ? "设置帧率显示、渲染帧率上限和垂直同步。" :
+                "Configure the FPS display, render frame rate limit and VSync.");
             BeginSettingsSection(chinese ? "显示与快捷键" : "Visibility & hotkey");
             var visible = GUILayout.Toggle(Settings.ShowFrameRate,
                 chinese ? "显示帧率" : "Show FPS", _uiStyles.Toggle);
@@ -284,6 +286,51 @@ namespace TestMod
             GUILayout.Label(chinese ? "点击按钮后按目标键绑定，Esc 取消，清除可取消绑定。与暂停、下一帧使用同一个键时，会清除旧绑定。" :
                 "Click to bind a key. Esc cancels; Clear removes the binding. Reusing a pause or step key clears its previous binding.",
                 _uiStyles.Help);
+            GUILayout.EndVertical();
+            GUILayout.Space(10f);
+
+            BeginSettingsSection(chinese ? "渲染帧率上限" : "Render frame rate limit");
+            var enabled = GUILayout.Toggle(Settings.EnableFrameRateLimit,
+                chinese ? "启用帧率控制" : "Enable frame rate control", _uiStyles.Toggle);
+            if (enabled != Settings.EnableFrameRateLimit) SetFrameRateLimitEnabled(enabled);
+            GUILayout.BeginHorizontal();
+            foreach (var frameRate in FrameRatePresets)
+            {
+                var label = frameRate == -1 ? (chinese ? "不限制" : "Unlimited") : frameRate.ToString();
+                if (GUILayout.Button(label, Settings.EnableFrameRateLimit && Settings.TargetFrameRate == frameRate ?
+                    _uiStyles.SelectedButton : _uiStyles.Button, GUILayout.ExpandWidth(true)))
+                    SetTargetFrameRate(frameRate);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(5f);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(chinese ? "自定义上限" : "Custom limit", _uiStyles.Label, GUILayout.Width(135f));
+            if (_targetFrameRateText == null)
+                _targetFrameRateText = (Settings.TargetFrameRate > 0 ? Settings.TargetFrameRate : 60).ToString();
+            var edited = GUILayout.TextField(_targetFrameRateText, 4, GUILayout.Width(90f));
+            if (edited != _targetFrameRateText)
+            {
+                _targetFrameRateText = edited;
+                int frameRate;
+                if (int.TryParse(edited, out frameRate) && frameRate >= 1 && frameRate <= 1000)
+                    SetTargetFrameRate(frameRate);
+            }
+            GUILayout.Label("FPS (1-1000)", _uiStyles.Label);
+            GUILayout.EndHorizontal();
+            GUILayout.Label(chinese ? "选择上限会立即启用控制。关闭后恢复接管前的帧率和 VSync 设置。" :
+                "Selecting a limit enables control immediately. Turning it off restores the previous FPS and VSync settings.",
+                _uiStyles.Help);
+            GUILayout.Space(5f);
+            var disableVSync = GUILayout.Toggle(Settings.DisableVSync,
+                chinese ? "帧率控制启用时关闭 VSync" : "Disable VSync while frame rate control is enabled", _uiStyles.Toggle);
+            if (disableVSync != Settings.DisableVSync) SetVSyncDisabled(disableVSync);
+            GUILayout.Label(chinese ? "VSync 可减少画面撕裂，但可能增加输入延迟，并覆盖自定义帧率上限。取消勾选后使用接管前的 VSync 设置。" :
+                "VSync reduces screen tearing, but can add input latency and override the FPS limit. Uncheck to use the original VSync setting.",
+                _uiStyles.Help);
+            if (IsFrameRateLimitEnabled)
+                GUILayout.Label((chinese ? "当前目标：" : "Active target: ") +
+                    (Application.targetFrameRate == -1 ? (chinese ? "不限制" : "Unlimited") :
+                        Application.targetFrameRate + " FPS") + "; VSync=" + QualitySettings.vSyncCount, _uiStyles.Label);
             GUILayout.EndVertical();
         }
 
@@ -395,6 +442,7 @@ namespace TestMod
         private static void ReleaseSettingsUI()
         {
             _availableResolutions = null;
+            _targetFrameRateText = null;
             if (_uiStyles == null) return;
             _uiStyles.Release();
             _uiStyles = null;

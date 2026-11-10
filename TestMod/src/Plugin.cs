@@ -9,6 +9,7 @@ namespace TestMod
     {
         private static TestModBehaviour _behaviour;
         private static GameSpeedController _speedController;
+        private static FrameRateController _frameRateController;
         private static Harmony _harmony;
         private static int _bindingTarget;
         private static int _ignoreHotkeysThroughFrame;
@@ -52,6 +53,39 @@ namespace TestMod
         {
             if (Settings == null) return;
             Settings.ShowFrameRate = visible;
+            SaveSettings(ModEntry);
+        }
+
+        public static bool IsFrameRateLimitEnabled
+        {
+            get { return _frameRateController != null && Settings.EnableFrameRateLimit; }
+        }
+
+        public static void SetFrameRateLimitEnabled(bool enabled)
+        {
+            if (Settings == null) return;
+            Settings.EnableFrameRateLimit = enabled;
+            if (_frameRateController != null) _frameRateController.ApplySettings();
+            SaveSettings(ModEntry);
+        }
+
+        public static void SetTargetFrameRate(int frameRate)
+        {
+            if (frameRate != -1 && (frameRate < 1 || frameRate > 1000))
+                throw new ArgumentOutOfRangeException("frameRate", "Use 1 to 1000, or -1 for unlimited.");
+            if (Settings == null) return;
+            Settings.EnableFrameRateLimit = true;
+            Settings.TargetFrameRate = frameRate;
+            if (frameRate > 0) _targetFrameRateText = frameRate.ToString();
+            if (_frameRateController != null) _frameRateController.ApplySettings();
+            SaveSettings(ModEntry);
+        }
+
+        public static void SetVSyncDisabled(bool disabled)
+        {
+            if (Settings == null) return;
+            Settings.DisableVSync = disabled;
+            if (_frameRateController != null) _frameRateController.ApplySettings();
             SaveSettings(ModEntry);
         }
 
@@ -259,12 +293,19 @@ namespace TestMod
                 _speedController = _behaviour.gameObject.AddComponent<GameSpeedController>();
                 _speedController.ApplySettings();
                 _behaviour.gameObject.AddComponent<FrameRateDisplay>();
+                _frameRateController = new FrameRateController();
+                _frameRateController.ApplySettings();
             }
         }
 
         private static void Stop()
         {
             _bindingTarget = 0;
+            if (_frameRateController != null)
+            {
+                _frameRateController.Release();
+                _frameRateController = null;
+            }
             if (_speedController != null)
             {
                 _speedController.ReleaseTime();
@@ -294,6 +335,9 @@ namespace TestMod
             Settings.GameSpeed = Mathf.Clamp(Settings.GameSpeed, 0.01f, 4f);
             Settings.FrameStepRepeatRate = Mathf.Clamp(Settings.FrameStepRepeatRate, 1, 60);
             Settings.CameraPlayerNumber = Mathf.Clamp(Settings.CameraPlayerNumber, 0, 3);
+            if (Settings.TargetFrameRate != -1)
+                Settings.TargetFrameRate = Settings.TargetFrameRate == 0 ? 60 :
+                    Mathf.Clamp(Settings.TargetFrameRate, 1, 1000);
             if (!Enum.IsDefined(typeof(KeyCode), Settings.PauseKey)) Settings.PauseKey = KeyCode.None;
             if (!Enum.IsDefined(typeof(KeyCode), Settings.FrameStepKey) ||
                 Settings.FrameStepKey == Settings.PauseKey) Settings.FrameStepKey = KeyCode.None;

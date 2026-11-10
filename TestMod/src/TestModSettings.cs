@@ -18,6 +18,9 @@ namespace TestMod
         public int CameraPlayerNumber;
         public bool ShowFrameRate;
         public KeyCode FrameRateToggleKey;
+        public bool EnableFrameRateLimit;
+        public int TargetFrameRate;
+        public bool DisableVSync;
 
         public TestModSettings()
         {
@@ -33,6 +36,9 @@ namespace TestMod
             CameraPlayerNumber = 0;
             ShowFrameRate = true;
             FrameRateToggleKey = KeyCode.None;
+            EnableFrameRateLimit = false;
+            TargetFrameRate = 60;
+            DisableVSync = true;
         }
     }
 }

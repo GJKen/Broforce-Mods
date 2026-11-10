@@ -12,6 +12,7 @@
 - 镜头跟随：联机时只把本机控制的第一名玩家纳入镜头跟随，并通过原版临时跟随目标保护未安装 Mod 或未启用此功能的队友画面；离线时可选择 P1～P4，所有本地玩家仍共用同一画面。角色死亡时恢复原生多人镜头，复活后重新聚焦。默认关闭。
 - 分辨率设置：列出当前显示器支持的不同宽高，一键切换并保存到游戏选项；保留当前窗口或全屏模式。
 - 帧率显示：默认在画面顶部正中显示 `FPS`，每半秒按真实时间更新，不受慢放和暂停影响；可在设置中开关或绑定显示／隐藏快捷键。
+- 帧率限制：在“帧率设置”页启用，可选 `30`、`60`、`120`、`144`、`240` FPS、自定义 `1～1000` FPS 或“不限制”；支持关闭 VSync，关闭控制或停用 Mod 时恢复原设置。限制功能默认关闭，预设目标为 `60` FPS。
 - 暂停与单帧推进：每次推进 `1/60` 秒的游戏时间，之后继续暂停，不受实际渲染帧率影响。
 - 暂停 / 恢复、下一帧可分别绑定键盘按键，默认均未绑定，不占用 F8；单按推进一帧，长按可连续推进。
 - 连续推进：长按下一帧快捷键 0.35 秒后开始，默认每秒 10 帧，可调为每秒 1～60 帧；可关闭长按连发。
@@ -36,7 +37,7 @@
 2. “敌人清理”页包含自动清理、手动清理和清理范围；关闭“启用自动击杀”后，自动和手动清敌都会禁用。
 3. “镜头跟随”页可启用角色跟随；联机自动选本机第一名玩家，离线可指定 P1～P4。
 4. “分辨率”页列出当前显示器支持的宽高，点击按钮立即切换并保存。
-5. “帧率显示”页可开关顶部正中的 FPS，并绑定显示／隐藏快捷键；默认显示，快捷键默认未绑定。显示状态和绑定都会保存。
+5. “帧率设置”页可开关顶部正中的 FPS、绑定显示／隐藏快捷键，并设置帧率上限和 VSync。默认显示 FPS、快捷键未绑定、帧率控制关闭；设置会保存。
 6. “语言设置”页可选择 `跟随系统`、`English` 或 `中文`，立即切换显示语言。
 7. 侧栏仅保留通用导航；播放状态、暂停时的推进帧数和“恢复播放”操作集中在“速度与动作帧”页。
 8. 记住上次使用的分类；功能设置会在 UMM 保存时持久化，下一次启动仍然保留。
@@ -67,6 +68,20 @@ TestMod.Plugin.SetGamePaused(false) // 按保存的倍率恢复
 TestMod.Plugin.SetGameSpeedEnabled(false) // 释放速度控制
 TestMod.Plugin.IsGamePaused
 TestMod.Plugin.SteppedFrames        // 当前 Mod 实例已完成的推进帧数
+```
+
+### 帧率设置
+
+在“帧率设置”页选择常用上限或输入 `1～1000`，会立即启用帧率控制；“不限制”使用 Unity 的无上限目标。帧率显示和帧率控制相互独立，隐藏数字后仍按设置限制帧率。
+
+VSync 可减少画面撕裂，但可能增加输入延迟并覆盖自定义上限。帧率控制默认关闭；启用时默认关闭 VSync，取消勾选则沿用接管前的 VSync 设置。关闭控制、禁用或卸载 TestMod 都会恢复接管前的帧率与 VSync。
+
+```csharp
+TestMod.Plugin.SetTargetFrameRate(120)       // 启用控制并设为 120 FPS
+TestMod.Plugin.SetTargetFrameRate(-1)        // 不限制帧率
+TestMod.Plugin.SetVSyncDisabled(false)       // 使用接管前的 VSync 设置
+TestMod.Plugin.SetFrameRateLimitEnabled(false) // 关闭控制并恢复原设置
+TestMod.Plugin.SetFrameRateVisible(false)    // 仅隐藏帧率数字
 ```
 
 ### 镜头跟随
@@ -169,6 +184,8 @@ D:\Study\C#\Broforce-Mods\TestMod\Release\UMM\Mods\TestMod
 使用 `powershell -File .\TestMod\BuildAndDeploy.ps1` 编译并部署到本机及 `5700G` 的 `UMM\Mods\TestMod`；加 `-SkipDeploy` 只编译。脚本读取本地 `LocalBroforcePath.props` 的依赖路径，使用 .NET 3.5 编译器。
 
 问题、实现和验收记录见[问题记录索引](issues/README.md)。
+
+原 FrameRateLimiter 功能已整合进“帧率设置”，只需安装 TestMod。历史材料、旧路径映射和独立项目清理状态见[帧率限制迁移说明](docs/FRAME-RATE-MIGRATION.md)。
 
 - 修改源码后需要重新编译 `TestMod.dll`，并覆盖本机或目标测试端 UMM 目录中的 DLL。
 - DLL 更新后需要重启游戏，正在运行的 Unity 进程不会自动加载新程序集。

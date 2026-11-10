@@ -1,5 +1,7 @@
 # Frame Rate Limiter
 
+> 历史说明：独立项目已于 2026-11-11 整合进 TestMod。当前入口见 [TestMod](../../README.md)，路径映射见[迁移说明](../FRAME-RATE-MIGRATION.md)。下文保留原英文说明。
+
 Frame Rate Limiter is a Unity Mod Manager plugin for the Steam version of Broforce. It limits the local rendering frame rate through Unity's `Application.targetFrameRate` without changing gameplay logic or network protocols.
 
 Current version: `1.1.1`
@@ -69,7 +71,7 @@ To create the Release package without deploying to the local UMM profile:
 powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -SkipDeploy
 ```
 
-See [docs/BUILD.md](docs/BUILD.md) for the complete build and deployment details.
+原独立版本构建部署说明见 [FrameRateLimiter-BUILD.md](FrameRateLimiter-BUILD.md)。
 
 ## Project Structure and Documentation
 
