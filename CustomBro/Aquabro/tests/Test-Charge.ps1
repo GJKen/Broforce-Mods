@@ -19,6 +19,7 @@ function Read-Method([string]$signature) {
 $methods = @(
     Read-Method 'private void SetupTridentPrefabs()'
     Read-Method 'protected override void RunFiring()'
+    Read-Method 'private bool CanShowTridentPose()'
     Read-Method 'private void FireTrident()'
     Read-Method 'private static void ApplyTridentVisual('
     Read-Method 'private static int GetAnimationFrame('
@@ -98,6 +99,7 @@ class Mathf {
  public static int Clamp(int x, int a, int b) { return Math.Max(a, Math.Min(b, x)); }
 }
 enum HeroType { Predabro }
+enum ActionState { Idle, Running, Jumping, ClimbingLadder, Hanging }
 class MonoBehaviour { }
 class Mook {
     public bool Throwable = true;
@@ -205,7 +207,9 @@ class AquabroProbe : SimulationBase {
     public static int DamageCalls;
     public bool isOnHelicopter, throwingHeldObject, hasBeenCoverInAcid, Incapacitated;
     public bool usingSpecial, usingPockettedSpecial, usingSpecial2, usingSpecial3, usingSpecial4;
-    public bool PoseAllowed = true, GunVisible;
+    public bool GunVisible, WallDrag, wallClimbing, ledgeGrapple, chimneyFlip;
+    public int rollingFrames;
+    public ActionState actionState;
     public int AtlasWrites;
     public object impaledByTransform, strungUpBy, inseminatorUnit;
     public GestureElement.Gestures currentGesture;
@@ -213,7 +217,6 @@ class AquabroProbe : SimulationBase {
     public CustomInfo Info = new CustomInfo();
     public AquabroProbe() { SetupTridentPrefabs(); }
     bool IsIncapacitated() { return Incapacitated; }
-    bool CanShowTridentPose() { return PoseAllowed; }
     void ActivateGun() { GunVisible = true; }
     void DeactivateGun() { GunVisible = false; }
     void SetGunPosition(float x, float y) { }
@@ -329,7 +332,13 @@ class ChargeTests {
             Check(ProjectileController.Count == count + 1, "连续投掷失败");
             for (int i = 0; i < 4; i++) Interrupted(i);
             MeleeThrow();
-            var terrain = new AquabroProbe { PoseAllowed = false };
+            var ledge = new AquabroProbe { actionState = ActionState.Jumping, ledgeGrapple = true };
+            ledge.Tick(true, 0.5f);
+            Check(ledge.GunVisible && ledge.chargeTime > 0f, "翻上平台边缘蓄力时双臂被隐藏");
+            count = ProjectileController.Count;
+            ledge.Tick(false, 0.01f);
+            Check(ledge.GunVisible && ProjectileController.Count == count + 1, "翻上平台边缘松键投掷时双臂或攻击丢失");
+            var terrain = new AquabroProbe { WallDrag = true, actionState = ActionState.Jumping };
             terrain.Tick(true, 0.5f);
             Check(!terrain.GunVisible && terrain.AtlasWrites == 0, "地形蓄力仍显示旧武器格");
             count = ProjectileController.Count;

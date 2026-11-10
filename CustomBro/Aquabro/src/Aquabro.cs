@@ -851,7 +851,7 @@ namespace AquabroMod
                 !usingSpecial3 && !usingSpecial4 &&
                 currentGesture == GestureElement.Gestures.None &&
                 !WallDrag && !wallClimbing &&
-                !ledgeGrapple && !chimneyFlip &&
+                !chimneyFlip &&
                 (actionState == ActionState.Idle || actionState == ActionState.Running ||
                  actionState == ActionState.Jumping || actionState == ActionState.ClimbingLadder);
         }
@@ -892,7 +892,8 @@ namespace AquabroMod
             {
                 // 滑索在游戏中仍是 Jumping，必须先识别附着状态，再选择绳索蓄力稿。
                 bool onZipline = attachedToZipline != null;
-                bool running = !onZipline && actionState == ActionState.Running && !ducking;
+                // 翻上平台边缘时基类仍为 Jumping，但实际播放分层跑步姿态。
+                bool running = !onZipline && (actionState == ActionState.Running || ledgeGrapple) && !ducking;
                 bool jumping = !onZipline && actionState == ActionState.Jumping;
                 bool climbingLadder = !onZipline && actionState == ActionState.ClimbingLadder;
                 int attackFrame;
