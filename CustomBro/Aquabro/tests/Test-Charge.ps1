@@ -53,7 +53,10 @@ namespace UnityEngine {
   public static void Destroy(object target) { ((GameObject)target).Destroyed=true; }
  }
 }
-class Vector3 { public Vector3(float x,float y,float z) { } }
+class Vector3 {
+ public float x,y,z;
+ public Vector3(float x,float y,float z) { this.x=x; this.y=y; this.z=z; }
+}
 class Quaternion { public static readonly Quaternion identity=new Quaternion(); }
 class GameObject {
  public bool Destroyed; object component;
@@ -126,8 +129,10 @@ class PredabroSpear : BrocheteMachete { }
 class SpriteSM {
     public class Renderer { public object material; }
     public Renderer meshRender = new Renderer();
+    public Vector3 offset = new Vector3(-10.5f,0f,10.82f);
     public float Width, Height, PixelWidth, PixelHeight, CellX, CellY;
     public int TextureRefreshes;
+    public void SetOffset(Vector3 value) { offset=value; }
     public void SetPixelDimensions(int x, int y) { PixelWidth = x; PixelHeight = y; }
     public void SetSize(float x, float y) { Width = x; Height = y; }
     public void SetLowerLeftPixel(float x, float y) { CellX = x; CellY = y; }
@@ -251,6 +256,8 @@ class ChargeTests {
         Check(string.Join(",",Networking.Networking.Events.ToArray())=="Instantiate,Fire,SetSeed", "公共路径调用顺序错误");
         Check(Networking.Networking.Calls==0, "角色另发了独立生成 RPC");
         Check(ProjectileController.Last.Sprite.meshRender.material.ToString()=="Aquabro/trident.png", "公共路径未应用自定义贴图");
+        Check(Near(ProjectileController.Last.Sprite.offset.z,-0.6f), "普通或蓄力三叉戟仍沿用原版后层深度");
+        Check(Near(HeroController.Prefab.projectile.Sprite.offset.z,10.82f) && Near(HeroController.Prefab.chargedSpearProectilePrefab.Sprite.offset.z,10.82f), "修改了共享长矛 prefab 的显示深度");
         Check(Near(p.chargeTime, 0f) && Near(p.fireDelay, 0.4f), "发射后未重置");
         p.Tick(false, 0.02f);
         Check(ProjectileController.Count == 1, "松键重复发射");
@@ -336,6 +343,7 @@ class ChargeTests {
             var remoteSpear = new PredabroSpear();
             remoteSpear.Fire(22f,33f,400f,0f,0f,2,remote); remoteSpear.SetSeed(4242);
             Check(object.ReferenceEquals(remoteSpear.firedBy,remote) && remoteSpear.Sprite.meshRender.material.ToString()=="Aquabro/trident.png", "原生远端 Fire 未应用对应外观");
+            Check(Near(remoteSpear.Sprite.offset.z,-0.6f), "远端三叉戟未使用前层深度");
             remote.Tick(true,1.4f); remote.Tick(false,.01f);
             Check(ProjectileController.Count==count, "接收端输入重放重复生成长矛");
             count = ProjectileController.Count;
@@ -346,6 +354,7 @@ class ChargeTests {
             var spear = new PredabroSpear();
             AquabroProbe.Visual(spear, p);
             Check(!spear.Child.enabled, "原版前景武器未隐藏");
+            Check(Near(spear.Sprite.offset.x,-10.5f) && Near(spear.Sprite.offset.y,0f) && Near(spear.Sprite.offset.z,-0.6f), "修正显示深度时改变了三叉戟平面锚点");
             spear.firedBy = p;
             Check(!AquabroProbe.Trail(spear), "海王仍生成原版长矛残影");
             Check((string)spear.Sprite.meshRender.material == "Aquabro/trident.png", "未应用海王武器素材");
@@ -354,9 +363,11 @@ class ChargeTests {
             AquabroProbe.Visual(otherOwnerSpear, new MonoBehaviour());
             Check(otherOwnerSpear.Child.enabled && AquabroProbe.Trail(otherOwnerSpear), "影响了其他角色长矛前景或残影");
             Check(otherOwnerSpear.Sprite.meshRender.material == null, "修改了其他角色的长矛");
+            Check(Near(otherOwnerSpear.Sprite.offset.z,10.82f), "修改了其他角色长矛的显示深度");
             var otherProjectile = new Projectile();
             AquabroProbe.Visual(otherProjectile, p);
             Check(otherProjectile.Sprite.meshRender.material == null, "修改了其他类型的投射物");
+            Check(Near(otherProjectile.Sprite.offset.z,10.82f), "修改了其他类型投射物的显示深度");
             Console.WriteLine("PASS: 水花帧时序、蓄力/连续投掷/打断、公共生成入口与原生 Fire/SetSeed 顺序、远端不自行开火、外观和零时间步；近战丢兵/前刺/15-120 FPS。传输和命中权威另由双端实机与水爆测试验证。");
             return 0;
         } catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }

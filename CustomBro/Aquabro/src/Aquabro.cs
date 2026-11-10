@@ -195,6 +195,9 @@ namespace AquabroMod
             spearSprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, "trident.png");
             spearSprite.SetPixelDimensions(32, 32);
             spearSprite.SetSize(32f, 32f);
+            // The full trident replaces both native spear layers. Use the native
+            // foreground depth instead of inheriting the rear sprite's 10.82 offset.
+            spearSprite.SetOffset(new Vector3(spearSprite.offset.x, spearSprite.offset.y, -0.6f));
             spearSprite.SetLowerLeftPixel(0f, 32f);
             spearSprite.RecalcTexture();
             spearSprite.CalcUVs();
