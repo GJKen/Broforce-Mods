@@ -7,7 +7,7 @@ using BroMakerLib;
 
 namespace AquabroMod
 {
-    // Preview selection is per local player and survives respawn.
+    // Preview selection is per player slot and survives respawn.
     public partial class Aquabro
     {
         private static readonly int[] SkillSelections = new int[4];
@@ -167,11 +167,12 @@ namespace AquabroMod
         {
             if (IsMine || skill < 0 || skill >= SkillNames.Length) return;
             SkillSelections[Mathf.Clamp(playerNum, 0, 3)] = skill;
+            RefreshSkillHud();
         }
 
         private void RefreshSkillHud()
         {
-            if (!IsMine || playerNum < 0 || playerNum >= 4 || HeroController.players == null ||
+            if (playerNum < 0 || playerNum >= 4 || HeroController.players == null ||
                 playerNum >= HeroController.players.Length) return;
             Player player = HeroController.players[playerNum];
             if (player == null || player.character != this || player.hud == null || player.hud.grenadeIcons == null) return;
