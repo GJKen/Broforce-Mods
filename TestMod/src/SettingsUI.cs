@@ -24,6 +24,7 @@ namespace TestMod
             DrawNavigation(modEntry, "enemies", chinese ? "敌人清理" : "Enemy Cleanup");
             DrawNavigation(modEntry, "camera", chinese ? "镜头跟随" : "Camera Follow");
             DrawNavigation(modEntry, "resolution", chinese ? "分辨率" : "Resolution");
+            DrawNavigation(modEntry, "fps", chinese ? "帧率显示" : "FPS Display");
             DrawNavigation(modEntry, "language", chinese ? "语言设置" : "Language");
             GUILayout.FlexibleSpace();
             GUILayout.EndVertical();
@@ -34,6 +35,7 @@ namespace TestMod
                 case "enemies": DrawEnemySettings(chinese); break;
                 case "camera": DrawCameraSettings(modEntry, chinese); break;
                 case "resolution": DrawResolutionSettings(chinese); break;
+                case "fps": DrawFrameRateSettings(modEntry, chinese); break;
                 case "language": DrawLanguageSettings(modEntry, chinese); break;
                 default: DrawGameSpeed(modEntry, chinese); break;
             }
@@ -266,6 +268,25 @@ namespace TestMod
             GUILayout.EndVertical();
         }
 
+        private static void DrawFrameRateSettings(UnityModManager.ModEntry modEntry, bool chinese)
+        {
+            DrawPageHeading(chinese ? "帧率显示" : "FPS Display",
+                chinese ? "在画面顶部正中显示当前渲染帧率。" :
+                "Show the current render frame rate at the top center of the screen.");
+            BeginSettingsSection(chinese ? "显示与快捷键" : "Visibility & hotkey");
+            var visible = GUILayout.Toggle(Settings.ShowFrameRate,
+                chinese ? "显示帧率" : "Show FPS", _uiStyles.Toggle);
+            if (visible != Settings.ShowFrameRate) SetFrameRateVisible(visible);
+            GUILayout.Label(chinese ? "每半秒更新一次，慢放和暂停时仍按真实时间计算。" :
+                "Updates every half second using real time, including during slow motion and pause.", _uiStyles.Help);
+            GUILayout.Space(8f);
+            DrawHotkey(modEntry, chinese, 3, chinese ? "显示 / 隐藏帧率" : "Show / hide FPS", Settings.FrameRateToggleKey);
+            GUILayout.Label(chinese ? "点击按钮后按目标键绑定，Esc 取消，清除可取消绑定。与暂停、下一帧使用同一个键时，会清除旧绑定。" :
+                "Click to bind a key. Esc cancels; Clear removes the binding. Reusing a pause or step key clears its previous binding.",
+                _uiStyles.Help);
+            GUILayout.EndVertical();
+        }
+
         private static void DrawResolutionSettings(bool chinese)
         {
             _resolutionScroll = GUILayout.BeginScrollView(_resolutionScroll, GUILayout.ExpandWidth(true),
@@ -339,8 +360,7 @@ namespace TestMod
                 GUILayout.ExpandWidth(true))) _bindingTarget = listening ? 0 : target;
             if (GUILayout.Button(chinese ? "清除" : "Clear", _uiStyles.Button, GUILayout.Width(60f)))
             {
-                if (target == 1) Settings.PauseKey = KeyCode.None;
-                else Settings.FrameStepKey = KeyCode.None;
+                SetHotkey(target, KeyCode.None);
                 _bindingTarget = 0;
                 SaveSettings(modEntry);
             }
@@ -351,21 +371,25 @@ namespace TestMod
                 currentEvent.keyCode == KeyCode.None) return;
             if (currentEvent.keyCode != KeyCode.Escape)
             {
-                if (target == 1)
-                {
-                    Settings.PauseKey = currentEvent.keyCode;
-                    if (Settings.FrameStepKey == Settings.PauseKey) Settings.FrameStepKey = KeyCode.None;
-                }
-                else
-                {
-                    Settings.FrameStepKey = currentEvent.keyCode;
-                    if (Settings.PauseKey == Settings.FrameStepKey) Settings.PauseKey = KeyCode.None;
-                }
+                SetHotkey(target, currentEvent.keyCode);
                 SaveSettings(modEntry);
             }
             _bindingTarget = 0;
             _ignoreHotkeysThroughFrame = Time.frameCount + 1;
             currentEvent.Use();
+        }
+
+        private static void SetHotkey(int target, KeyCode key)
+        {
+            if (key != KeyCode.None)
+            {
+                if (Settings.PauseKey == key) Settings.PauseKey = KeyCode.None;
+                if (Settings.FrameStepKey == key) Settings.FrameStepKey = KeyCode.None;
+                if (Settings.FrameRateToggleKey == key) Settings.FrameRateToggleKey = KeyCode.None;
+            }
+            if (target == 1) Settings.PauseKey = key;
+            else if (target == 2) Settings.FrameStepKey = key;
+            else Settings.FrameRateToggleKey = key;
         }
 
         private static void ReleaseSettingsUI()

@@ -43,6 +43,18 @@ namespace TestMod
             get { return _speedController == null ? 0 : _speedController.SteppedFrames; }
         }
 
+        public static bool IsFrameRateVisible
+        {
+            get { return _behaviour != null && Settings.ShowFrameRate; }
+        }
+
+        public static void SetFrameRateVisible(bool visible)
+        {
+            if (Settings == null) return;
+            Settings.ShowFrameRate = visible;
+            SaveSettings(ModEntry);
+        }
+
         public static bool IsFocusedCameraEnabled
         {
             get { return Settings != null && Settings.EnableFocusedCamera; }
@@ -246,6 +258,7 @@ namespace TestMod
                 _harmony.PatchAll(typeof(Plugin).Assembly);
                 _speedController = _behaviour.gameObject.AddComponent<GameSpeedController>();
                 _speedController.ApplySettings();
+                _behaviour.gameObject.AddComponent<FrameRateDisplay>();
             }
         }
 
@@ -274,7 +287,7 @@ namespace TestMod
         {
             if (Settings.SettingsPanel != "speed" && Settings.SettingsPanel != "enemies" &&
                 Settings.SettingsPanel != "camera" && Settings.SettingsPanel != "resolution" &&
-                Settings.SettingsPanel != "language")
+                Settings.SettingsPanel != "fps" && Settings.SettingsPanel != "language")
                 Settings.SettingsPanel = "speed";
             if (float.IsNaN(Settings.GameSpeed) || float.IsInfinity(Settings.GameSpeed))
                 Settings.GameSpeed = 1f;
@@ -284,6 +297,9 @@ namespace TestMod
             if (!Enum.IsDefined(typeof(KeyCode), Settings.PauseKey)) Settings.PauseKey = KeyCode.None;
             if (!Enum.IsDefined(typeof(KeyCode), Settings.FrameStepKey) ||
                 Settings.FrameStepKey == Settings.PauseKey) Settings.FrameStepKey = KeyCode.None;
+            if (!Enum.IsDefined(typeof(KeyCode), Settings.FrameRateToggleKey) ||
+                Settings.FrameRateToggleKey == Settings.PauseKey ||
+                Settings.FrameRateToggleKey == Settings.FrameStepKey) Settings.FrameRateToggleKey = KeyCode.None;
             if (!string.Equals(Settings.Language, "en", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(Settings.Language, "zh", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(Settings.Language, "system", StringComparison.OrdinalIgnoreCase))

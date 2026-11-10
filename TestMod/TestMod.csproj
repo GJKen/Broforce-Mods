@@ -49,6 +49,7 @@
     <Compile Include="src\TestModBehaviour.cs" />
     <Compile Include="src\TestModSettings.cs" />
     <Compile Include="src\GameSpeedController.cs" />
+    <Compile Include="src\FrameRateDisplay.cs" />
     <Compile Include="src\SettingsUI.cs" />
     <Compile Include="src\CameraFollowPatch.cs" />
     <Compile Include="src\CameraCompatibility.cs" />
