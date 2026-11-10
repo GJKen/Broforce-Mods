@@ -5,3 +5,6 @@
 	path = RocketLibMultiplayer
 	url = https://github.com/GJKen/RocketLib.git
 	branch = codex/rocketlib-network-phase1
+[submodule "SwapBrosMultiplayer"]
+	path = SwapBrosMultiplayer
+	url = https://github.com/GJKen/SwapBros.git
