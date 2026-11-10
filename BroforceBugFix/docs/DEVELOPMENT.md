@@ -15,7 +15,7 @@
 - `src/DoodadCrateReentryFix.cs`：`DoodadCrate.ActuallyCollapse` 单实例同步重入保护。
 - `src/LobbyJoinStreamFix.cs`：主菜单加入新房间时，清理上次未完成地图加载遗留的暂停 RPC 流。
 - `BuildAndDeploy.ps1`：使用 .NET Framework 3.5 编译器构建，并更新本机、内网测试端和项目安装包。
-- `issues/`：保存原始现象、日志结论、源码证据、修复边界和复测结果。
+- `issues/`：保存问题记录、结论、修复边界和复测入口；运行证据统一放在 `docs/evidence/`。
 
 插件使用独立 Harmony ID：
 

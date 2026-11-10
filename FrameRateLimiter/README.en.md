@@ -86,4 +86,4 @@ See [docs/BUILD.md](docs/BUILD.md) for the complete build and deployment details
 | `README.md` | Chinese documentation |
 | `README.en.md` | English documentation |
 | `docs/BUILD.md` | Build, deployment, and Release package structure |
-| `issues/` | Historical issues, test evidence, and acceptance records |
+| `issues/` | Issue and fix records; the original request transcript is under `docs/` |

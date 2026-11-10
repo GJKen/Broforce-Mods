@@ -61,7 +61,8 @@ modinfo.json                 UMM 清单模板
 LocalBroforcePath.props.example
                              本机路径配置示例
 docs/DEVELOPMENT.md          开发、逆向、测试和维护约束
-issues/                      问题证据、修复说明和验收记录
+issues/                      问题记录、修复说明和验收入口
+docs/evidence/               运行验证附件和截图
 ```
 
 - [开发与测试文档](docs/DEVELOPMENT.md)

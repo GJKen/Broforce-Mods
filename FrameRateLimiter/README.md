@@ -86,4 +86,4 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -SkipDeploy
 | `README.md` | 中文说明文档 |
 | `README.en.md` | 英文说明文档 |
 | `docs/BUILD.md` | 构建、部署和 Release 包结构说明 |
-| `issues/` | 历史问题、测试证据和验收记录 |
+| `issues/` | 问题与修复记录；原始需求对话保存在 `docs/` |

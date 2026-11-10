@@ -22,7 +22,7 @@
 
 当前构建：`buildHash=352369deeb227e77255856bc8e82abdd3a884a5fb5cafd1442df63cce8667ffd`；DLL SHA-256：`24FA715356F354575D4BCFF7EA01C6EB7D0546217E3E8126065EF6A9CCA384C7`。
 
-证据位于 [diagnostics/2026-11-09-workshop-swap](diagnostics/2026-11-09-workshop-swap/)，保留 `before-results.json` 和 `after-results.json` 中的修改前复现及修改后双端快照；临时脚本和日志副本已按用户要求删除。当前为双端 MCP 回归通过，等待用户按原操作复测；不据此归因于最近精简，也未覆盖其它地图或长期稳定性。
+证据位于 [docs/evidence/2026-11-09-workshop-swap](../docs/evidence/2026-11-09-workshop-swap/)，保留 `before-results.json` 和 `after-results.json` 中的修改前复现及修改后双端快照；临时脚本和日志副本已按用户要求删除。当前为双端 MCP 回归通过，等待用户按原操作复测；不据此归因于最近精简，也未覆盖其它地图或长期稳定性。
 
 ## 与最近精简的关系
 

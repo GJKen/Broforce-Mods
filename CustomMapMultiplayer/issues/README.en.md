@@ -2,7 +2,7 @@
 
 > [Chinese](README.md)
 
-This directory contains current issues, log evidence, experimental changes, and acceptance results. Historical records that have completed their corresponding test scope are moved to `archive/`. Archived documents may contain reverted code, old parameters, or plans that were incomplete at the time. Current usage and valid implementation are defined by the project root `README.en.md` and `docs/DEVELOPMENT.md`.
+This directory contains issue records, conclusions, boundaries, and acceptance entry points. Runtime evidence is kept under `docs/evidence/`. Historical records that have completed their corresponding test scope are moved to `archive/`. Archived documents may contain reverted code, old parameters, or plans that were incomplete at the time. Current usage and valid implementation are defined by the project root `README.en.md` and `docs/DEVELOPMENT.md`.
 
 ## Current Status Summary
 
@@ -14,6 +14,7 @@ This directory contains current issues, log evidence, experimental changes, and 
 
 | Document | Status | Reading notes |
 | --- | --- | --- |
+| [Official lobby join blocked after disabling the multiplayer Mod](../../BroforceBugFix/issues/ISSUES-2026-11-09-未完成地图加载后加入官方房卡在主菜单.md) | Localized and passed two-sided retest after the BroforceBugFix repair | See the BroforceBugFix record for the permanent fix, reproduction, and two-sided verification; the initial incident record and raw screenshot remain local. |
 | [Workshop 加载中重复加入导致换人与入图失败](ISSUES-2026-11-09-Workshop加载中重复加入导致换人与入图失败.md) | 已通过双端 MCP 回归，待用户复测 | 加载中重复加入同一房间保留首次请求；修复后双方正常入图并切换 Cobro/Bronobi。 |
 | [联机加入提示按本端旁观状态显示](ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md) | 已通过官方图与 Workshop 双端 MCP 回归 | 按本端参与槽位判断，只有旁观端显示加入提示，重新加入后隐藏；官方图加入方保持禁用 Mod。 |
 | [Conservative code cleanup](ISSUES-2026-11-08-多人联机分阶段保守精简.md) | Eight stages removed 221 source lines; net reduction is 211 after the idle synchronization fix. Favorite-map testing passed. | Cleanup and related records are consolidated into one local commit; the synchronization fix and deployment script remain separate. Backup branch and validation limits are recorded; not pushed. |

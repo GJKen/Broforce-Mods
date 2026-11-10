@@ -63,7 +63,8 @@ modinfo.json                 UMM manifest template
 LocalBroforcePath.props.example
                              Local path configuration example
 docs/DEVELOPMENT.md          Development, reverse-engineering, testing, and maintenance constraints
-issues/                      Issue evidence, fix descriptions, and acceptance records
+issues/                      Issue records, fix descriptions, and acceptance entry points
+docs/evidence/               Runtime validation attachments and screenshots
 ```
 
 - [Development and testing documentation](docs/DEVELOPMENT.md)

@@ -170,7 +170,8 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
 | `Release/UMM/Mods/CustomMapMultiplayer/Info.json` | UMM 清单和构建元数据源文件 |
 | `LocalBroforcePath.props.example` | 本机路径配置示例 |
 | `docs/DEVELOPMENT.md` | [开发文档索引](docs/DEVELOPMENT.md) |
-| `issues/` | [历史问题、测试证据和验收记录](issues/README.md) |
+| `issues/` | [问题记录、结论和验收入口](issues/README.md) |
+| `docs/evidence/` | 当前问题的运行验证附件和截图 |
 | `docs/CHAT.md` | 联机聊天输入、viewport 和历史消息显示 |
 | `umm-settings-preview.html` | UMM 设置界面预览 |
 

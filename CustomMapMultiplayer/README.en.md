@@ -170,7 +170,8 @@ The standard script reads and keeps `Release\UMM\Mods\CustomMapMultiplayer\Info.
 | `LocalBroforcePath.props.example` | Local path configuration example |
 | `docs/DEVELOPMENT.md` | [Development documentation index](docs/DEVELOPMENT.md) |
 | `docs/CHAT.md` | Online chat input, viewport, and history display |
-| `issues/` | [Historical issues, test evidence, and acceptance records](issues/README.md) |
+| `issues/` | [Issue records, conclusions, and acceptance entry points](issues/README.md) |
+| `docs/evidence/` | Runtime validation attachments and screenshots for current issues |
 | `umm-settings-preview.html` | UMM settings interface preview |
 
 ### Other Documentation
