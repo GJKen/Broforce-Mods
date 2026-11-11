@@ -43,3 +43,4 @@ $waveRspPath = Join-Path $waveOutput 'compile.rsp'
 & $CompilerPath /noconfig /nologo ('@' + $waveRspPath) 2>&1 | Tee-Object -FilePath (Join-Path $waveOutput 'mono35-build.log')
 if ($LASTEXITCODE -ne 0) { throw 'Aquabro compilation failed' }
 Get-Item -LiteralPath (Join-Path $waveOutput 'Aquabro.dll') | Select-Object FullName,Length,LastWriteTime
+& (Join-Path $PSScriptRoot 'Package.ps1') -AssemblyPath (Join-Path $waveOutput 'Aquabro.dll')

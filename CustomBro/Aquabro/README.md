@@ -157,11 +157,14 @@
 
 ## 构建、关闭游戏与部署
 
+最终安装包统一位于 [Release](Release/README.md)：`Release/Aquabro.zip`，解压后的安装目录为 `Release/UMM/BroMaker_Storage/Aquabro/`，包含角色 DLL、JSON 和全部 PNG。`obj/` 是 MSBuild 中间文件，`bin/` 是编译／测试工作目录，均不用于安装。
+
 首次复制 `LocalBuild.example.json` 为 `LocalBuild.json`，设置 Aseprite、依赖和部署目录，再执行：
 
 ```powershell
 ./BuildAssets.ps1 -SkipDeploy  # 仅构建
 ./BuildAssets.ps1             # 构建并部署
+./tools/Package.ps1           # 仅将现有 _Mod 成品重新打包
 ```
 
 部署前终止 Broforce 并确认退出；DLL、PNG、图集和命中蒙版必须配套更新，脚本同时复制角色 JSON。必要实机验证和清理结束后默认关闭游戏。只改文档无需构建或启动游戏。

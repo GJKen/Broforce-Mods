@@ -6,6 +6,7 @@ LocalBroforcePath.props
 .layer-probe/
 bin/
 obj/
+/Release/UMM/
 backups/
 aseprite-build.log
 .debug-*.png

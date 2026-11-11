@@ -32,18 +32,18 @@
     <AquabroReferencesPath Condition="'$(AquabroReferencesPath)' == ''">$(MSBuildProjectDirectory)\.aquabro-buildrefs</AquabroReferencesPath>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="0Harmony"><HintPath>$(AquabroReferencesPath)\0Harmony.dll</HintPath></Reference>
-    <Reference Include="Assembly-CSharp"><HintPath>$(AquabroReferencesPath)\Assembly-CSharp.dll</HintPath></Reference>
-    <Reference Include="BroMakerLib"><HintPath>$(AquabroReferencesPath)\BroMakerLib.dll</HintPath><Private>True</Private></Reference>
-    <Reference Include="RocketLib"><HintPath>$(AquabroReferencesPath)\RocketLib.dll</HintPath><Private>True</Private></Reference>
-    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.IMGUIModule.dll</HintPath></Reference>
-    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.TextRenderingModule.dll</HintPath></Reference>
+    <Reference Include="0Harmony"><HintPath>$(AquabroReferencesPath)\0Harmony.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="Assembly-CSharp"><HintPath>$(AquabroReferencesPath)\Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="BroMakerLib"><HintPath>$(AquabroReferencesPath)\BroMakerLib.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="RocketLib"><HintPath>$(AquabroReferencesPath)\RocketLib.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.IMGUIModule.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.TextRenderingModule.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="UnityEngine"><HintPath>$(AquabroReferencesPath)\UnityEngine.dll</HintPath></Reference>
-    <Reference Include="UnityEngine.CoreModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.CoreModule.dll</HintPath></Reference>
-    <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.ImageConversionModule.dll</HintPath></Reference>
-    <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.PhysicsModule.dll</HintPath></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(AquabroReferencesPath)\UnityEngine.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.CoreModule.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.ImageConversionModule.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(AquabroReferencesPath)\UnityEngine.PhysicsModule.dll</HintPath><Private>False</Private></Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\Aquabro.cs" />
@@ -65,4 +65,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup><ModContentFolder>_Mod</ModContentFolder></PropertyGroup>
+  <Target Name="PackageAquabro" AfterTargets="Build">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\Package.ps1&quot; -AssemblyPath &quot;$(TargetPath)&quot;" />
+  </Target>
 </Project>

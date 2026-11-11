@@ -130,6 +130,8 @@ try {
         Copy-Item -LiteralPath (Join-Path $tempRoot $name) -Destination (Join-Path $outputRoot $name) -Force
     }
 
+    & (Join-Path $projectRoot 'tools\Package.ps1')
+
     foreach ($deployRoot in $(if ($SkipDeploy) { @() } else { $deployRoots })) {
         if (Test-Path -LiteralPath $deployRoot) {
             foreach ($name in @('Aquabro.json','Aquabro.dll','sprite.png','gunSprite.png','trident.png','avatar.png','special.png','special-tidal-wave.png','special-shark-hunt.png','special-maelstrom.png','special-abyssal-spring.png','water-hit-small.png','water-rocket-explosion.png','skill-tidal-wave.png','skill-shark-hunt.png','skill-shark-hunt-body.png','skill-shark-hunt-water-back.png','skill-shark-hunt-water-front.png','skill-maelstrom.png','skill-abyssal-spring.png','skill-tidal-wave-acid-1.png','skill-tidal-wave-acid-2.png','skill-maelstrom-acid-1.png','skill-maelstrom-acid-2.png','skill-abyssal-spring-acid-1.png','skill-abyssal-spring-acid-2.png')) {
