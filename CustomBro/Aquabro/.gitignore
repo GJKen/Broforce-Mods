@@ -28,6 +28,7 @@ archive/skill-regression/previews/
 *.exe
 *.pdb
 *.zip
+!/Release/Aquabro.zip
 *.7z
 
 # 仅保留本地的原版动作、水特效参考和废弃分稿目录。
