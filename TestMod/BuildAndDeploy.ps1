@@ -40,7 +40,7 @@ $sourceFiles = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter
     Select-Object -ExpandProperty FullName
 & $compiler $arguments $sourceFiles
 if ($LASTEXITCODE -ne 0) { throw "C# compilation failed: $LASTEXITCODE" }
-Copy-Item -LiteralPath (Join-Path $projectRoot 'Info.json') -Destination (Join-Path $packagePath 'Info.json') -Force
+& (Join-Path $projectRoot 'Package.ps1') -AssemblyPath $outputPath
 
 if (-not $SkipDeploy) {
     $localModPath = Join-Path (Split-Path -Parent $ummPath) 'Mods\TestMod'

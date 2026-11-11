@@ -9,6 +9,9 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <PackageModPath>$(MSBuildProjectDirectory)\Release\UMM\Mods\TestMod</PackageModPath>
     <OutputPath>$(PackageModPath)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <Import Project="LocalBroforcePath.props" Condition="Exists('LocalBroforcePath.props')" />
@@ -56,8 +59,7 @@
     <Compile Include="src\CameraCompatibility.cs" />
   </ItemGroup>
 
-  <Target Name="CopyTestModMetadata" AfterTargets="Build">
-    <MakeDir Directories="$(PackageModPath)" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\Info.json" DestinationFiles="$(PackageModPath)\Info.json" />
+  <Target Name="PackageTestMod" AfterTargets="Build">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Package.ps1&quot; -AssemblyPath &quot;$(TargetPath)&quot;" />
   </Target>
 </Project>

@@ -179,9 +179,11 @@ E:\SteamLibrary\steamapps\common\Broforce\r2mod\Broforce\profiles\Broforce\UMM\M
 D:\Study\C#\Broforce-Mods\TestMod\Release\UMM\Mods\TestMod
 ```
 
+完整安装包为 `Release/TestMod.zip`，包内保留 `UMM/Mods/TestMod/` 安装层级，包含 `TestMod.dll`、`Info.json` 与独立的安装说明。安装步骤见 [Release/README.md](Release/README.md)。`obj/`、`bin/` 仅供编译与测试，不作为最终安装物。
+
 ## 维护提示
 
-使用 `powershell -File .\TestMod\BuildAndDeploy.ps1` 编译并部署到本机及 `5700G` 的 `UMM\Mods\TestMod`；加 `-SkipDeploy` 只编译。脚本读取本地 `LocalBroforcePath.props` 的依赖路径，使用 .NET 3.5 编译器。
+使用 `powershell -File .\TestMod\BuildAndDeploy.ps1` 编译、打包并部署到本机及 `5700G` 的 `UMM\Mods\TestMod`；加 `-SkipDeploy` 只编译和打包。脚本读取本地 `LocalBroforcePath.props` 的依赖路径，使用 .NET 3.5 编译器。项目构建也会生成同样的发布包；仅重打现有 DLL 可执行 `powershell -File .\TestMod\Package.ps1`，不会部署或启动游戏。
 
 问题、实现和验收记录见[问题记录索引](issues/README.md)。
 
