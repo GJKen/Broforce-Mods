@@ -1245,7 +1245,8 @@ namespace AquabroMod
                 objects[i].SetActive(frame < end);
                 if (frame >= end) continue;
                 // Reset world position and facing even if the parent hero walks or turns.
-                objects[i].transform.position = new Vector3(x, y + 48f * scale, i == 0 ? 1.05f : .95f);
+                objects[i].transform.position = new Vector3(x, y + 48f * scale,
+                    AquabroSkillVisual.VisualDepth + (i == 0 ? .05f : -.05f));
                 objects[i].transform.localScale = new Vector3(facing / (owner.transform.localScale.x < 0f ? -1f : 1f), 1f, 1f);
                 sprites[i].SetLowerLeftPixel(frame * 128, 128);
             }
@@ -1283,9 +1284,9 @@ namespace AquabroMod
         internal static bool IsSharkDamageFrame(int frame)
         { return frame >= 6 && (frame < 27 || (frame >= SharkFlightFirstFrame && frame < SharkBodyFrameCount)); }
         private const float TidalSpeed = 160f;
-        // Enemies render near z=0 and terrain near z=5; keep all four
-        // skill sprites behind enemies while remaining in front of terrain.
-        private const float VisualDepth = 1f;
+        // Blood pool sprites have a -16 offset and render near z=-12.1.
+        // Keep all four skills and both shark splash layers in front of them.
+        internal const float VisualDepth = -13f;
         private readonly Aquabro owner;
         private readonly int kind;
         private float facing;

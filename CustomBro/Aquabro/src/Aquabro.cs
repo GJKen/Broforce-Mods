@@ -61,7 +61,7 @@ namespace AquabroMod
             bool charged)
         {
             GameObject obj = new GameObject("Aquabro Water Impact");
-            obj.transform.position = new Vector3(x, y, -12f);
+            obj.transform.position = new Vector3(x, y, -13f);
             SpriteSM sprite = obj.AddComponent<SpriteSM>();
             sprite.meshRender.material = ResourcesController.GetMaterial(path, texture);
             sprite.SetPixelDimensions(size, size);
