@@ -1213,6 +1213,7 @@ namespace AquabroMod
     internal sealed class SpringDamageState
     {
         internal readonly WaterAcidState Acid = new WaterAcidState();
+        internal readonly WaterBloodState Blood = new WaterBloodState();
         private readonly Dictionary<object, int> hits = new Dictionary<object, int>();
         private readonly Dictionary<object, float> nextHit = new Dictionary<object, float>();
         internal bool TryHit(object target, float castTime, out bool first)
@@ -1242,8 +1243,16 @@ namespace AquabroMod
         private readonly int first, end;
         private readonly GameObject[] objects = new GameObject[2];
         private readonly SpriteSM[] sprites = new SpriteSM[2];
-        internal SharkSplashVisual(Aquabro owner, float x, float y, float facing, float scale, int first, int end)
+        private readonly WaterBloodState blood;
+        private readonly Texture2D[] bloodTextures = new Texture2D[2];
+        private readonly Material[] bloodMaterials = new Material[2];
+        private readonly Color32[][] cleanPixels = new Color32[2][], bloodPixels = new Color32[2][];
+        private readonly Color32[] framePixels = new Color32[128 * 128];
+        private int uploadedFrame = -1;
+        private float uploadedColor = -1f;
+        internal SharkSplashVisual(Aquabro owner, float x, float y, float facing, float scale, int first, int end, WaterBloodState blood)
         {
+            this.blood = blood;
             this.owner = owner; this.x = x; this.y = y; this.facing = facing; this.scale = scale;
             this.first = first; this.end = end;
             for (int i = 0; i < 2; i++)
@@ -1269,13 +1278,41 @@ namespace AquabroMod
                 objects[i].transform.position = new Vector3(x, y + 48f * scale,
                     AquabroSkillVisual.VisualDepth + (i == 0 ? .05f : -.05f));
                 objects[i].transform.localScale = new Vector3(facing / (owner.transform.localScale.x < 0f ? -1f : 1f), 1f, 1f);
-                sprites[i].SetLowerLeftPixel(frame * 128, 128);
+                if (blood.Touched)
+                {
+                    if (bloodTextures[i] == null)
+                    {
+                        string part = "-water-" + (i == 0 ? "back" : "front") + ".png";
+                        cleanPixels[i] = AquabroSkillVisual.LoadWaterPixels(owner, "skill-shark-hunt" + part, 28);
+                        bloodPixels[i] = AquabroSkillVisual.LoadWaterPixels(owner, "skill-shark-hunt-blood" + part, 28);
+                        bloodTextures[i] = new Texture2D(128, 128, TextureFormat.ARGB32, false);
+                        bloodTextures[i].filterMode = FilterMode.Point;
+                        bloodTextures[i].wrapMode = TextureWrapMode.Clamp;
+                        bloodMaterials[i] = new Material(sprites[i].meshRender.sharedMaterial);
+                        bloodMaterials[i].mainTexture = bloodTextures[i];
+                        sprites[i].meshRender.material = bloodMaterials[i];
+                        sprites[i].RecalcTexture(); sprites[i].CalcUVs(); sprites[i].UpdateUVs();
+                    }
+                    if (frame != uploadedFrame || blood.ColorLevel != uploadedColor)
+                    {
+                        for (int py = 0; py < 128; py++) for (int px = 0; px < 128; px++)
+                        {
+                            int source = py * 28 * 128 + frame * 128 + px;
+                            framePixels[py * 128 + px] = AquabroSkillVisual.MixWaterColor(cleanPixels[i][source], bloodPixels[i][source], blood.ColorLevel);
+                        }
+                        bloodTextures[i].SetPixels32(framePixels); bloodTextures[i].Apply(false, false);
+                    }
+                }
+                sprites[i].SetLowerLeftPixel(bloodTextures[i] == null ? frame * 128 : 0, 128);
             }
+            uploadedFrame = frame; uploadedColor = blood.ColorLevel;
         }
         internal void Dispose()
         {
             for (int i = 0; i < 2; i++)
             {
+                if (bloodMaterials[i] != null) UnityEngine.Object.Destroy(bloodMaterials[i]);
+                if (bloodTextures[i] != null) UnityEngine.Object.Destroy(bloodTextures[i]);
                 UnityEngine.Object.Destroy(objects[i]);
             }
         }
@@ -1324,6 +1361,7 @@ namespace AquabroMod
         private readonly HashSet<object> maelstromCaught = new HashSet<object>();
         private readonly HashSet<GameObject> hitObjects = new HashSet<GameObject>();
         private readonly WaterProjectileBarrier waterBarrier;
+        private readonly WaterBloodState blood;
         private SharkSplashVisual sharkLaunchWater;
         private float x, y, elapsed, pulseTime;
         private bool resolved;
@@ -1366,7 +1404,7 @@ namespace AquabroMod
             sharkInput = 0f;
             sharkVelocityX = facing * SharkBreachDistance / (2f * SharkLaunchSpeed / SharkGravity);
             sharkVelocityY = SharkLaunchSpeed;
-            sharkLaunchWater = new SharkSplashVisual(owner, x, y, facing, scale, 6, 19);
+            sharkLaunchWater = new SharkSplashVisual(owner, x, y, facing, scale, 6, 19, blood);
             sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt-body.png");
             sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
             owner.ReleaseSharkControl(this);
@@ -1383,6 +1421,7 @@ namespace AquabroMod
         {
             hitUnits = sharedHits ?? new HashSet<object>();
             springDamage = sharedSpring ?? new SpringDamageState();
+            blood = kind == 3 ? springDamage.Blood : new WaterBloodState();
             castDelay = delay;
             this.owner = owner; this.kind = kind; this.x = x; this.y = y;
             originX = x;
@@ -1406,7 +1445,7 @@ namespace AquabroMod
             sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
             obj.transform.position = new Vector3(x, y + 48f * scale, VisualDepth);
             if (kind != 1) waterBarrier=new WaterProjectileBarrier(owner,kind,x,y,facing,scale,
-                kind == 3 ? springDamage.Acid : null);
+                kind == 3 ? springDamage.Acid : null, blood);
             obj.SetActive(false);
         }
 
@@ -1469,39 +1508,53 @@ namespace AquabroMod
         private Material acidMaterial;
         private Color32[] acidFramePixels;
         private Color32[][] acidPalettePixels;
+        private Color32[] bloodPalettePixels;
         private int acidUploadedFrame = -1;
         private float acidUploadedColorLevel = -1f;
+        private float bloodUploadedColorLevel = -1f;
         private static readonly Dictionary<string, Color32[][]> AcidPixels = new Dictionary<string, Color32[][]>();
+        private static readonly Dictionary<string, Color32[]> WaterPixels = new Dictionary<string, Color32[]>();
+        internal static Color32[] LoadWaterPixels(Aquabro owner, string file, int frames)
+        {
+            string path = System.IO.Path.Combine(owner.Info.path, file);
+            Color32[] pixels;
+            if (WaterPixels.TryGetValue(path, out pixels)) return pixels;
+            Texture2D source = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+            try
+            {
+                if (!source.LoadImage(System.IO.File.ReadAllBytes(path)) || source.width != frames * 128 || source.height != 128)
+                    throw new InvalidOperationException("Invalid water source atlas: " + file);
+                pixels = source.GetPixels32(); WaterPixels.Add(path, pixels); return pixels;
+            }
+            finally { UnityEngine.Object.Destroy(source); }
+        }
+        internal static Color32 MixWaterColor(Color32 a, Color32 b, float mix)
+        {
+            return new Color32((byte)(a.r + (b.r - a.r) * mix), (byte)(a.g + (b.g - a.g) * mix),
+                (byte)(a.b + (b.b - a.b) * mix), a.a);
+        }
         internal static float AdvanceAcidColor(float current, int target, float delta)
         { return delta <= 0f ? current : Mathf.Min(target, current + delta / .3f); }
 
         private void UpdateAcidColor(int frame, float delta)
         {
-            if (waterBarrier == null || waterBarrier.AcidStage == 0) return;
+            int stageLevel = waterBarrier == null ? 0 : waterBarrier.AcidStage;
+            if (stageLevel == 0 && !blood.Touched) return;
             // All columns use the same cast clock, including delayed columns.
             // Advancing several columns must not speed up the shared gradient.
             acidColorLevel = kind == 3 ? springDamage.Acid.AdvanceColor(elapsed + castDelay, delta) :
-                AdvanceAcidColor(acidColorLevel, waterBarrier.AcidStage, delta);
+                AdvanceAcidColor(acidColorLevel, stageLevel, delta);
             if (acidTexture == null)
             {
                 string key = owner.Info.path + "/" + Aquabro.SkillAssets[kind];
                 if (!AcidPixels.TryGetValue(key, out acidPalettePixels))
                 {
                     acidPalettePixels = new Color32[3][];
-                    for (int stage = 0; stage <= 2; stage++)
+                    for (int stage = 0; stage <= (kind == 1 ? 0 : 2); stage++)
                     {
                         string file = "skill-" + Aquabro.SkillAssets[kind] + (stage == 0 ? "" : "-acid-" + stage) + ".png";
-                        // BroMaker's cached render texture has invalid CPU pixel data in this
-                        // runtime even when GetPixels32 does not throw. Decode the original PNG.
-                        Texture2D source = new Texture2D(2,2,TextureFormat.ARGB32,false);
-                        try
-                        {
-                            if (!source.LoadImage(System.IO.File.ReadAllBytes(System.IO.Path.Combine(owner.Info.path, file))) ||
-                                source.width != Counts[kind]*128 || source.height != 128)
-                                throw new InvalidOperationException("Invalid acid source atlas: " + file);
-                            acidPalettePixels[stage] = source.GetPixels32();
-                        }
-                        finally { UnityEngine.Object.Destroy(source); }
+                        // Decode PNGs directly: BroMaker's render cache has invalid CPU pixels.
+                        acidPalettePixels[stage] = LoadWaterPixels(owner, file, Counts[kind]);
                     }
                     AcidPixels.Add(key, acidPalettePixels);
                 }
@@ -1518,7 +1571,9 @@ namespace AquabroMod
             }
             // Once the gradient settles, repeated game ticks can show the same
             // animation frame. Rebuild/upload only when either input changes.
-            if (acidUploadedFrame == frame && acidUploadedColorLevel == acidColorLevel) return;
+            if (blood.Touched && bloodPalettePixels == null)
+                bloodPalettePixels = LoadWaterPixels(owner, "skill-" + Aquabro.SkillAssets[kind] + "-blood.png", Counts[kind]);
+            if (acidUploadedFrame == frame && acidUploadedColorLevel == acidColorLevel && bloodUploadedColorLevel == blood.ColorLevel) return;
             int from = System.Math.Min(1, (int)acidColorLevel), to = from + 1;
             float mix = acidColorLevel - from;
             int width = Counts[kind] * 128;
@@ -1529,15 +1584,17 @@ namespace AquabroMod
                 for (int px = 0; px < 128; px++)
                 {
                     int sourceIndex = sourceRow + px;
-                    Color32 a = acidPalettePixels[from][sourceIndex], b = acidPalettePixels[to][sourceIndex];
-                    acidFramePixels[destinationRow+px] = new Color32(
-                        (byte)(a.r+(b.r-a.r)*mix), (byte)(a.g+(b.g-a.g)*mix),
-                        (byte)(a.b+(b.b-a.b)*mix), a.a);
+                    Color32 a = acidPalettePixels[from][sourceIndex];
+                    if (from == 0 && bloodPalettePixels != null)
+                        a = MixWaterColor(a, bloodPalettePixels[sourceIndex], blood.ColorLevel);
+                    acidFramePixels[destinationRow+px] = acidColorLevel > 0f ?
+                        MixWaterColor(a, acidPalettePixels[to][sourceIndex], mix) : a;
                 }
             }
             acidTexture.SetPixels32(acidFramePixels); acidTexture.Apply(false, false);
             acidUploadedFrame = frame;
             acidUploadedColorLevel = acidColorLevel;
+            bloodUploadedColorLevel = blood.ColorLevel;
         }
 
         internal void PrepareSpringWater(float delta)
@@ -1584,7 +1641,7 @@ namespace AquabroMod
                         // The exported entry aligns the nose with the surface,
                         // preserving the interleaved tail/water/head layers.
                         // This whole frame stays fixed at the impact surface.
-                        sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt.png");
+                        sprite.meshRender.material = acidMaterial ?? ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt.png");
                         sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
                     }
                 }
@@ -1595,7 +1652,6 @@ namespace AquabroMod
                 if (sharkLandingElapsed >= .45f || (sharkLandingElapsed < 0f && sharkBreachElapsed >= SharkFlightLimit))
                     return false;
             }
-            sharkLaunchWater.Update(sharkBreachElapsed);
             return true;
         }
 
@@ -1763,8 +1819,18 @@ namespace AquabroMod
             obj.transform.position=new Vector3(x,y+48f*scale,VisualDepth);
             // Parent scale may flip while the hero moves; freeze travel facing.
             obj.transform.localScale=new Vector3(facing/(owner.transform.localScale.x<0f?-1f:1f),1f,1f);
-            UpdateAcidColor(frame, delta);
-            sprite.SetLowerLeftPixel(acidTexture == null ? frame*128 : 0,128);
+            bool sharkFlight = kind == 1 && sharkBreachElapsed >= 0f && sharkLandingElapsed < 0f;
+            if (kind == 1 && !sharkFlight && !blood.Touched)
+                foreach (DoodadBloodPool pool in DoodadBloodPool.bloodDoodads)
+                    if (!(pool is DoodadAcidPool) && pool.fluidType == DoodadBloodPool.FluidType.Blood &&
+                        pool.gameObject.activeInHierarchy && Mathf.Abs(pool.transform.position.y - y) <= 16f * scale &&
+                        Mathf.Abs(pool.transform.position.x - x) <= 16f * scale &&
+                        Aquabro.WaterContactVisible(x, y + 8f * scale, pool.transform.position.x, pool.transform.position.y, null))
+                        blood.Touched = true;
+            blood.AdvanceColor(elapsed + castDelay, delta);
+            if (sharkLaunchWater != null) sharkLaunchWater.Update(sharkBreachElapsed);
+            if (!sharkFlight) UpdateAcidColor(frame, delta);
+            sprite.SetLowerLeftPixel(acidTexture == null || sharkFlight ? frame*128 : 0,128);
             return true;
         }
 

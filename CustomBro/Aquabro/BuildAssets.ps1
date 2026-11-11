@@ -13,6 +13,7 @@ $settings = Get-AquabroBuildSettings -ProjectRoot $projectRoot -AsepritePath $As
 $aseprite = $settings.AsepritePath
 $sourceRoot = Join-Path $projectRoot 'aseprite-source'
 $outputRoot = Join-Path $projectRoot '_Mod'
+$bloodAssets = @('skill-tidal-wave-blood.png','skill-shark-hunt-blood.png','skill-shark-hunt-blood-water-back.png','skill-shark-hunt-blood-water-front.png','skill-maelstrom-blood.png','skill-abyssal-spring-blood.png')
 $deployRoots = $settings.DeployDirectories
 if (-not $SkipDeploy -and $deployRoots.Count -eq 0) {
     throw '未配置部署目录。仅构建请使用 -SkipDeploy，部署请设置 -DeployDirectories 或 LocalBuild.json。'
@@ -108,6 +109,9 @@ try {
     & $aseprite -b --script-param "root=$projectRoot" --script-param "output=$tempRoot" --script (Join-Path $projectRoot 'tools\export_skill_effects.lua') | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Skill effect export failed' }
 
+    & $aseprite -b --script-param "root=$projectRoot" --script-param "output=$tempRoot" --script-param 'blood=true' --script (Join-Path $projectRoot 'tools\export_skill_effects.lua') | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Blood skill export failed' }
+
     & $aseprite -b --script-param "root=$projectRoot" --script-param "output=$tempRoot" --script (Join-Path $projectRoot 'tools\export_acid_skills.lua') | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Acid skill export failed' }
 
@@ -130,6 +134,9 @@ try {
         Copy-Item -LiteralPath (Join-Path $tempRoot $name) -Destination (Join-Path $outputRoot $name) -Force
     }
 
+    foreach ($name in $bloodAssets) {
+        Copy-Item -LiteralPath (Join-Path $tempRoot $name) -Destination (Join-Path $outputRoot $name) -Force
+    }
     & (Join-Path $projectRoot 'tools\Package.ps1')
 
     foreach ($deployRoot in $(if ($SkipDeploy) { @() } else { $deployRoots })) {
@@ -150,6 +157,9 @@ try {
                         throw "Deployment copy failed: $destination"
                     }
                 }
+            }
+            foreach ($name in $bloodAssets) {
+                Copy-Item -LiteralPath (Join-Path $outputRoot $name) -Destination (Join-Path $deployRoot $name) -Force
             }
             $cache = Join-Path $deployRoot 'Aquabro.dll.cache'
             if (Test-Path -LiteralPath $cache) {

@@ -438,7 +438,7 @@ internal static class SkillSharkTests
         string original=owner.Info.path;owner.Info.path=System.IO.Path.GetDirectoryName(atlasPath);
         try
         {
-            SharkSplashVisual water=new SharkSplashVisual(owner,0,0,1,1,6,19);
+            SharkSplashVisual water=new SharkSplashVisual(owner,0,0,1,1,6,19,new WaterBloodState());
             SpriteSM[] waterSprites=(SpriteSM[])typeof(SharkSplashVisual).GetField("sprites",Hidden).GetValue(water);
             for(int i=0;i<2;i++)
             {

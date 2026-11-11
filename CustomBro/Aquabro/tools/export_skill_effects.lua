@@ -1,5 +1,6 @@
 local root=assert(app.params['root'])
 local output=assert(app.params['output'])
+local blood=app.params['blood']=='true'
 local deflate=assert(loadfile(root..'/tools/export_water_effects.lua'))('mask-deflate')
 local pack16=assert(loadfile(root..'/tools/export_water_effects.lua'))('mask-pack16')
 local maskRuns=assert(loadfile(root..'/tools/export_water_effects.lua'))('mask-runs')
@@ -50,8 +51,25 @@ for _,entry in ipairs({{'tidal-wave',16},{'shark-hunt',28},{'maelstrom',32},{'ab
   local name='skill-'..entry[1]
   local suffix=entry[1]=='shark-hunt' and '-fx-v7.aseprite' or '-fx-v3.aseprite'
   local source=root..'/aseprite-source/03_特殊技能/'..name..suffix
+  if blood then source=root..'/aseprite-source/03_特殊技能/血水/'..name..'-blood.aseprite' end
   local sprite=assert(app.open(source),'Missing skill source: '..source)
   assert(sprite.width==128 and sprite.height==128 and #sprite.frames==entry[2],name..': unexpected layout')
+  if blood then
+    local base=assert(app.open(root..'/aseprite-source/03_特殊技能/'..name..suffix))
+    assert(#sprite.layers==#base.layers,name..': blood layers changed')
+    for i,cel in ipairs(sprite.cels) do
+      local original=base.layers[cel.layer.stackIndex]:cel(cel.frameNumber)
+      assert(original and cel.position==original.position and cel.image.width==original.image.width and cel.image.height==original.image.height,name..': blood cel layout changed')
+      local body=entry[1]=='shark-hunt' and cel.layer~=sprite.layers[3] and cel.layer~=sprite.layers[7] and cel.layer~=sprite.layers[8]
+      for y=0,cel.image.height-1 do for x=0,cel.image.width-1 do
+        local a,b=cel.image:getPixel(x,y),original.image:getPixel(x,y)
+        assert(app.pixelColor.rgbaA(a)==app.pixelColor.rgbaA(b),name..': blood alpha changed')
+        if body then assert(a==b,name..': shark body changed') end
+      end end
+    end
+    base:close()
+    name=name..'-blood'
+  end
   local atlas=Image(128*#sprite.frames,128,ColorMode.RGB)
   local bodyAtlas=entry[1]=='shark-hunt' and Image(128*(#sprite.frames+sharkFlightFrames),128,ColorMode.RGB) or nil
   local backAtlas=bodyAtlas and Image(128*#sprite.frames,128,ColorMode.RGB) or nil
@@ -133,10 +151,10 @@ for _,entry in ipairs({{'tidal-wave',16},{'shark-hunt',28},{'maelstrom',32},{'ab
     end
   end
   atlas:saveAs(output..'/'..name..'.png')
-  if bodyAtlas then bodyAtlas:saveAs(output..'/'..name..'-body.png') end
+  if bodyAtlas and not blood then bodyAtlas:saveAs(output..'/'..name..'-body.png') end
   if backAtlas then backAtlas:saveAs(output..'/'..name..'-water-back.png') end
   if frontAtlas then frontAtlas:saveAs(output..'/'..name..'-water-front.png') end
-  if #masks>0 then
+  if #masks>0 and not blood then
     local templateFile=assert(io.open(root..'/tools/SpringPixelMask.cs.in','r'))
     local template=templateFile:read('*a');templateFile:close()
     local className=entry[1]=='tidal-wave' and 'TidalWavePixelMask'

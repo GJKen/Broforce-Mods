@@ -31,6 +31,7 @@ public static class SkillSpringTests
                 BossSkillDamageTests.RunWave(); return;
             }
             CheckAcid();
+            CheckBlood();
             PixelMaskTests.Run();
             CheckCastStart();
             CheckSpringTerrainPlacement();
@@ -46,6 +47,100 @@ public static class SkillSpringTests
             CheckWaveNetwork();
         }
         catch (Exception error) { Console.WriteLine("FAIL: " + error); Environment.Exit(1); }
+    }
+    private static void CheckBlood()
+    {
+        Reset();
+        WaterBloodState clock = new WaterBloodState();
+        clock.AdvanceColor(3f, 3f); clock.Touched = true;
+        for (int i = 0; i < 7; i++) clock.AdvanceColor(3.425f, .425f);
+        Check(Math.Abs(clock.ColorLevel - .5f) < .0001f, "Shared columns accelerated blood color");
+        clock.AdvanceColor(3.425f, 0f);
+        Check(Math.Abs(clock.ColorLevel - .5f) < .0001f, "Paused blood gradient advanced");
+        clock.AdvanceColor(3.85f, .425f);
+        Check(clock.ColorLevel == 1f, "Blood gradient did not finish in .85 seconds");
+        Aquabro owner = new Aquabro();
+        foreach (int kind in new int[] { 0, 2, 3 }) foreach (float facing in new float[] { -1f, 1f })
+        {
+            WaterProjectileBarrier water = new WaterProjectileBarrier(owner, kind, 0, 0, facing, 1);
+            water.SetFrame(4);
+            SkillContactMask mask = new SkillContactMask(kind, 0, 0, facing, 1, 4);
+            Vector3 contact = new Vector3(); bool found = false;
+            for (int yy = 1; yy < 112 && !found; yy++) for (int xx = -64; xx < 64; xx++)
+                if (mask.Contains(xx, yy, 0)) { contact = new Vector3(xx, yy, 0); found = true; break; }
+            Check(found, "Missing blood contact mask");
+            DoodadBloodPool pool = new DoodadBloodPool(); pool.transform.position = contact;
+            pool.X = pool.Y = 5000f; // Native parent pools can have stale X/Y; use their world position.
+            pool.fluidType = DoodadBloodPool.FluidType.Oil;
+            DoodadBloodPool.bloodDoodads.Add(pool);
+            water.AbsorbPools(); Check(!water.Blood.Touched, "Oil triggers blood color");
+            pool.fluidType = DoodadBloodPool.FluidType.Blood; pool.gameObject.SetActive(false);
+            water.AbsorbPools(); Check(!water.Blood.Touched, "Inactive blood triggers color");
+            pool.gameObject.SetActive(true);
+            water.AbsorbPools(); water.AbsorbPools();
+            Check(water.Blood.Touched && water.AcidStage == 0, "Blood contact missing or adds acid stage");
+            water.Dispose(); DoodadBloodPool.bloodDoodads.Clear();
+        }
+        string fixture = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Aquabro-blood-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(fixture); owner.Info.path = fixture;
+        try
+        {
+            int[] frames = { 16, 28, 32, 28 };
+            for (int kind = 0; kind < 4; kind++)
+            {
+                List<string> suffixes = new List<string>(new string[] { "", "-blood" });
+                if (kind != 1) { suffixes.Add("-acid-1"); suffixes.Add("-acid-2"); }
+                else foreach (string part in new string[] { "-water-back", "-water-front", "-blood-water-back", "-blood-water-front" }) suffixes.Add(part);
+                foreach (string suffix in suffixes)
+                using (System.Drawing.Bitmap png = new System.Drawing.Bitmap(frames[kind] * 128, 128))
+                {
+                    System.Drawing.Color color = suffix.Contains("blood") ? System.Drawing.Color.FromArgb(137,149,18,35) :
+                        suffix.Contains("acid") ? System.Drawing.Color.FromArgb(137,40,200,20) : System.Drawing.Color.FromArgb(137,20,60,200);
+                    using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(png)) g.Clear(color);
+                    for (int frame = 0; frame < frames[kind]; frame++)
+                    {
+                        png.SetPixel(frame * 128, 127, color);
+                        png.SetPixel(frame * 128 + 1, 127, System.Drawing.Color.Transparent);
+                    }
+                    png.Save(System.IO.Path.Combine(fixture, "skill-" + Aquabro.SkillAssets[kind] + suffix + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+                AquabroSkillVisual visual = new AquabroSkillVisual(owner, kind, 8000, 8000, 1, 5, 0, 1);
+                WaterBloodState blood = (WaterBloodState)typeof(AquabroSkillVisual).GetField("blood", Private).GetValue(visual);
+                blood.Touched = true; visual.Tick(.425f);
+                Texture2D texture = (Texture2D)typeof(AquabroSkillVisual).GetField("acidTexture", Private).GetValue(visual);
+                Color32 sample = texture.GetPixels32()[0];
+                Check(sample.r == 84 && sample.g == 39 && sample.b == 117 && sample.a == 137, "Blood midpoint/alpha mismatch kind " + kind);
+                Check(texture.GetPixels32()[1].a == 0, "Blood gradient fills transparent pixels");
+                int uploads = texture.UploadCount; visual.Tick(0f);
+                Check(texture.UploadCount == uploads && Math.Abs(blood.ColorLevel - .5f) < .0001f, "Paused blood rendering advances");
+                visual.Tick(.425f); sample = texture.GetPixels32()[0];
+                Check(sample.r == 149 && sample.g == 18 && sample.b == 35 && blood.ColorLevel == 1f, "Blood endpoint mismatch kind " + kind);
+                Check(owner.CurrentAcidStage == 0, "Blood color changes damage type");
+                if (kind != 1)
+                {
+                    WaterProjectileBarrier water = (WaterProjectileBarrier)typeof(AquabroSkillVisual).GetField("waterBarrier",Private).GetValue(visual);
+                    Check(water.AcidStage == 0, "Blood adds corrosion");
+                    water.Absorb(new object()); visual.Tick(.31f); sample = texture.GetPixels32()[0];
+                    Check(sample.r == 40 && sample.g == 200 && sample.b == 20, "Blood breaks existing acid endpoint");
+                }
+                else
+                {
+                    SharkSplashVisual splash = new SharkSplashVisual(owner, 8000, 8000, 1, 1, 6, 19, blood);
+                    Texture2D[] textures = (Texture2D[])typeof(SharkSplashVisual).GetField("bloodTextures",Private).GetValue(splash);
+                    foreach (Texture2D water in textures) Check(water.GetPixels32()[0].r == 149, "Shark launch splash stays blue");
+                    splash.Dispose();
+                }
+                visual.Dispose();
+            }
+            SpringDamageState shared = new SpringDamageState();
+            AquabroSkillVisual left = new AquabroSkillVisual(owner,3,8000,8000,1,5,0,1,null,shared);
+            AquabroSkillVisual right = new AquabroSkillVisual(owner,3,9000,8000,1,5,.1f,1,null,shared);
+            Check(object.ReferenceEquals(typeof(AquabroSkillVisual).GetField("blood",Private).GetValue(left),
+                typeof(AquabroSkillVisual).GetField("blood",Private).GetValue(right)), "Spring columns do not share blood state");
+            left.Dispose(); right.Dispose();
+        }
+        finally { System.IO.Directory.Delete(fixture, true); }
+        Console.WriteLine("PASS blood: native pool contact/filter; .85s single gradient; shared clock; pause; four skill PNG colors/alpha; shark launch water; no acid stage; existing acid priority");
     }
     private static void CheckAcid()
     {
@@ -1462,7 +1557,7 @@ public class Doodad
     public Doodad(float x,float y) {centerX=x;centerY=y;}
     public void DamageOptional(DamageObject damage,ref bool hit) {Damaged=true;hit=true;Map.DoodadHits++;}
 }
-public class DoodadBloodPool : Doodad { public static List<DoodadBloodPool> bloodDoodads=new List<DoodadBloodPool>(); public float X,Y; public DoodadBloodPool():base(0,0){} }
+public class DoodadBloodPool : Doodad { public enum FluidType { Blood, Oil, Sewerage, Acid } public FluidType fluidType; public Transform transform { get { return gameObject.transform; } } public static List<DoodadBloodPool> bloodDoodads=new List<DoodadBloodPool>(); public float X,Y; public DoodadBloodPool():base(0,0){} }
 public class DoodadAcidPool : DoodadBloodPool {}
 public enum BloodColor { Red,Green }
 public enum DirectionEnum { None,Up,Down,Left,Right }

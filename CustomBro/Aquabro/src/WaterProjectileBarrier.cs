@@ -6,6 +6,24 @@ using UnityEngine;
 
 namespace AquabroMod
 {
+    internal sealed class WaterBloodState
+    {
+        internal bool Touched;
+        internal float ColorLevel;
+        private float colorTime;
+        internal float AdvanceColor(float castTime, float delta)
+        {
+            float step = Mathf.Min(delta, Mathf.Max(0f, castTime - colorTime));
+            colorTime = Mathf.Max(colorTime, castTime);
+            if (Touched && step > 0f)
+            {
+                ColorLevel = Mathf.Min(1f, ColorLevel + step / .85f);
+                if (ColorLevel > .9999f) ColorLevel = 1f;
+            }
+            return ColorLevel;
+        }
+    }
+
     // One state per water body, or per entire spring cast. A pool touching
     // several columns is still one acid source for that cast.
     internal sealed class WaterAcidState
@@ -36,14 +54,24 @@ namespace AquabroMod
         private readonly float scale;
         private float facing;
         private readonly WaterAcidState acid;
+        internal readonly WaterBloodState Blood;
         internal int AcidStage { get { return acid.Stage; } }
         internal void MoveFacing(float value) { facing = value; }
         internal void Absorb(object source) { if (kind != 1) acid.Absorb(source); }
         internal void AbsorbPools()
         {
-            if (kind == 1 || !visible || !owner.IsMine || AcidStage >= 2) return;
+            if (kind == 1 || !visible) return;
             foreach (DoodadBloodPool pool in DoodadBloodPool.bloodDoodads)
-                if (pool is DoodadAcidPool && pool.gameObject.activeInHierarchy && Intersects(pool.X, pool.Y, 0f, 0f, 4f)) Absorb(pool);
+            {
+                float poolX = pool is DoodadAcidPool ? pool.X : pool.transform.position.x;
+                float poolY = pool is DoodadAcidPool ? pool.Y : pool.transform.position.y;
+                if (!pool.gameObject.activeInHierarchy ||
+                    (!(pool is DoodadAcidPool) && pool.fluidType != DoodadBloodPool.FluidType.Blood) ||
+                    !Intersects(poolX, poolY, 0f, 0f, 4f)) continue;
+                if (pool is DoodadAcidPool) { if (owner.IsMine) Absorb(pool); }
+                else Blood.Touched = true;
+            }
+            if (!owner.IsMine || AcidStage >= 2) return;
             for (int i = AcidSlime.Count - 1; i >= 0 && AcidStage < 2; i--)
             {
                 SlimeGroundCover slime = AcidSlime[i];
@@ -75,8 +103,13 @@ namespace AquabroMod
 
         internal WaterProjectileBarrier(Aquabro owner, int kind, float x, float y, float facing, float scale,
             WaterAcidState sharedAcid)
+            : this(owner, kind, x, y, facing, scale, sharedAcid, null) {}
+
+        internal WaterProjectileBarrier(Aquabro owner, int kind, float x, float y, float facing, float scale,
+            WaterAcidState sharedAcid, WaterBloodState sharedBlood)
         {
             acid = sharedAcid ?? new WaterAcidState();
+            Blood = sharedBlood ?? new WaterBloodState();
             this.owner=owner;this.kind=kind;this.x=x;this.y=y;this.facing=facing;this.scale=scale;
             previousX=x;previousY=y;
             Active.Add(this);
