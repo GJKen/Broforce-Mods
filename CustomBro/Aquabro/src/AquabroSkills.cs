@@ -860,18 +860,22 @@ namespace AquabroMod
             foreach (RaycastHit hit in Physics.RaycastAll(origin, direction, distance, layers))
             {
                 Collider contact = hit.collider;
-                if (contact == null || contact.isTrigger ||
-                    contact.GetComponentInParent<Unit>() != null || contact.GetComponent<DamageRelay>() != null ||
-                    contact.GetComponentInParent<FallingBlock>() != null ||
-                    (contact.GetComponentInParent<Doodad>() != null && contact.GetComponentInParent<Elevator>() == null)) continue;
-                // All columns are planned before the first one can break a cage.
-                // A destructible prop must not permanently cancel later columns.
-                if (ignoreCages && (contact.GetComponent<Cage>() != null ||
-                    contact.GetComponentInParent<Cage>() != null || contact.GetComponent<CageBar>() != null)) continue;
+                if (!IsSkillTerrain(contact, ignoreCages)) continue;
                 if (hit.distance >= best) continue;
                 best = hit.distance; nearest = hit; found = true;
             }
             return found;
+        }
+
+        private static bool IsSkillTerrain(Collider contact, bool ignoreCages)
+        {
+            // Spring plans all columns before any of them can break a cage.
+            return contact != null && contact.enabled && contact.gameObject.activeInHierarchy && !contact.isTrigger &&
+                contact.GetComponentInParent<Unit>() == null && contact.GetComponent<DamageRelay>() == null &&
+                contact.GetComponentInParent<FallingBlock>() == null &&
+                (contact.GetComponentInParent<Doodad>() == null || contact.GetComponentInParent<Elevator>() != null) &&
+                (!ignoreCages || (contact.GetComponent<Cage>() == null &&
+                    contact.GetComponentInParent<Cage>() == null && contact.GetComponent<CageBar>() == null));
         }
 
         private bool FindSharkFloor(float x, float y, bool dropDown, out float floorY)
@@ -920,9 +924,9 @@ namespace AquabroMod
         }
 
         internal bool MoveSharkFlight(ref float x, ref float y, float destinationX, float destinationY,
-            out bool ceiling)
+            float facing, float scale, int frame, HashSet<GameObject> hitObjects, out bool ceiling)
         {
-            x = MoveSkillHorizontally(x, y, destinationX);
+            if (!SharkFlightBlocked(destinationX, y, facing, scale, frame, hitObjects)) x = destinationX;
             ceiling = false;
             RaycastHit contact;
             if (destinationY < y && RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down,
@@ -931,13 +935,32 @@ namespace AquabroMod
                 y = contact.point.y;
                 return true;
             }
-            if (destinationY > y && RaycastSharkTerrain(new Vector3(x, y + 56f, 0f), new Vector3(0f, 1f, 0f),
-                destinationY - y, out contact))
-            {
-                y = contact.point.y - 56f; ceiling = true;
-            }
+            if (destinationY > y && SharkFlightBlocked(x, destinationY, facing, scale, frame, hitObjects))
+                ceiling = true;
             else y = destinationY;
             return false;
+        }
+
+        private bool SharkFlightBlocked(float x, float y, float facing, float scale, int frame,
+            HashSet<GameObject> hitObjects)
+        {
+            SkillContactMask mask = new SkillContactMask(1, x, y, facing, scale, frame);
+            Collider[] contacts = Physics.OverlapSphere(new Vector3(x, y + 48f * scale, 0f),
+                82f * scale + 5f, Map.groundLayerStrict);
+            int previousCount = contacts.Length + 1;
+            while (true)
+            {
+                int count = 0;
+                foreach (Collider contact in contacts)
+                    if (IsSkillTerrain(contact, false) && mask.IntersectsRect(contact.bounds)) count++;
+                if (count == 0) return false;
+                if (count >= previousCount) return true;
+                previousCount = count;
+                // The same body pixels that touch terrain must be allowed to break
+                // it before stopping. A broken brick can expose another contacted
+                // brick that was skipped earlier in the unordered physics results.
+                SkillSharkObjects(x, y, facing, scale, frame, hitObjects);
+            }
         }
 
         internal float MoveSkillHorizontally(float x, float y, float destination)
@@ -997,9 +1020,7 @@ namespace AquabroMod
                 if (contact.GetComponentInParent<Unit>() != null || (relay != null && relay.doodad == null) ||
                     CollisionDamageTarget.FindSkill(contact) != null) continue;
                 Bounds bounds = contact.bounds;
-                float hitX = Mathf.Clamp(x, bounds.min.x, bounds.max.x);
-                float hitY = Mathf.Clamp(y + 48f * scale, Mathf.Max(y + 1f, bounds.min.y), bounds.max.y);
-                if (!mask.IntersectsRect(bounds) || !WaterContactVisible(x, hitY, hitX, hitY, contact) ||
+                if (!mask.IntersectsVisibleRect(contact) ||
                     !alreadyHit.Add(contact.gameObject)) continue;
                 MapController.Damage_Networked(this, contact.gameObject, ValueOrchestrator.GetModifiedDamage(28, playerNum),
                     DamageType.Crush, facing * 180f, 420f, bounds.center.x, bounds.center.y);
@@ -1551,8 +1572,10 @@ namespace AquabroMod
                     float nextX = x + sharkVelocityX * step;
                     float nextY = y + sharkVelocityY * step - .5f * SharkGravity * step * step;
                     bool ceiling;
-                    bool landed = owner.MoveSharkFlight(ref x, ref y, nextX, nextY, out ceiling);
-                    if (Mathf.Abs(x - nextX) > .001f) sharkVelocityX = 0f;
+                    bool landed = owner.MoveSharkFlight(ref x, ref y, nextX, nextY,
+                        facing, scale, SharkBreachFrame(), hitObjects, out ceiling);
+                    // Keep trying the launch speed: SkillSharkObjects may break
+                    // the blocking terrain after this movement step.
                     sharkVelocityY = ceiling ? 0f : sharkVelocityY - SharkGravity * step;
                     if (landed)
                     {

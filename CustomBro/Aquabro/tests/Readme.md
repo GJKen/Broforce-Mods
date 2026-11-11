@@ -55,7 +55,7 @@
 | 文件 | 主要覆盖 |
 | --- | --- |
 | [SkillSpringTests.cs](SkillSpringTests.cs) | 综合入口与模拟对象；七柱展开、低台阶／牢笼／高墙、共享七击和整组污染、狂潮、拦弹、切换与次数、HUD；Big Guy／Grenadier 固定一次 26 点且存活不挡浪 |
-| [SkillSharkTests.cs](SkillSharkTests.cs) | 潜行操控、梯子／电梯／Boss 顶面支撑；多帧率重力飞行、深坑／无底洞、阻墙、镜头与暂停；固定水花、59 格本体与蒙版、鼻尖触水和入水停破坏 |
+| [SkillSharkTests.cs](SkillSharkTests.cs) | 潜行操控、梯子／电梯／Boss 顶面支撑；多帧率重力飞行、深坑／无底洞、实墙阻挡与破墙后恢复、低顶实际接触与拆砖飞行、镜头与暂停；固定水花、59 格本体与蒙版、鼻尖触水和入水停破坏 |
 | [SkillMaelstromTests.cs](SkillMaelstromTests.cs) | 普通兵／载具／露头虫类落点、分散吸附、普通／重装尸体吸力及死亡状态、重装控制、拆墙扩路线、收尾显示帧与伤害一致 |
 | [SkillDamageTargetTests.cs](SkillDamageTargetTests.cs) | 单位、Boss 和物件的伤害资格；毒水两阶段、原生腐蚀、免疫与普通伤害回退 |
 | [SkillOcclusionTests.cs](SkillOcclusionTests.cs) | 墙后狂潮／猎杀物件、三种屏障拦弹与酸池污染，含贴身薄墙、弹丸先撞墙和拆墙恢复 |
@@ -73,6 +73,7 @@
 - **虫类落点**：`CheckWormDestination` 覆盖主体未登记／远离头部、已登记仍按露出部位、头部下缘埋土、最近目标和护甲／关闭／无效／墙／无地面／距离过滤，不能只用手动登记的虫代替。
 - **漩涡路线与收尾**：`CheckWallExpansion` 覆盖双向、15～120 FPS、不同时刻拆墙、无跳位和原定寿命；`CheckFinishVisualFrame` 按显示帧 24／跳帧 26 检查正式 PNG 接触及单次 9 点收尾。
 - **鲨鱼画面**：飞行末格与入水本体对齐，鼻尖到水线；接触首格仅本体、前后水层透明，下一格有水花。鼻尖间隙为零不能替代首帧水线检查，不恢复旧版按地形裁切水花的断言。
+- **鲨鱼飞行碰撞**：编译后的综合测试入口支持 `SkillSpringTests --shark-flight`，只运行飞行定向用例；完整 `Test-Spring.ps1` 也包含这些检查。`CheckBreachCeiling` 防止固定 56px 探针在约 20px 高的起跳本体尚未触顶时提前截停，并以真实 16px 可破坏砖块组成低顶，覆盖双朝向、15／30／60／120 FPS 的接触破坏及约 64px 完整飞行，同时保留不可破坏屋顶、支撑地板与暂停断言。实墙阻挡及移除后恢复使用真实矩形碰撞体。
 - **毒水**：清水→两级渐变、50%／100% 概率、来源去重、暂停、原生覆酸与停击飞／吸附；同次涌泉先吸毒再伤害，延迟柱继承状态。渐变从原 PNG 解码，不能依赖渲染缓存的 CPU 像素。
 - **死亡酸液残留**：`CheckSlimeSources` 覆盖三种水体、双向／两种缩放、地板／墙／天花板四个附着面、隔墙后拆墙、血色／伤害／有效性筛选、来源去重和两级升级，不消耗残留。`Probe-SlimeWaterLive.cs` 默认只读现场；暂停时传 `verify=true`，用临时原生酸液检查 Setup 登记和实际 PNG 变绿，结束清理全部临时对象。
 

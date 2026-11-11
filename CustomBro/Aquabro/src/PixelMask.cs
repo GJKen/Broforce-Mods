@@ -178,6 +178,10 @@ namespace AquabroMod
 
         // Exact pixel-square to rectangle distance, including collider edges.
         internal bool IntersectsRect(int frame, float left, float top, float right, float bottom, float margin)
+        { return IntersectsRect(frame, left, top, right, bottom, margin, null); }
+
+        internal bool IntersectsRect(int frame, float left, float top, float right, float bottom, float margin,
+            System.Func<float, float, bool> visible)
         {
             if (frame < 0 || frame >= frames.Length) return false;
             if (left > right) { float swap = left; left = right; right = swap; }
@@ -195,7 +199,9 @@ namespace AquabroMod
                     int bit = py * size + px;
                     if ((mask[bit / 8] & (1 << (bit % 8))) == 0) continue;
                     float dx = System.Math.Max(0f, System.Math.Max(px - right, left - (px + 1)));
-                    if (dx * dx + dy * dy <= margin * margin) return true;
+                    if (dx * dx + dy * dy <= margin * margin && (visible == null || visible(
+                        System.Math.Max(left, System.Math.Min(right, px + .5f)),
+                        System.Math.Max(top, System.Math.Min(bottom, py + .5f))))) return true;
                 }
             }
             return false;

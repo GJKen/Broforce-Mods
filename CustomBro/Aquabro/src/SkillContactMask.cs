@@ -51,5 +51,18 @@ namespace AquabroMod
             return IntersectsRect(target.X - halfWidth, target.Y, target.X + halfWidth,
                 target.Y + Mathf.Max(target.headHeight, target.height));
         }
+
+        internal bool IntersectsVisibleRect(Collider contact)
+        {
+            Bounds bounds = contact.bounds;
+            if (bounds.max.y <= Y + 1f) return false;
+            float originX = X, originY = Y, scale = Scale, facing = Facing;
+            return mask.IntersectsRect(frame, PixelX(bounds.min.x), PixelY(bounds.max.y),
+                PixelX(bounds.max.x), PixelY(Mathf.Max(Y + 1f, bounds.min.y)), 5f / Scale,
+                delegate(float px, float py) {
+                    return Aquabro.WaterContactVisible(originX, originY + 8f * scale,
+                        originX + (px - 64f) * facing * scale, originY + (112f - py) * scale, contact);
+                });
+        }
     }
 }

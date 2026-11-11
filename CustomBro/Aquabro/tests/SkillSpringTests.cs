@@ -23,6 +23,7 @@ public static class SkillSpringTests
         {
             if(args.Length==1 && args[0]=="--skill-hud") {CheckSkillHud();return;}
             if(args.Length==1 && args[0]=="--skill-network") {CheckSkillHud();CheckSkillNetwork();return;}
+            if(args.Length==1 && args[0]=="--shark-flight") {SkillSharkTests.RunFlight();return;}
             if(args.Length==2 && args[0]=="--wave-network")
             {
                 CheckSkillNetwork(); CheckWaveNetwork();
@@ -1316,6 +1317,11 @@ namespace UnityEngine
         }
         public static Collider[] OverlapSphere(Vector3 point,float range,int layer)
         {
+            if(layer==Map.groundLayerStrict)return Array.FindAll(SceneTerrain,delegate(Collider c) {
+                return c.enabled && c.gameObject.activeInHierarchy && (c.TerrainMask & layer)!=0 &&
+                    point.x+range>=c.bounds.min.x && point.x-range<=c.bounds.max.x &&
+                    point.y+range>=c.bounds.min.y && point.y-range<=c.bounds.max.y;
+            });
             if (layer!=4) return Contacts;
             return Array.FindAll(LadderContacts,delegate(Collider c) {
                 return c.enabled && point.x+range>=c.bounds.min.x && point.x-range<=c.bounds.max.x &&

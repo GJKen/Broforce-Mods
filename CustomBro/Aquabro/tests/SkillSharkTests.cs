@@ -53,6 +53,7 @@ internal static class SkillSharkTests
         CheckControlReturn();
         CheckFlightPoses(atlas);
         CheckEntryWaterFrames(composite,atlas,atlasPath);
+        CheckBreachCeiling(owner);
         CheckBreachDash(owner);
         CheckBreachWater(owner, atlas, atlasPath);
         CheckLadderCasts(owner);
@@ -328,9 +329,18 @@ internal static class SkillSharkTests
             Check(Math.Abs(Value(effect,"x")-facing*64)<.9f,"Same-height flight no longer advances about 64 pixels");
             float x=Value(effect,"x");effect.BreachShark();effect.Tick(.05f);
             Check(Value(effect,"x")==x,"Repeated press restarts flight after landing");effect.Dispose();
-            Physics.SharkWallX=facing*20;
+            Collider wall=TerrainBox(facing*20,0,1,200,true);
+            Physics.SceneTerrain=new Collider[]{wall};
             effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();effect.Tick(.5f);
-            Check(Math.Abs(Value(effect,"x"))<=12.01f,"Shark flight crosses wall");effect.Dispose();
+            Check(Math.Abs(Value(effect,"x"))<=12.01f,"Shark flight crosses wall");
+            float blockedX=Value(effect,"x");
+            Physics.SceneTerrain=new Collider[0];
+            effect.Tick(0);
+            Check(Value(effect,"x")==blockedX,"Removing wall during pause moved shark");
+            effect.Tick(1f/fps);
+            Check(Math.Abs(Value(effect,"x")-blockedX-facing*(AquabroSkillVisual.SharkBreachDistance/.6f)/fps)<.02f,
+                "Shark stays stopped after blocking wall is destroyed");
+            effect.Dispose();
         }
         foreach(float facing in new float[]{-1,1})
         foreach(int fps in new int[]{15,30,60,120})
@@ -359,7 +369,64 @@ internal static class SkillSharkTests
             effect.Dispose();
         }
         Reset();Physics.SharkTerrainEnabled=false;Physics.SharkWallX=float.PositiveInfinity;
-        Console.WriteLine("PASS shark ballistics: ascent/gravity; continuous 16/96/1024px pit descent; bottomless expiry; about 64px flat flight; mirrors; 15/30/60/120 FPS; walls; pause/repeated press");
+        Console.WriteLine("PASS shark ballistics: ascent/gravity; continuous 16/96/1024px pit descent; bottomless expiry; about 64px flat flight; mirrors; 15/30/60/120 FPS; solid walls stop; destroyed walls resume; pause/repeated press");
+    }
+
+    private static Collider TerrainBox(float x,float y,float halfWidth,float halfHeight,bool solid)
+    {
+        Collider c=new Collider(x,y,solid);
+        c.bounds.min=new Vector3(x-halfWidth,y-halfHeight,0);
+        c.bounds.max=new Vector3(x+halfWidth,y+halfHeight,0);
+        c.bounds.center=new Vector3(x,y,0);return c;
+    }
+
+    internal static void RunFlight()
+    {
+        Aquabro owner=new Aquabro();CheckBreachCeiling(owner);CheckBreachDash(owner);
+    }
+
+    private static void CheckBreachCeiling(Aquabro owner)
+    {
+        foreach(float facing in new float[]{-1,1})
+        foreach(int fps in new int[]{15,30,60,120})
+        {
+            Reset();Physics.SharkTerrainEnabled=false;
+            Collider floor=TerrainBox(0,-8,256,8,true);
+            Collider ceiling=TerrainBox(0,64,256,8,true);
+            Physics.SceneTerrain=Physics.Contacts=new Collider[]{floor,ceiling};
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();
+            effect.Tick(1f/120f);
+            Check(Value(effect,"y")>1.9f && Value(effect,"sharkVelocityY")>230,
+                "Invisible 56px ceiling probe stopped the 20px launch body");
+            effect.Tick(0);Check(Value(effect,"sharkVelocityY")>230,"Pause changed ceiling response");
+            bool touched=false;
+            for(int i=0;i<fps;i++)
+            {
+                effect.Tick(1f/fps);
+                if(Value(effect,"sharkVelocityY")<=0){touched=true;break;}
+            }
+            Check(touched && ceiling.enabled && floor.enabled,"Solid ceiling/floor stopped blocking or was destroyed");
+            effect.Dispose();
+
+            // Real 16px bricks at +48px above the launch floor, including a low roof.
+            System.Collections.Generic.List<Collider> terrain=new System.Collections.Generic.List<Collider>();
+            terrain.Add(floor);
+            for(int col=-3;col<=4;col++)for(int row=0;row<3;row++)
+                terrain.Add(TerrainBox(col*16,56+row*16,8,8,false));
+            Physics.SceneTerrain=Physics.Contacts=terrain.ToArray();
+            effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();
+            float time=0;
+            while(time<.62f-.00001f)
+            {
+                float dt=Math.Min(1f/fps,.62f-time);effect.Tick(dt);time+=dt;
+            }
+            Check(Math.Abs(Value(effect,"x")-facing*64)<.9f && Value(effect,"sharkLandingElapsed")>=0,
+                "Destructible low roof still truncates the shark flight at "+fps+" FPS facing "+facing+" x="+Value(effect,"x")+" y="+Value(effect,"y")+" hits="+MapController.ObjectHits);
+            Check(MapController.ObjectHits>0 && floor.enabled,"Flight did not break contacted bricks or broke the support floor");
+            effect.Dispose();
+        }
+        Physics.SceneTerrain=Physics.Contacts=new Collider[0];Physics.SharkTerrainEnabled=false;
+        Console.WriteLine("PASS shark ceiling: visible body before collision; solid roof/floor; actual 16px brick destruction and full 64px flight; both facings; 15/30/60/120 FPS; pause");
     }
 
     private static void CheckBreachWater(Aquabro owner, Bitmap atlas, string atlasPath)
