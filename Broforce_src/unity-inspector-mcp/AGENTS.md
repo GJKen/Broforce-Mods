@@ -15,15 +15,17 @@ AI 客户端 --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity I
 
 ## 关键约束
 
-- **stdio 是 MCP 传输通道**：任何子进程都不得向 stdout 输出。启动子进程必须用 `spawn` 且 `stdio: "ignore"`，绝不能使用会继承 stdio 的 `exec()`。
+- **stdio 是 MCP 传输通道**：除 `wrapper.js` 的协议转发外，游戏启动、进程管理等子进程的输出不得混入 MCP stdout。使用 `spawn` 配合 `stdio: "ignore"`，或使用捕获输出的 `execFile`；诊断信息写 stderr。
 - **TCP 协议**：请求/响应为单行 JSON，`{"id":"...","method":"...","params":{...}}` → `{"id":"...","success":true,"result":{...}}`。
 - **id 判空**：MCP 的 init 消息使用 `id: 0`，判断消息 id 时必须用 `!== undefined && !== null`，不要用真值判断。
 
 ## 热重载（wrapper.js）
 
 - `restart_server` 工具：杀死 `index.js` 子进程、重新拉起、重放 MCP `initialize` 握手，客户端无感知。
-- 修改 `index.js` 后用 `restart_server` 生效，无需重启客户端。
+- 修改 `index.js` 或 `unity-connection.js` 后，对使用该目录的每个 MCP 服务调用 `restart_server`，无需重启客户端。重启会丢弃 `configure_connection` 的临时配置，并重新读取进程环境变量。
+- wrapper 会发送工具列表变更通知；客户端仍未显示新增工具时，刷新工具列表或重连该 MCP 服务。
 - `wrapper.js` 修改需重启客户端。
+- 游戏端 DLL 更新必须先退出游戏再部署，重新启动游戏后生效；`restart_server` 只重启 Node.js 服务。
 
 ## 新增一个 MCP 工具
 
@@ -31,7 +33,7 @@ AI 客户端 --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity I
 2. 在 `CallToolRequestSchema` 处理器的 switch 中添加 `case`。
 3. 需要访问游戏：`result = await unityClient.sendCommand("method_name", params)`。
 4. 仅 Node.js 处理的（文件操作、进程管理）：直接实现，不走 `sendCommand`。
-5. 在 `BroforceMods/Unity Inspector Mod/Unity Inspector Mod/MessageHandler.cs` 添加对应处理器。
+5. 在 [`UnityInspectorMod/src/MessageHandler.cs`](../../UnityInspectorMod/src/MessageHandler.cs) 添加对应游戏端处理器。
 
 ## 超时约定
 
@@ -47,7 +49,7 @@ AI 客户端 --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity I
 
 ## 连接配置与认证
 
-- `configure_connection` 可运行时更新 host/port/token 并测试连接；`connection_status` 不连接游戏、不返回口令。修改只在当前进程内生效。
+- `configure_connection` 可运行时更新 host/port/token 及 `connectTimeoutMs`（100–30000ms），默认通过 `ping` 测试；`testConnection:false` 只更新配置。`connection_status` 不连接游戏、不返回口令，`connected` 仅表示 TCP 连接状态，实际可用性以 `ping` 或 `reachable` 为准。修改只在当前进程内生效。
 - 持久配置：`UNITY_INSPECTOR_HOST`、`UNITY_INSPECTOR_PORT`、`UNITY_INSPECTOR_TOKEN`。游戏端默认只监听回环地址，远程监听必须设置口令。
 - 请求顶层可携带 `token`；禁止在日志或状态结果中打印该字段或完整请求源码。游戏端上限 8 连接、1 MiB 请求，客户端上限 64 待处理请求。
 - `npm test` 运行传输及实际 stdio 工具集成测试，不需要游戏。
@@ -62,6 +64,8 @@ AI 客户端 --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity I
 
 ## 游戏进程管理
 
-- `launch_game`：`spawn` 启动 `bf`（detached stdio），轮询 TCP 连通性。
-- `stop_game`：`pkill` 终止。
-- 两者都用 `spawn` 且 `stdio: "ignore"`。
+- Windows 本机 `launch_game`：通过 `explorer.exe` 打开桌面 `Broforce.url`，可用 `UNITY_INSPECTOR_LOCAL_LAUNCH_URL` 指定快捷方式；非 Windows 本机沿用 `bf`。启动后等待目标端 `ping` 成功。
+- 远程 `launch_game`：配置 `UNITY_INSPECTOR_REMOTE_LAUNCH_HOST` 和 `UNITY_INSPECTOR_REMOTE_LAUNCH_TASK` 后通过 `schtasks.exe` 触发远程任务；可选凭据为 `UNITY_INSPECTOR_REMOTE_LAUNCH_USER` / `UNITY_INSPECTOR_REMOTE_LAUNCH_PASSWORD`。仅修改 TCP 目标不会配置远程启动。
+- 本机 `stop_game`：Windows 使用 `taskkill`，非 Windows 使用 `pkill`。远程目标不支持该工具终止游戏，也不支持自动远程重启，需在目标机器关闭游戏。
+- `UNITY_INSPECTOR_PROCESS_SCOPE=remote` 用于标明远程进程，尤其是隧道入口为本机回环地址时；`configure_connection` 不修改进程管理、启动任务或日志路径。
+- `read_log` / `watch_log` 优先使用 `UNITY_INSPECTOR_UMM_LOG_PATH`，未配置或路径不可访问时才尝试内置的 `Default` profile 路径。

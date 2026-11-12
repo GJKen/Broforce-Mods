@@ -43,13 +43,13 @@ Test scripts are JSON files with the following structure:
 
 ### Step Fields
 
-- **command** (required): Name of any Unity Inspector MCP tool
+- **command** (required): TCP command name supported by the game-side handler
 - **params** (optional): Object containing parameters for the command
 - **wait** (optional): Milliseconds to wait after this step completes
 
 ## Available Commands
 
-You can use any Unity Inspector MCP tool in your scripts:
+Each step is sent directly to the game over TCP. Use game-side commands such as those below. Node.js tools (`configure_connection`, `connection_status`, `restart_server`, `read_log`, `watch_log`, `launch_game` and script-library file operations) must be called separately through MCP. In particular, set the target and token before running a JSON script; connection configuration cannot be a script step.
 
 ### Level Control
 - `go_to_level` - Load a specific level
@@ -62,6 +62,7 @@ You can use any Unity Inspector MCP tool in your scripts:
 
 ### Inspection
 - `inspect_player` - Get player information
+- `game_state` - Read scene, level and player summary
 - `list_enemies` - List enemies in scene
 - `list_gameobjects` - List GameObjects
 - `inspect_gameobject` - Inspect specific GameObject
@@ -183,6 +184,7 @@ You can use any Unity Inspector MCP tool in your scripts:
 - Script execution stops at the first failed step
 - Check the returned results for error messages
 - Add `inspect_player` or `list_gameobjects` steps to verify state
+- A timeout may occur after an operation has started; check game state before repeating a state-changing step. The updated transport reports TCP errors and timeouts rather than inferring a crash from local processes.
 
 ### Common Patterns
 

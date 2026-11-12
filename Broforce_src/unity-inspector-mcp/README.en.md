@@ -6,9 +6,9 @@ An MCP (Model Context Protocol) server that allows AI clients to inspect and int
 
 ## Prerequisites
 
-1. Unity Inspector Mod installed and running in your Unity game (Broforce)
+1. Unity Inspector Mod installed; enable it in Broforce before using game-side tools
 2. Node.js 18+ installed
-3. The Unity game must be running with the TCP server started (port 9999)
+3. Game-side tools require a running game and TCP listener. Match the MCP host, port and token to the game panel (default `127.0.0.1:9999`). `connection_status` and offline tests do not require the game.
 
 ## Installation
 
@@ -40,6 +40,8 @@ node wrapper.js
 
 When Codex or another MCP client is configured with this server, do not start a second copy manually; the client starts the stdio server itself.
 
+After updating `index.js` or `unity-connection.js`, call `restart_server` on each MCP service using this directory. Refresh the tool list or reconnect the service if new tools remain unavailable. Changes to `wrapper.js` or persistent environment variables require restarting the corresponding client service. Stop the game before deploying an updated DLL, then relaunch it; `restart_server` only reloads Node.js.
+
 ### Runtime connection settings
 
 After changing the game port, call the MCP `configure_connection` tool, for example:
@@ -48,7 +50,7 @@ After changing the game port, call the MCP `configure_connection` tool, for exam
 {"host":"127.0.0.1","port":19999,"token":"","testConnection":true}
 ```
 
-Set any of `host`, `port`, `token` and `connectTimeoutMs` (100–30000ms); omitted fields retain their values. This disconnects the old socket and tests the new target with `ping`, reporting `reachable` and any error. Set `testConnection:false` to configure without connecting. `connection_status` reports the target, connection state and pending request count without revealing the token. Runtime configuration lasts until this MCP process restarts; use environment variables for persistence.
+Set any of `host`, `port`, `token` and `connectTimeoutMs` (100–30000ms); omitted fields retain their values. This disconnects the old socket and tests the new target with `ping`, reporting `reachable` and any error. Set `testConnection:false` to configure without connecting. `connection_status` reports the target, connection state and pending request count without revealing the token. Its `connected` field describes TCP state; verify usability with `ping` or `reachable`. Runtime changes are lost on `restart_server`, which restores the process environment configuration.
 
 The transport routes unique request IDs through one UTF-8 JSON line decoder, supporting concurrent requests and TCP fragmentation/coalescing while ignoring late replies. It does not infer a game crash from local process polling. Default timeouts are 5 seconds for connecting, 7 for ordinary commands, 35 for code/script compilation and execution, 10 for screenshots, and 17 for script unload.
 
@@ -66,7 +68,7 @@ UNITY_INSPECTOR_UMM_LOG_PATH=\\192.0.2.10\game-share\Broforce\profiles\Default\U
 
 Enable the Mod on the remote machine, select `Allow LAN/tunnel connections`, enter an access token and apply. The default listener is local-only at `127.0.0.1`; remote mode listens on `0.0.0.0` and requires a matching token. Use TCP for port forwarding. Local connections may omit the token. Authentication does not encrypt traffic; use an encrypted tunnel across the Internet.
 
-`configure_connection` only changes the debugging connection. Remote launch still requires a configured remote task. `stop_game` refuses to kill local processes when the target is remote; stop the game on that machine. When forwarding a remote target through loopback, set `UNITY_INSPECTOR_PROCESS_SCOPE=remote`.
+`configure_connection` only changes the debugging connection, not process scope, launch tasks or log paths. Remote launch still requires a configured remote task. For a remote target, `stop_game` reports that the game must be stopped on that machine; automatic remote restart is also unsupported. Use `UNITY_INSPECTOR_PROCESS_SCOPE=remote` when a loopback tunnel forwards to a remote game. See the [remote launch guide (Chinese)](docs/三方图联机进入与内网游戏端启动方案-2026-10-06.md) for scheduled-task setup.
 
 Run `npm test` for transport and stdio tool integration tests without starting the game.
 
@@ -131,11 +133,19 @@ type = "stdio"
 
 Then ask the client to use `unity_inspector`, starting with `ping` and `game_state`.
 
-For a second remote target, duplicate the entry with a different server name and add the three environment variables above. The tools will then be exposed under the corresponding MCP server name, for example `unity_inspector_remote`.
+For a second remote target, duplicate the entry with a different server name and set `UNITY_INSPECTOR_HOST`, `UNITY_INSPECTOR_PORT`, `UNITY_INSPECTOR_TOKEN` and `UNITY_INSPECTOR_PROCESS_SCOPE=remote` in its environment. Add `UNITY_INSPECTOR_UMM_LOG_PATH` if remote logs are needed. Tools are exposed under that server name, for example `unity_inspector_remote`; configure each target through its own tools.
 
 </details>
 
 ## Available Tools
+
+### Connection and Service Management
+
+- `connection_status` - Read the target, TCP state and whether a token is configured without connecting to the game
+- `configure_connection` - Change this MCP service's host, port, token or connect timeout, testing by default
+- `restart_server` - Reload Node.js and restore process environment settings; provided by `wrapper.js`
+- `launch_game` - Open the local Windows desktop `Broforce.url`, or trigger a configured remote scheduled task
+- `stop_game` - Stop the local game; remote games must be stopped on the target machine
 
 ### Inspection Tools
 - `ping` - Test connection to Unity Inspector
@@ -153,15 +163,24 @@ For a second remote target, duplicate the entry with a different server name and
 - `teleport_player` - Teleport the player to specific coordinates
 - `set_player_health` - Set the player's health
 - `set_game_speed` - Set the game speed (time scale)
+- `spawn_entity` - Spawn an entity at a position; implementation is limited
 
 ### Level Control
 - `list_campaigns` - List all available campaigns
 - `go_to_level` - Go directly to a specific campaign level
+- `restart_level` - Restart the current level from the beginning
 
 ### Interaction Tools
 - `simulate_input` - Simulate keyboard/controller input
 - `execute_code` - Execute C# expressions in the Unity context
 - `take_screenshot` - Take a screenshot of the game
+- `list_bros` - List official bros and current player selections
+- `swap_bro` - Change the active official bro by killing and respawning the current character at the same position
+- `set_bro` - Select the official bro for the next respawn or level
+- `list_bromaker_bros` - List custom BroMaker characters and negotiated peer availability
+- `switch_bromaker_bro` - Load a custom character through BroMaker's `Switch to Bro` path using `broName` and `playerNum` (0–3); requires an active player owned by this client
+
+BroMaker commands require the corresponding game-side handlers and BroMaker/RocketLib networking support. Check the player slot and ownership with `game_state`, then verify the result from the other peer. Existing validation covers Drunken Broster switching between two peers; it does not establish support for every character, unlock rule or ability. If the client tool list has not refreshed, `run_test_script` can forward these game-side commands.
 
 ### Test Automation
 - `list_test_scripts` - List all available test scripts
@@ -185,18 +204,18 @@ The MCP server acts as a bridge between the AI client and the Unity game, transl
 
 ### Connection Issues
 
-If running in WSL and can't connect:
-- The server automatically detects WSL and uses the Windows host IP
-- You can manually test with: `ip route show default` to get the Windows IP
+In WSL, the MCP attempts to detect the Windows host IP; check it with `ip route show default`. The updated game defaults to a Windows loopback listener, which is not reachable through the host network-interface IP. Run Node.js on Windows against `127.0.0.1`, or enable LAN listening in the game, set a token and configure the host IP and matching token.
 
 ### Server not responding
 
-1. Check the Unity game is running
-2. Check Unity Inspector Mod is loaded
-3. Click "Start Server" in the mod's UI if not running
-4. Default port is 9999
+1. Use that target's `connection_status` to check the host and port.
+2. Check that the target game is running, the Mod is enabled and its panel shows `Running`; click `Start Server` if stopped.
+3. Match the actual panel port; `9999` is only the default. Remote access also requires LAN listening and a matching token.
+4. Test with `configure_connection` or `ping`. For `Authentication failed`, check the token; a TCP connection alone does not prove authentication.
 
-The MCP server currently searches the default r2modman profile paths for `read_log` and `watch_log`. If you use a custom profile such as `profiles\Broforce`, verify the actual UMM log directly at:
+The updated transport no longer reports `Game process died` based on local process polling. If an old service still returns it, reload that service and verify with the same target's `ping` and `game_state`. A command timeout may occur after execution starts; check game state before repeating an operation that changes it.
+
+`read_log` and `watch_log` prefer `UNITY_INSPECTOR_UMM_LOG_PATH`, then try built-in `Default` profile paths if unset or inaccessible. For a custom profile such as `profiles\Broforce` or a remote target, set this variable to the actual UMM log path readable by the MCP process, or inspect it directly:
 
 ```text
 <r2modman profile>\UMM\Core\Log.txt
@@ -204,7 +223,7 @@ The MCP server currently searches the default r2modman profile paths for `read_l
 
 The Unity Inspector Mod also writes its own errors to that UMM log. MCP connection messages are written to the MCP process standard error stream and are normally shown by the MCP client rather than saved as a separate game log.
 
-By default, MCP connects to the Broforce process on the same machine. A second MCP server instance can target a trusted LAN client with `UNITY_INSPECTOR_HOST`, `UNITY_INSPECTOR_PORT`, and `UNITY_INSPECTOR_UMM_LOG_PATH`. After a remote host exits, MCP cannot inspect that exited client's state.
+By default, MCP connects to Broforce on the same machine. Configure remote hosts, ports, tokens and process scope as described above. Log paths are independent and do not change with `configure_connection`. After the remote game exits, MCP cannot inspect that instance.
 
 ## Test Scripts
 
@@ -212,7 +231,7 @@ Test scripts allow you to automate sequences of commands for repeatable debuggin
 
 ### Creating Test Scripts
 
-Test scripts are JSON files stored in the `scripts/` directory:
+Test scripts are JSON files stored in the `scripts/` directory. Each step's `command` is sent directly to a game-side handler. Call Node.js tools such as `configure_connection`, `connection_status` and `restart_server` separately; they cannot be JSON test steps. See the [test script guide](scripts/README.md).
 
 ```json
 {
@@ -247,7 +266,7 @@ Test scripts are JSON files stored in the `scripts/` directory:
 - **name**: Human-readable name for the script
 - **description**: What the script tests or demonstrates
 - **steps**: Array of commands to execute in sequence
-  - **command**: Any available MCP tool name
+  - **command**: A TCP command supported by the game-side handler
   - **params**: Parameters for the command (optional)
   - **wait**: Milliseconds to wait after command completes (optional)
 
@@ -273,6 +292,6 @@ The script executor will run each step in sequence, wait for the specified delay
 
 To modify the available tools, edit:
 - `index.js` - MCP server implementation and test script execution
-- `BroforceMods/Unity Inspector Mod/MessageHandler.cs` - Unity-side message handling
+- [`UnityInspectorMod/src/MessageHandler.cs`](../../UnityInspectorMod/src/MessageHandler.cs) - Unity-side message handling
 
 For a developer-focused guide (architecture, hot reload, constraints, how to add tools), see [AGENTS.md](AGENTS.md) (English: [AGENTS.en.md](AGENTS.en.md)).

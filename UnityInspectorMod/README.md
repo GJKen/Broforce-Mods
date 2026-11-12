@@ -22,7 +22,7 @@ notepad .\LocalBroforcePath.props
 
 `LocalBroforcePath.props` 必须包含 `BroforceManagedPath` 和 `UnityModManagerPath`。如果脚本无法自动找到 `mcs.dll` 和 `Newtonsoft.Json.dll`，取消注释并填写 `InspectorModDependenciesPath`。该文件包含机器相关路径，不应提交到公共仓库。
 
-配置完成后构建并部署：
+配置完成并退出 Broforce、确认游戏进程结束后，构建并部署：
 
 ```powershell
 & .\BuildAndDeploy.ps1
@@ -43,13 +43,17 @@ notepad .\LocalBroforcePath.props
 & .\BuildAndDeploy.ps1 -SkipDeploy
 ```
 
+如果 r2modman 已将 Mod 安装在 `UMM\Mods\alexneargarder-UnityInspectorMod` 等目录，请使用 `-SkipDeploy`，把生成包内的 `Unity Inspector Mod.dll`、`mcs.dll`、`Newtonsoft.Json.dll` 和 `Info.json` 覆盖到实际启用的目录，保留其设置、清单和其他文件。默认部署路径是固定的 `UMM\Mods\Unity Inspector Mod`，不要因此留下两份相同 Mod ID 的安装。
+
+更新游戏端 DLL 后重新启动游戏；MCP 的 `index.js` 或 `unity-connection.js` 更新后，对本机和远端各自调用 `restart_server`。该工具只重载 Node.js 服务，不会让已运行的游戏加载新 DLL。新增工具仍未显示时刷新客户端工具列表或重连服务。
+
 ## 运行与 MCP
 
 Mod 面板默认使用中文；顶部点击 `English` / `中文` 按钮可即时切换语言并保存选择，下次启动仍使用所选语言。状态、连接设置和错误提示随语言切换，正在运行的服务和连接不受影响。下文使用英文界面名称，中文界面对应“启动服务”“停止服务”“应用连接设置”。
 
 1. 启动 Broforce。
 2. 在 UMM 中启用 `Unity Inspector Mod`。
-3. 确认 Mod 面板显示 `TCP Server Status: Running`，默认端口为 `9999`。状态为 `Stopped` 时，在面板中点击 `Start Server`；默认会在 Mod 加载时自动启动。
+3. 确认 Mod 面板显示 `TCP Server Status: Running`，并核对面板实际监听地址和端口；首次默认端口为 `9999`，之后沿用已保存设置。状态为 `Stopped` 时，在面板中点击 `Start Server`；默认会在 Mod 加载时自动启动。
 4. 在 `Broforce_src\unity-inspector-mcp` 中安装 Node.js 18+ 依赖并配置 MCP 客户端。具体步骤见 [MCP README](../Broforce_src/unity-inspector-mcp/README.md)；客户端已配置该服务时，不要再手动启动第二个实例。
 
 在 Mod 面板的 `Port (1-65535)` 输入框填写端口，点击 `Apply Settings` 即可在游戏运行期间切换，无需重启游戏。输入框只保留 ASCII 数字，应用时检查 1–65535 范围。输入过程不影响当前服务；切换到无效或已被占用的新端口时会显示错误，并保留原监听和连接。成功切换端口会断开旧连接并立即保存设置；服务停止时应用只保存，点击 `Start Server` 才开始监听。
@@ -60,7 +64,7 @@ MCP 提供 `configure_connection` 工具，可直接切换目标，无需重启�
 {"host":"127.0.0.1","port":19999,"token":"","testConnection":true}
 ```
 
-`connection_status` 可查看当前目标和连接状态，不返回口令。工具修改在当前 MCP 进程内有效；需要重启后保留时，配置环境变量 `UNITY_INSPECTOR_HOST`、`UNITY_INSPECTOR_PORT`、`UNITY_INSPECTOR_TOKEN`。游戏监听设置和 MCP 目标需要分别应用；面板显示的是游戏实际监听地址和端口。
+`connection_status` 可查看当前目标和 TCP 状态，不连接游戏、不返回口令；实际可用性需用 `ping` 或 `configure_connection` 的 `reachable` 确认。工具修改在当前 MCP 进程内有效，`restart_server` 后恢复环境变量 `UNITY_INSPECTOR_HOST`、`UNITY_INSPECTOR_PORT`、`UNITY_INSPECTOR_TOKEN` 的配置。游戏监听设置和 MCP 目标需要分别应用；面板显示的是游戏实际监听地址和端口。
 
 默认只监听 `127.0.0.1`。需要局域网或 TCP 内网穿透时，勾选“允许局域网/穿透连接”，填写连接口令后应用；此时监听 `0.0.0.0`，MCP 的 `token` 必须一致。本机连接也可选配口令。修改口令会断开旧连接；同端口切换监听地址需要重启监听，失败时尝试恢复原监听，已有连接需要重连。口令按 UMM 设置保存在本机 XML 中，不应提交到 Git。
 
@@ -80,7 +84,7 @@ Unity Inspector Mod 的连接、脚本和运行时错误仍会写入 UMM 日志�
 <r2modman profile>\UMM\Core\Log.txt
 ```
 
-MCP 自身的连接信息通过标准错误输出返回给 MCP 客户端。MCP 的 `read_log` 和 `watch_log` 目前默认查找 `Default` profile；如果使用 `profiles\Broforce` 等自定义 profile，应直接收集实际的 `Core\Log.txt`。
+MCP 自身的连接信息通过标准错误输出返回给 MCP 客户端。`read_log` 和 `watch_log` 优先使用 `UNITY_INSPECTOR_UMM_LOG_PATH`，未设置或路径不可访问时尝试内置的 `Default` profile 路径。使用 `profiles\Broforce` 等自定义 profile 时，将该变量设为实际 `Core\Log.txt` 路径；远端日志需要使用 MCP 进程可访问的路径。
 
 口令认证不提供传输加密；跨公网调试建议通过 Tailscale、ZeroTier 或其他加密隧道连接。
 

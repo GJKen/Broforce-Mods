@@ -2,6 +2,8 @@
 
 本文记录在游戏运行中使用 Unity Inspector MCP 把玩家 1 的当前角色切换为指定官方角色的方法。文中场景名和 `ScorpionBro` 仅是历史示例；目标角色、场景和当前游戏源码版本都应在实际运行环境确认。
 
+当前工具已提供 `list_bros`、`swap_bro` 和 `set_bro`：普通换人先查询官方角色列表，再按需要立即换人或设置下次出生角色；下面的手工表达式用于排查底层生成与注册关系。BroMaker 自定义角色使用 `list_bromaker_bros` / `switch_bromaker_bro`。连接地址、可配置端口及口令参见 [MCP 使用指南](../Broforce_src/unity-inspector-mcp/README.md)。
+
 ## 前置条件
 
 - 游戏已经启动并进入关卡。
@@ -186,10 +188,10 @@ new object[]{
 
 ### 调用 MCP 返回 `Game process died`
 
-Unity Inspector MCP 偶尔会误报。按仓库约定，先调用 `ping` 和 `game_state`：
+这是旧版 MCP 本机进程轮询可能产生的误报，新版已移除该检测。旧服务仍返回该提示时，重载对应 MCP 服务，并用同一端点的 `ping` 和 `game_state` 复核：
 
 - `ping` 返回 `pong` 且 `game_state` 正常：继续操作，不视为游戏崩溃。
-- 两者都无法连接：检查游戏是否真的退出，再重新启动 MCP 连接。
+- 两者都无法连接：核对目标游戏、实际监听端口和连接口令，按返回的 TCP 或认证错误排查，不能单凭断连认定崩溃。操作超时后先核对角色状态，再决定是否重试换人。
 
 ### 误删了角色预制体
 

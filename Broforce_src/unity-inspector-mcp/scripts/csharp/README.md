@@ -2,6 +2,8 @@
 
 Runtime C# scripts that compile and execute inside the Unity game process via the MCP tool.
 
+Configure the target through that MCP service's `configure_connection`, then verify it with `ping`. Port `9999` is the default; match the game's saved port and token. See the [MCP connection guide](../../README.en.md#runtime-connection-settings). `run_test_script` handles JSON game commands, while `execute_script` reads and sends C# source from this library.
+
 ## Script Format
 
 Scripts are `.cs` files with optional comment-header metadata:
@@ -30,7 +32,9 @@ public static class MyScript
 ## Lifecycle
 
 - **`Main()`** — Called when the script is executed. Optional — scripts without Main() just register their types.
-- **`Unload()`** — Called when the script is unloaded via `unload_script`. Optional but recommended for scripts that apply patches or create GameObjects.
+- **`Unload()`** — Called when the script is unloaded via `unload_script` or when the Mod is disabled/unloaded. Use it to clean up timers, event subscriptions and other script-owned resources. Registered Harmony patches and tracked GameObjects are also cleaned up. Compiled assemblies remain loaded until the game process exits.
+
+Code/script compilation and execution have a 35-second MCP timeout; unload has 17 seconds. A timeout may occur after execution starts. Inspect game state before retrying a script that changes it. Scripts that create asynchronous runners can return before their scenario finishes.
 
 ## ScriptContext API
 
