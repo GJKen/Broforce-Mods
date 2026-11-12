@@ -40,6 +40,18 @@ node wrapper.js
 
 当 Codex 或其他 MCP 客户端已配置此服务器时，请勿手动启动第二个副本；客户端会自动启动 stdio 服务器。
 
+### 运行时切换连接
+
+游戏面板更改端口后，调用 MCP 工具 `configure_connection`，例如：
+
+```json
+{"host":"127.0.0.1","port":19999,"token":"","testConnection":true}
+```
+
+可分别修改 `host`、`port`、`token` 和 `connectTimeoutMs`（100–30000ms）；省略的字段保留原值。工具会断开旧连接并默认发送 `ping` 检查新目标，返回 `reachable` 和失败原因。设置 `testConnection:false` 则只更新配置。`connection_status` 可查看目标、连接状态和待处理请求数，不会返回口令。运行时修改在当前 MCP 进程内有效，持久配置使用下文环境变量。
+
+连接使用唯一请求 ID 和统一的 UTF-8 单行 JSON 解码器，支持并发与 TCP 分包/合包；迟到响应不会交给新请求。不再根据本机进程轮询断言游戏崩溃，连接失败会显示目标地址和端口。连接超时默认为 5 秒；常规命令为 7 秒，代码/脚本编译执行为 35 秒，截图为 10 秒，卸载为 17 秒。
+
 ### 远程 Windows 客户端
 
 可通过环境变量更改 MCP 目标。当 Broforce 进程运行在另一台受信任的局域网机器上时很有用：
@@ -47,10 +59,16 @@ node wrapper.js
 ```text
 UNITY_INSPECTOR_HOST=192.0.2.10
 UNITY_INSPECTOR_PORT=9999
+UNITY_INSPECTOR_TOKEN=<与游戏面板一致的口令>
+UNITY_INSPECTOR_PROCESS_SCOPE=remote
 UNITY_INSPECTOR_UMM_LOG_PATH=\\192.0.2.10\game-share\Broforce\profiles\Default\UMM\Core\Log.txt
 ```
 
-远程机器上必须启用 Unity Inspector Mod，且其 TCP 服务器必须监听局域网接口。该服务没有身份验证，因此仅允许监控机器访问 TCP 9999，不要暴露在受信任的局域网之外。
+远程机器上必须启用 Unity Inspector Mod，在面板勾选“允许局域网/穿透连接”、设置口令并应用。默认只监听 `127.0.0.1`，启用远程后监听 `0.0.0.0`；转发协议应选择 TCP。口令必须与 MCP 一致，本机默认可不设口令。认证不提供加密，跨公网使用时建议通过加密隧道。
+
+`configure_connection` 只修改调试连接。远程启动仍需预先配置远程任务；远程目标下 `stop_game` 会提示在目标机器关闭游戏，不会结束本机游戏。端口转发到本机回环地址时，用 `UNITY_INSPECTOR_PROCESS_SCOPE=remote` 标明远程进程。
+
+运行 `npm test` 可执行通信和 stdio 工具集成测试，无需启动游戏。
 
 ### 添加到 Claude Desktop
 

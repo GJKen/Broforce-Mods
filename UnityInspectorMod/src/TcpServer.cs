@@ -12,18 +12,30 @@ namespace Unity_Inspector_Mod
     {
         private TcpListener listener;
         private Thread listenerThread;
-        private bool isRunning;
+        private volatile bool isRunning;
         private readonly int port;
+        private readonly IPAddress listenAddress;
+        private volatile string accessToken;
+        public const int MaxClients = 8;
+        public const int MaxRequestCharacters = 1024 * 1024;
         private readonly List<ClientHandler> clients = new List<ClientHandler>();
         private readonly MessageHandler messageHandler;
 
         public bool IsRunning => isRunning;
         public int Port => port;
-        public int ConnectedClients => clients.Count;
+        public string ListenAddress => listenAddress.ToString();
+        public int ConnectedClients
+        {
+            get { lock ( clients ) return clients.Count; }
+        }
 
-        public TcpServer( int port )
+        public TcpServer( int port, string address = "127.0.0.1", string token = "" )
         {
             this.port = port;
+            this.listenAddress = IPAddress.Parse( address );
+            this.accessToken = token ?? "";
+            if ( !IPAddress.IsLoopback( listenAddress ) && string.IsNullOrEmpty( accessToken ) )
+                throw new ArgumentException( "Remote listening requires an access token" );
             this.messageHandler = new MessageHandler();
         }
 
@@ -33,16 +45,19 @@ namespace Unity_Inspector_Mod
 
             try
             {
-                listener = new TcpListener( IPAddress.Any, port );
+                listener = new TcpListener( listenAddress, port );
+                listener.ExclusiveAddressUse = true;
                 listener.Start();
                 isRunning = true;
 
-                listenerThread = new Thread( ListenForClients );
+                var activeListener = listener;
+                listenerThread = new Thread( () => ListenForClients( activeListener ) );
                 listenerThread.IsBackground = true;
                 listenerThread.Start();
             }
             catch ( Exception ex )
             {
+                Stop();
                 Main.Log( $"Failed to start TcpListener: {ex}" );
                 throw;
             }
@@ -52,12 +67,6 @@ namespace Unity_Inspector_Mod
         {
             isRunning = false;
 
-            foreach ( var client in clients.ToArray() )
-            {
-                client.Disconnect();
-            }
-            clients.Clear();
-
             if ( listener != null )
             {
                 listener.Stop();
@@ -66,28 +75,49 @@ namespace Unity_Inspector_Mod
 
             if ( listenerThread != null )
             {
-                listenerThread.Join( 1000 );
+                if ( listenerThread != Thread.CurrentThread &&
+                    (listenerThread.ThreadState & ThreadState.Unstarted) == 0 )
+                    listenerThread.Join( 1000 );
                 listenerThread = null;
             }
+
+            ClientHandler[] snapshot;
+            lock ( clients )
+            {
+                snapshot = clients.ToArray();
+                clients.Clear();
+            }
+            foreach ( var client in snapshot ) client.Disconnect();
         }
 
-        private void ListenForClients()
+        private void ListenForClients( TcpListener activeListener )
         {
             while ( isRunning )
             {
+                TcpClient tcpClient = null;
+                ClientHandler client = null;
                 try
                 {
-
-                    if ( listener.Pending() )
+                    tcpClient = activeListener.AcceptTcpClient();
+                    lock ( clients )
                     {
-                        var tcpClient = listener.AcceptTcpClient();
-                        var client = new ClientHandler( tcpClient, this );
+                        if ( !isRunning || clients.Count >= MaxClients )
+                        {
+                            tcpClient.Close();
+                            if ( !isRunning ) return;
+                            continue;
+                        }
+                        client = new ClientHandler( tcpClient, this );
                         clients.Add( client );
+                        // Register before starting the receive thread: a client
+                        // may disconnect as soon as it is accepted.
+                        client.Start();
                     }
-                    Thread.Sleep( 100 );
                 }
                 catch ( Exception ex )
                 {
+                    if ( client != null ) client.Disconnect();
+                    else if ( tcpClient != null ) tcpClient.Close();
                     if ( isRunning )
                     {
                         Main.Log( $"Error accepting client: {ex.Message}" );
@@ -99,13 +129,24 @@ namespace Unity_Inspector_Mod
 
         internal void RemoveClient( ClientHandler client )
         {
-            clients.Remove( client );
+            lock ( clients ) clients.Remove( client );
         }
 
-        internal string ProcessMessage( string message )
+        public void UpdateToken( string token )
         {
-            string result = messageHandler.HandleMessage( message );
-            return result;
+            token = token ?? "";
+            if ( !IPAddress.IsLoopback( listenAddress ) && string.IsNullOrEmpty( token ) )
+                throw new ArgumentException( "Remote listening requires an access token" );
+            if ( accessToken == token ) return;
+            accessToken = token;
+            ClientHandler[] snapshot;
+            lock ( clients ) snapshot = clients.ToArray();
+            foreach ( var client in snapshot ) client.Disconnect();
+        }
+
+        internal string ProcessMessage( string message, Func<bool> cancelled )
+        {
+            return messageHandler.HandleMessage( message, accessToken, cancelled );
         }
     }
 
@@ -117,33 +158,40 @@ namespace Unity_Inspector_Mod
         private readonly NetworkStream stream;
         private readonly StreamReader reader;
         private readonly StreamWriter writer;
-        private bool isConnected;
+        private int disconnected;
 
         public ClientHandler( TcpClient client, TcpServer server )
         {
             this.client = client;
             this.server = server;
+            client.NoDelay = true;
+            client.ReceiveTimeout = 120000;
+            client.SendTimeout = 10000;
             this.stream = client.GetStream();
             this.reader = new StreamReader( stream, new UTF8Encoding( false ) ); // false = no BOM
             this.writer = new StreamWriter( stream, new UTF8Encoding( false ) ) { AutoFlush = true };
-            this.isConnected = true;
-
             receiveThread = new Thread( ReceiveMessages );
             receiveThread.IsBackground = true;
+        }
+
+        public void Start()
+        {
             receiveThread.Start();
         }
 
         private void ReceiveMessages()
         {
-            while ( isConnected && client.Connected )
+            while ( Interlocked.CompareExchange( ref disconnected, 0, 0 ) == 0 )
             {
                 try
                 {
-                    string message = reader.ReadLine();
+                    string message = ReadBoundedLine();
                     if ( message != null )
                     {
                         // Process message from client
-                        string response = server.ProcessMessage( message );
+                        if ( Encoding.UTF8.GetByteCount( message ) > TcpServer.MaxRequestCharacters )
+                            throw new IOException( "Request exceeds 1 MiB limit" );
+                        string response = server.ProcessMessage( message, IsUnavailable );
                         
                         writer.WriteLine( response );
                         
@@ -155,7 +203,8 @@ namespace Unity_Inspector_Mod
                 }
                 catch ( Exception ex )
                 {
-                    Main.Log( $"[ClientHandler] Error receiving message: {ex.Message}" );
+                    if ( Interlocked.CompareExchange( ref disconnected, 0, 0 ) == 0 && server.IsRunning )
+                        Main.Log( $"[ClientHandler] Error receiving message: {ex.Message}" );
                     break;
                 }
             }
@@ -163,19 +212,36 @@ namespace Unity_Inspector_Mod
             Disconnect();
         }
 
+        private string ReadBoundedLine()
+        {
+            var message = new StringBuilder();
+            while ( true )
+            {
+                int character = reader.Read();
+                if ( character < 0 ) return null;
+                if ( character == '\n' ) return message.ToString().TrimEnd( '\r' );
+                if ( message.Length >= TcpServer.MaxRequestCharacters )
+                    throw new IOException( "Request exceeds 1 MiB limit" );
+                message.Append( (char)character );
+            }
+        }
+
+        private bool IsUnavailable()
+        {
+            if ( !server.IsRunning || Interlocked.CompareExchange( ref disconnected, 0, 0 ) != 0 ) return true;
+            try { return client.Client.Poll( 0, SelectMode.SelectRead ) && client.Client.Available == 0; }
+            catch { return true; }
+        }
+
         public void Disconnect()
         {
-            if ( !isConnected ) return;
-            isConnected = false;
+            if ( Interlocked.Exchange( ref disconnected, 1 ) != 0 ) return;
 
-            try
-            {
-                reader?.Close();
-                writer?.Close();
-                stream?.Close();
-                client?.Close();
-            }
-            catch { }
+            // Close the socket first to unblock ReadLine on the receive thread.
+            try { client.Close(); } catch { }
+            try { reader.Close(); } catch { }
+            try { writer.Close(); } catch { }
+            try { stream.Close(); } catch { }
 
             server.RemoveClient( this );
         }

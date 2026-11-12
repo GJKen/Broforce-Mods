@@ -45,12 +45,26 @@ Build without deploying:
 
 ## Runtime and MCP
 
+The panel defaults to Chinese. Click `English` / `中文` at the top to switch immediately and save the selected language for the next launch. Status text, port controls and error messages follow the selected language without interrupting the server or its connections. The instructions below use the English labels.
+
 1. Start Broforce.
 2. Enable `Unity Inspector Mod` in UMM.
-3. Confirm that the Mod panel shows `TCP Server Status: Running` on port `9999`. If the status is `Stopped`, click `Start Server` in the panel; the server normally starts automatically when the Mod loads.
+3. Confirm that the Mod panel shows `TCP Server Status: Running` on the default port `9999`. If the status is `Stopped`, click `Start Server` in the panel; the server normally starts automatically when the Mod loads.
 4. Install the Node.js 18+ dependencies and configure the MCP client in `Broforce_src\unity-inspector-mcp`. See the [MCP README](../Broforce_src/unity-inspector-mcp/README.en.md). When the client already has this service configured, do not start a second instance manually.
 
-On Windows, the port can be checked first:
+Enter a port in `Port (1-65535)` and click `Apply Settings` to switch while the game is running. The editor retains only ASCII digits; applying validates the range. Editing does not affect the server. An invalid or occupied new port leaves the existing listener and connections intact. A successful port change disconnects old clients and saves settings. When stopped, applying only saves settings; `Start Server` starts listening.
+
+Use the MCP `configure_connection` tool to change the target without restarting the client. For example, after changing the game port to `19999`, pass:
+
+```json
+{"host":"127.0.0.1","port":19999,"token":"","testConnection":true}
+```
+
+`connection_status` reports the target and connection state without revealing the token. Runtime changes last for this MCP process; use `UNITY_INSPECTOR_HOST`, `UNITY_INSPECTOR_PORT` and `UNITY_INSPECTOR_TOKEN` for persistent configuration. Apply the game listener settings and MCP target separately.
+
+The listener defaults to `127.0.0.1`. For LAN or TCP tunnel access, enable `Allow LAN/tunnel connections`, enter an access token and apply. This listens on `0.0.0.0` and requires the same MCP token. Local connections can also use a token. Rotating the token disconnects existing clients. Changing the listening address on the same port restarts the listener and attempts rollback on failure; old clients must reconnect. UMM stores the token in the local settings XML, which must not be committed.
+
+On Windows, the port can be checked first (replace `9999` if changed):
 
 ```powershell
 Test-NetConnection 127.0.0.1 -Port 9999
@@ -68,4 +82,14 @@ Connection, script, and runtime errors from Unity Inspector Mod are still writte
 
 MCP connection information is returned to the MCP client through standard error. MCP's `read_log` and `watch_log` currently look for the `Default` profile by default. If a custom profile such as `profiles\Broforce` is used, collect the actual `Core\Log.txt` directly.
 
-The Mod's TCP service has no authentication and listens on all network interfaces by default. Use it only on a trusted local machine or LAN, restrict access to port `9999` with a firewall, and never expose the port to the public Internet.
+Token authentication does not encrypt traffic. Use Tailscale, ZeroTier or another encrypted tunnel for access across the Internet.
+
+## Scheduling, cleanup and verification
+
+- Responses are routed by unique request ID with UTF-8 decoding and JSON line framing. Late replies are discarded.
+- Unity object access and script state operations run on the main thread. Screenshot capture is dispatched there, while file waiting stays on the network thread. Script compilation is serialized with expression compilation on the main thread to protect shared Mono compiler state.
+- The queue holds at most 256 tasks and starts at most 32 per frame with a 4ms scheduling budget. A running task cannot be forcibly interrupted. Unstarted tasks are cancelled on timeout, disconnection or disable; a running-task timeout explicitly reports that execution already started.
+- Each listener allows 8 connections and requests up to 1 MiB, with a 120-second idle read timeout. The MCP reconnects on the next call after closure.
+- Disabling or unloading closes sockets, releases simulated inputs and timers, unloads script patches and tracked objects, and removes this Mod's patches and dispatcher. Dynamically compiled assemblies remain loaded until the game process exits.
+
+Run `& .\tests\Test-PortSwitch.ps1` in this directory for connection, UI, scheduling and cleanup checks. Run `npm test` in the MCP directory for transport and stdio integration tests.

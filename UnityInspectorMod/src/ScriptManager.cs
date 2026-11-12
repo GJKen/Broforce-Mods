@@ -230,6 +230,19 @@ namespace Unity_Inspector_Mod
             return new { count = scripts.Length, scripts };
         }
 
+        public static void UnloadAll()
+        {
+            // Called on the main thread after the listener and queue are stopped.
+            // Nested EnqueueAndWait executes inline on this thread.
+            foreach (var name in activeScripts.Keys.ToArray())
+            {
+                try { UnloadScript(name); }
+                catch (Exception ex) { Main.Log("Script cleanup failed (" + name + "): " + ex.Message); }
+            }
+            activeScripts.Clear();
+            ScriptContext.Clear();
+        }
+
         private static object InvokeMain(string name, ActiveScript script, Dictionary<string, string> args)
         {
             // Find Main() method

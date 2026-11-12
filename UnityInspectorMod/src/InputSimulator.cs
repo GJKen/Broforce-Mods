@@ -1,177 +1,144 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
-using UnityEngine;
 
 namespace Unity_Inspector_Mod
 {
     public static class InputSimulator
     {
-        private static Dictionary<string, bool> simulatedInputs = new Dictionary<string, bool>();
-        private static Dictionary<string, Timer> activeHolds = new Dictionary<string, Timer>();
-        private static bool startButtonHandled = false;
-        
+        private static readonly object gate = new object();
+        private static readonly Dictionary<string, bool> simulatedInputs = new Dictionary<string, bool>();
+        private static readonly Dictionary<string, Timer> activeHolds = new Dictionary<string, Timer>();
+        private static bool startButtonHandled;
+        private static bool accepting;
+        private static int generation;
+
         public static void Initialize()
         {
-            simulatedInputs["up"] = false;
-            simulatedInputs["down"] = false;
-            simulatedInputs["left"] = false;
-            simulatedInputs["right"] = false;
-            simulatedInputs["fire"] = false;
-            simulatedInputs["jump"] = false;
-            simulatedInputs["special"] = false;
-            simulatedInputs["highfive"] = false;
-            simulatedInputs["gesture"] = false;
-            simulatedInputs["sprint"] = false;
-            simulatedInputs["start"] = false;
-            simulatedInputs["escape"] = false;
+            lock (gate)
+            {
+                ClearLocked();
+                generation++;
+                accepting = true;
+                foreach (string key in new[] { "up", "down", "left", "right", "fire", "jump", "special", "highfive", "gesture", "sprint", "start", "escape" })
+                    simulatedInputs[key] = false;
+            }
         }
-        
+
         public static object SimulateInput(string action, int? duration = null, int? playerNum = null, int? count = null, int? interval = null)
         {
             try
             {
-                string inputKey = action.ToLower();
-                
-                if (!simulatedInputs.ContainsKey(inputKey))
+                string key = (action ?? "").ToLowerInvariant();
+                int presses = count ?? 1, spacing = interval ?? 200, hold = duration ?? 50;
+                if (hold <= 0) hold = 50;
+                if (presses < 1 || presses > 1000 || spacing < 1 || spacing > 10000 || hold > 120000 ||
+                    (long)(presses - 1) * spacing > 120000)
+                    throw new ArgumentException("Input count/interval/duration is outside the supported range (maximum 120 seconds)");
+                int current;
+                var cancelled = MainThreadDispatcher.RequestCancelled;
+                lock (gate)
                 {
-                    return new { success = false, error = $"Unknown input action: {action}" };
+                    if (!simulatedInputs.ContainsKey(key)) throw new ArgumentException("Unknown input action: " + action);
+                    current = generation;
                 }
-                
-                int targetPlayer = playerNum ?? 0;
-                int pressCount = count ?? 1;
-                int pressInterval = interval ?? 200; // Default 200ms between presses
-                
-                if (pressCount > 1)
+                for (int i = 0; i < presses; i++)
                 {
-                    // Multiple presses
-                    PressInputMultiple(inputKey, pressCount, pressInterval, targetPlayer);
-                    return new { success = true, action = action, count = pressCount, interval = pressInterval, player = targetPlayer };
-                }
-                else if (duration.HasValue && duration.Value > 0)
-                {
-                    if (activeHolds.ContainsKey(inputKey))
+                    lock (gate)
                     {
-                        activeHolds[inputKey].Dispose();
-                        activeHolds.Remove(inputKey);
+                        CheckActive(current, cancelled);
+                        HoldLocked(key, presses > 1 ? 50 : hold);
                     }
-                    
-                    HoldInput(inputKey, duration.Value, targetPlayer);
-                    
-                    return new { success = true, action = action, duration = duration.Value, player = targetPlayer };
+                    if (i < presses - 1)
+                    {
+                        var elapsed = Stopwatch.StartNew();
+                        while (elapsed.ElapsedMilliseconds < spacing)
+                        {
+                            lock (gate) CheckActive(current, cancelled);
+                            long remaining = spacing - elapsed.ElapsedMilliseconds;
+                            if (remaining > 0) Thread.Sleep((int)System.Math.Min(25, remaining));
+                        }
+                    }
                 }
-                else
-                {
-                    PressInput(inputKey, targetPlayer);
-                    return new { success = true, action = action, player = targetPlayer };
-                }
+                return new { success = true, action = action, count = presses, interval = spacing, duration = hold, player = playerNum ?? 0 };
             }
             catch (Exception ex)
             {
-                Main.Log($"Error simulating input: {ex.Message}");
                 return new { success = false, error = ex.Message };
             }
         }
-        
-        private static void HoldInput(string inputKey, int durationMs, int playerNum)
-        {
-            simulatedInputs[inputKey] = true;
-            
-            var timer = new Timer(_ =>
-            {
-                simulatedInputs[inputKey] = false;
-                if (activeHolds.ContainsKey(inputKey))
-                {
-                    activeHolds[inputKey].Dispose();
-                    activeHolds.Remove(inputKey);
-                }
-            }, null, durationMs, Timeout.Infinite);
-            
-            activeHolds[inputKey] = timer;
-        }
-        
-        private static void PressInput(string inputKey, int playerNum)
-        {
-            simulatedInputs[inputKey] = true;
-            
-            var timer = new Timer(_ =>
-            {
-                simulatedInputs[inputKey] = false;
-            }, null, 50, Timeout.Infinite);
-        }
-        
-        private static void PressInputMultiple(string inputKey, int count, int intervalMs, int playerNum)
-        {
-            // Block until all presses complete
-            for (int i = 0; i < count; i++)
-            {
-                // Press the input
-                simulatedInputs[inputKey] = true;
 
-                // Release after 50ms
-                var releaseTimer = new Timer(_ =>
-                {
-                    simulatedInputs[inputKey] = false;
-                }, null, 50, Timeout.Infinite);
+        private static void CheckActive(int current, Func<bool> cancelled)
+        {
+            if (!accepting || current != generation || (cancelled != null && cancelled()))
+                throw new OperationCanceledException("Simulated input cancelled");
+        }
 
-                // Wait for interval before next press (except after last press)
-                if (i < count - 1)
+        private static void HoldLocked(string key, int duration)
+        {
+            Timer previous;
+            if (activeHolds.TryGetValue(key, out previous)) previous.Dispose();
+            simulatedInputs[key] = true;
+            Timer timer = null;
+            timer = new Timer(_ =>
+            {
+                lock (gate)
                 {
-                    System.Threading.Thread.Sleep(intervalMs);
+                    Timer active;
+                    if (!activeHolds.TryGetValue(key, out active) || !ReferenceEquals(active, timer)) return;
+                    activeHolds.Remove(key);
+                    simulatedInputs[key] = false;
+                    if (key == "start") startButtonHandled = false;
+                    timer.Dispose();
                 }
+            }, null, Timeout.Infinite, Timeout.Infinite);
+            activeHolds[key] = timer;
+            timer.Change(duration, Timeout.Infinite);
+        }
+
+        public static bool IsInputSimulated(string key)
+        {
+            lock (gate)
+            {
+                bool value;
+                return accepting && simulatedInputs.TryGetValue(key, out value) && value;
             }
         }
-        
-        public static bool IsInputSimulated(string inputKey)
-        {
-            return simulatedInputs.ContainsKey(inputKey) && simulatedInputs[inputKey];
-        }
-        
+
         public static bool HasAnySimulatedInput()
         {
-            foreach (var kvp in simulatedInputs)
+            lock (gate)
             {
-                if (kvp.Value) return true;
+                if (!accepting) return false;
+                foreach (var value in simulatedInputs.Values) if (value) return true;
+                return false;
             }
-            return false;
         }
-        
+
         public static bool ShouldTriggerStart()
         {
-            if (simulatedInputs.ContainsKey("start") && simulatedInputs["start"] && !startButtonHandled)
+            lock (gate)
             {
+                bool value;
+                if (!accepting || startButtonHandled || !simulatedInputs.TryGetValue("start", out value) || !value) return false;
                 startButtonHandled = true;
-                // Reset the flag after a short delay to allow for next press
-                var resetTimer = new Timer(_ =>
-                {
-                    startButtonHandled = false;
-                }, null, 100, Timeout.Infinite);
                 return true;
             }
-            
-            return false;
         }
-        
-        public static void ClearAllInputs()
+
+        private static void ClearLocked()
         {
-            foreach (var kvp in activeHolds)
-            {
-                if (kvp.Value != null)
-                {
-                    kvp.Value.Dispose();
-                }
-            }
+            foreach (var timer in activeHolds.Values) timer.Dispose();
             activeHolds.Clear();
-            
-            foreach (var key in simulatedInputs.Keys)
-            {
-                simulatedInputs[key] = false;
-            }
+            foreach (var key in new List<string>(simulatedInputs.Keys)) simulatedInputs[key] = false;
+            startButtonHandled = false;
         }
-        
+
+        public static void ClearAllInputs() { lock (gate) ClearLocked(); }
         public static void Cleanup()
         {
-            ClearAllInputs();
+            lock (gate) { accepting = false; generation++; ClearLocked(); }
         }
     }
 }

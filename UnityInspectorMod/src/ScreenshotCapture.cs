@@ -7,11 +7,9 @@ namespace Unity_Inspector_Mod
     public static class ScreenshotCapture
     {
         private static readonly string screenshotDirectory;
-        private static readonly bool isLinux;
 
         static ScreenshotCapture()
         {
-            isLinux = Application.platform == RuntimePlatform.LinuxPlayer;
             screenshotDirectory = Path.Combine( Main.mod.Path, "Screenshots" );
 
             if ( !Directory.Exists( screenshotDirectory ) )
@@ -32,25 +30,20 @@ namespace Unity_Inspector_Mod
 
                 var path = Path.Combine( screenshotDirectory, filename );
 
-                UnityEngine.ScreenCapture.CaptureScreenshot( path );
+                MainThreadDispatcher.EnqueueAndWait( () => UnityEngine.ScreenCapture.CaptureScreenshot( path ) );
 
                 const int timeoutMs = 3000;
                 const int pollIntervalMs = 25;
                 int elapsed = 0;
-                while ( !File.Exists( path ) && elapsed < timeoutMs )
+                while ( !IsReady( path ) && elapsed < timeoutMs )
                 {
                     System.Threading.Thread.Sleep( pollIntervalMs );
                     elapsed += pollIntervalMs;
                 }
 
-                if ( !File.Exists( path ) )
+                if ( !IsReady( path ) )
                 {
                     throw new IOException( $"Screenshot capture timed out after {timeoutMs}ms" );
-                }
-
-                if ( isLinux )
-                {
-                    return path;
                 }
 
                 return path.Replace( '\\', '/' );
@@ -60,6 +53,11 @@ namespace Unity_Inspector_Mod
                 Main.Log( $"Failed to take screenshot: {ex.Message}" );
                 throw;
             }
+        }
+
+        private static bool IsReady( string path )
+        {
+            return File.Exists( path ) && new FileInfo( path ).Length > 0;
         }
 
         private static void ManageScreenshotHistory()

@@ -137,20 +137,16 @@ namespace Unity_Inspector_Mod
         {
             try
             {
-                // Ensure initialization with lock
-                if (!initialized)
-                {
-                    Initialize();
-                }
-
                 // Execute all code on the main thread to prevent Unity API crashes
                 object executionResult = null;
                 Exception executionException = null;
+                string compilerOutput = null;
 
                 MainThreadDispatcher.EnqueueAndWait(() =>
                 {
                     try
                     {
+                        if (!initialized) Initialize();
                         output.Length = 0;
 
                         // Strip comments from the code
@@ -238,11 +234,13 @@ namespace Unity_Inspector_Mod
                     {
                         // Don't destroy evaluator on first errors - it may be warming up
                         executionException = iex;
+                        if (retriesRemaining == 0) { initialized = false; evaluator = null; }
                     }
                     catch (Exception ex)
                     {
                         executionException = ex;
                     }
+                    finally { compilerOutput = output != null ? output.ToString() : null; }
                 }, 5000);
 
                 // Check if there was an exception during execution
@@ -263,16 +261,6 @@ namespace Unity_Inspector_Mod
                     // All retries exhausted
                     Main.Log($"Code execution failed after retries: {executionException.Message}");
 
-                    // If it was an InternalErrorException, force re-init for next call
-                    if (executionException is InternalErrorException)
-                    {
-                        lock (initLock)
-                        {
-                            initialized = false;
-                            evaluator = null;
-                        }
-                    }
-
                     var errorMessage = $"Execution error: {executionException.Message}";
                     var innerEx = executionException.InnerException;
                     while (innerEx != null)
@@ -281,7 +269,6 @@ namespace Unity_Inspector_Mod
                         innerEx = innerEx.InnerException;
                     }
 
-                    var compilerOutput = output != null ? output.ToString() : null;
                     if (!string.IsNullOrEmpty(compilerOutput))
                     {
                         errorMessage += $"\n  Compiler output: {compilerOutput}";
@@ -304,7 +291,7 @@ namespace Unity_Inspector_Mod
                 return new
                 {
                     success = false,
-                    error = "Code execution timed out after 5 seconds",
+                    error = tex.Message,
                     result = (object)null
                 };
             }
@@ -318,6 +305,13 @@ namespace Unity_Inspector_Mod
                     result = (object)null
                 };
             }
+        }
+
+        public static void Cleanup()
+        {
+            evaluator = null;
+            output = null;
+            initialized = false;
         }
 
         

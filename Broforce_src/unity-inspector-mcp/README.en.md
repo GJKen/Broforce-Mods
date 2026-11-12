@@ -40,6 +40,18 @@ node wrapper.js
 
 When Codex or another MCP client is configured with this server, do not start a second copy manually; the client starts the stdio server itself.
 
+### Runtime connection settings
+
+After changing the game port, call the MCP `configure_connection` tool, for example:
+
+```json
+{"host":"127.0.0.1","port":19999,"token":"","testConnection":true}
+```
+
+Set any of `host`, `port`, `token` and `connectTimeoutMs` (100–30000ms); omitted fields retain their values. This disconnects the old socket and tests the new target with `ping`, reporting `reachable` and any error. Set `testConnection:false` to configure without connecting. `connection_status` reports the target, connection state and pending request count without revealing the token. Runtime configuration lasts until this MCP process restarts; use environment variables for persistence.
+
+The transport routes unique request IDs through one UTF-8 JSON line decoder, supporting concurrent requests and TCP fragmentation/coalescing while ignoring late replies. It does not infer a game crash from local process polling. Default timeouts are 5 seconds for connecting, 7 for ordinary commands, 35 for code/script compilation and execution, 10 for screenshots, and 17 for script unload.
+
 ### Remote Windows client
 
 The MCP target can be changed with environment variables. This is useful when the Broforce process runs on another trusted LAN machine:
@@ -47,10 +59,16 @@ The MCP target can be changed with environment variables. This is useful when th
 ```text
 UNITY_INSPECTOR_HOST=192.0.2.10
 UNITY_INSPECTOR_PORT=9999
+UNITY_INSPECTOR_TOKEN=<same token as the game panel>
+UNITY_INSPECTOR_PROCESS_SCOPE=remote
 UNITY_INSPECTOR_UMM_LOG_PATH=\\192.0.2.10\game-share\Broforce\profiles\Default\UMM\Core\Log.txt
 ```
 
-The Unity Inspector Mod must be enabled on the remote machine and its TCP server must listen on the LAN interface. The service has no authentication, so allow TCP 9999 only from the monitoring machine and do not expose it outside the trusted LAN.
+Enable the Mod on the remote machine, select `Allow LAN/tunnel connections`, enter an access token and apply. The default listener is local-only at `127.0.0.1`; remote mode listens on `0.0.0.0` and requires a matching token. Use TCP for port forwarding. Local connections may omit the token. Authentication does not encrypt traffic; use an encrypted tunnel across the Internet.
+
+`configure_connection` only changes the debugging connection. Remote launch still requires a configured remote task. `stop_game` refuses to kill local processes when the target is remote; stop the game on that machine. When forwarding a remote target through loopback, set `UNITY_INSPECTOR_PROCESS_SCOPE=remote`.
+
+Run `npm test` for transport and stdio tool integration tests without starting the game.
 
 ### Adding to Claude Desktop
 

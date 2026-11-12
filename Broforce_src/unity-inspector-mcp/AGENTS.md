@@ -10,6 +10,7 @@ AI 客户端 --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity I
 
 - `wrapper.js`：热重载代理。在 AI 客户端与 `index.js` 之间转发 MCP 消息，注入 `restart_server` 工具。
 - `index.js`：实际的 MCP 服务器，包含所有工具实现。
+- `unity-connection.js`：TCP 连接与请求分发；唯一 ID、共享连接 Promise、UTF-8 单行解码、迟到响应丢弃、超时及运行时连接配置。
 - 部分工具仅在 Node.js 侧处理（文件操作、进程管理）；其余通过 TCP 转发给游戏。
 
 ## 关键约束
@@ -34,14 +35,22 @@ AI 客户端 --stdio/MCP--> wrapper.js --stdio--> index.js --TCP:9999--> Unity I
 
 ## 超时约定
 
-默认 TCP 超时 2 秒。慢操作在 `sendCommand()` 中覆盖：
-- `execute_script` / `compile_script`：30 秒
-- `unload_script`：10 秒
-- 带 count 的 `simulate_input`：count × interval
+连接超时默认 5 秒；普通命令 7 秒。预算定义在 `unity-connection.js` 的 `commandTimeout()`：
+- `execute_code` / `execute_script` / `compile_script`：35 秒
+- `unload_script`：17 秒；`take_screenshot`：10 秒
+- 带 count 的 `simulate_input`：`(count - 1) × interval + 7000ms`，最长 125 秒
+- 游戏端排队普通任务 5 秒、脚本任务 30 秒；等待超时取消未开始的任务，不能强行终止已执行的 Unity 操作。
 
 ## 崩溃检测
 
-`sendCommand` 等待响应期间每 500ms 轮询 `pgrep`。若游戏进程死亡，立即返回 "Game process died — the command likely caused a crash"，而不是等超时。
+不再通过本机进程轮询推断游戏崩溃。仅根据 TCP 连接状态与命令超时报告错误，不能把远端断开直接解释为崩溃。
+
+## 连接配置与认证
+
+- `configure_connection` 可运行时更新 host/port/token 并测试连接；`connection_status` 不连接游戏、不返回口令。修改只在当前进程内生效。
+- 持久配置：`UNITY_INSPECTOR_HOST`、`UNITY_INSPECTOR_PORT`、`UNITY_INSPECTOR_TOKEN`。游戏端默认只监听回环地址，远程监听必须设置口令。
+- 请求顶层可携带 `token`；禁止在日志或状态结果中打印该字段或完整请求源码。游戏端上限 8 连接、1 MiB 请求，客户端上限 64 待处理请求。
+- `npm test` 运行传输及实际 stdio 工具集成测试，不需要游戏。
 
 ## C# 脚本系统（Node.js 侧）
 

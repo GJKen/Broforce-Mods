@@ -48,14 +48,22 @@ namespace Unity_Inspector_Mod
             };
         }
 
-        public string HandleMessage( string message )
+        public string HandleMessage( string message, string requiredToken = "", Func<bool> cancelled = null )
         {
+            string id = null;
+            var previousCancellation = MainThreadDispatcher.RequestCancelled;
+            MainThreadDispatcher.RequestCancelled = cancelled;
             try
             {
                 var request = JObject.Parse( message );
-                var id = request["id"]?.ToString();
+                id = request["id"]?.ToString();
                 var method = request["method"]?.ToString();
                 var parameters = request["params"] as JObject;
+
+                if ( !string.IsNullOrEmpty( requiredToken ) && !TokensEqual( requiredToken, request["token"]?.ToString() ) )
+                    return CreateErrorResponse( id, "Authentication failed: check the Unity Inspector access token" );
+                if ( !Main.enabled || (cancelled != null && cancelled()) )
+                    return CreateErrorResponse( id, "Unity Inspector is disabled or the request disconnected" );
 
                 if ( string.IsNullOrEmpty( method ) )
                 {
@@ -64,8 +72,19 @@ namespace Unity_Inspector_Mod
 
                 if ( handlers.ContainsKey( method ) )
                 {
-                    var result = handlers[method]( parameters );
-                    return CreateSuccessResponse( id, result );
+                    // These orchestrate their own main-thread work or only touch
+                    // managed data. All other handlers and serialization run on Unity's thread.
+                    bool background = method == "ping" || method == "echo" || method == "execute_code" ||
+                        method == "take_screenshot" || method == "simulate_input";
+                    if ( background ) return CreateSuccessResponse( id, handlers[method]( parameters ) );
+                    string response = null;
+                    int timeout = method == "execute_script" || method == "compile_script" ? 30000 :
+                        method == "unload_script" ? 15000 : 5000;
+                    MainThreadDispatcher.EnqueueAndWait( () =>
+                    {
+                        response = CreateSuccessResponse( id, handlers[method]( parameters ) );
+                    }, timeout );
+                    return response;
                 }
                 else
                 {
@@ -74,13 +93,22 @@ namespace Unity_Inspector_Mod
             }
             catch ( JsonException ex )
             {
-                return CreateErrorResponse( null, $"Invalid JSON: {ex.Message}" );
+                return CreateErrorResponse( id, $"Invalid JSON: {ex.Message}" );
             }
             catch ( Exception ex )
             {
                 Main.Log( $"Error handling message: {ex}" );
-                return CreateErrorResponse( null, $"Internal error: {ex.Message}" );
+                return CreateErrorResponse( id, $"Internal error: {ex.Message}" );
             }
+            finally { MainThreadDispatcher.RequestCancelled = previousCancellation; }
+        }
+
+        private static bool TokensEqual( string expected, string actual )
+        {
+            if ( actual == null || expected.Length != actual.Length ) return false;
+            int difference = 0;
+            for ( int i = 0; i < expected.Length; i++ ) difference |= expected[i] ^ actual[i];
+            return difference == 0;
         }
 
         private string CreateSuccessResponse( string id, object result )

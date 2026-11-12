@@ -28,6 +28,13 @@ namespace Unity_Inspector_Mod
             public string Errors;
         }
 
+        public static void Cleanup()
+        {
+            new Harmony("scriptcompiler.internal").UnpatchAll("scriptcompiler.internal");
+            tokenCheckPatched = false;
+            extensionMethodCrashPatched = false;
+        }
+
         public static void PatchTokenCheck()
         {
             if (tokenCheckPatched) return;

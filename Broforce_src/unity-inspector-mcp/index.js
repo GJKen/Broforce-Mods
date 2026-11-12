@@ -8,7 +8,7 @@ import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import net from 'net';
+import { UnityConnection } from './unity-connection.js';
 import os from 'os';
 import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
@@ -68,38 +68,9 @@ function runIgnoredProcess(command, args) {
   });
 }
 
-async function isBroforceRunning() {
-  if (remoteProcessScope) {
-    return null;
-  }
-
-  if (process.platform === 'win32') {
-    try {
-      const { stdout } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], {
-        windowsHide: true,
-      });
-      return WINDOWS_GAME_PROCESS_NAMES.some((name) => stdout.includes(`"${name}"`));
-    } catch (error) {
-      return error.code === 'ENOENT' ? null : false;
-    }
-  }
-
-  for (const processName of ['Broforce.x86_64', 'Broforce']) {
-    try {
-      await execFileAsync('pgrep', ['-x', processName]);
-      return true;
-    } catch (error) {
-      if (error.code === 'ENOENT') return null;
-      // Try the next known process name.
-    }
-  }
-
-  try {
-    await execFileAsync('pgrep', ['-f', 'Broforce_beta.exe']);
-    return true;
-  } catch (error) {
-    return error.code === 'ENOENT' ? null : false;
-  }
+function canManageLocalGameProcess() {
+  const host = unityClient.host?.toLowerCase();
+  return !remoteProcessScope && (!host || ['localhost', '127.0.0.1', '::1', os.hostname().toLowerCase()].includes(host));
 }
 
 async function terminateBroforce() {
@@ -138,22 +109,18 @@ const UMM_LOG_PATHS = [
 ];
 let watchLogOffset = 0;
 
-class UnityInspectorClient {
+class UnityInspectorClient extends UnityConnection {
   constructor() {
-    const configuredHost = process.env.UNITY_INSPECTOR_HOST?.trim();
-    const configuredPort = Number.parseInt(process.env.UNITY_INSPECTOR_PORT || '', 10);
-    this.host = configuredHost || null;
-    this.port = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
-      ? configuredPort
-      : 9999;
-    this.connected = false;
-    this.platform = null; // 'wsl', 'linux', or 'native'
+    const rawPort = process.env.UNITY_INSPECTOR_PORT || '9999';
+    const port = /^\d+$/.test(rawPort) ? Number(rawPort) : NaN;
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error('UNITY_INSPECTOR_PORT must be an integer from 1 to 65535');
+    }
+    super({ host: process.env.UNITY_INSPECTOR_HOST?.trim() || null, port,
+      token: process.env.UNITY_INSPECTOR_TOKEN || '' });
+    this.platform = null;
     this.gamePath = null;
     this.protonPrefix = null;
-
-    if (this.host) {
-      console.error(`Unity Inspector target configured by environment: ${this.host}:${this.port}`);
-    }
   }
 
   async detectPlatform() {
@@ -254,46 +221,6 @@ class UnityInspectorClient {
     return '127.0.0.1';
   }
 
-  async connect() {
-    if (!this.host) {
-      this.host = await this.getServerHost();
-    }
-
-    // Clean up any existing socket
-    if (this.socket) {
-      this.socket.removeAllListeners();
-      this.socket.destroy();
-      this.socket = null;
-    }
-
-    return new Promise((resolve, reject) => {
-      this.socket = new net.Socket();
-      let settled = false;
-
-      this.socket.connect(this.port, this.host, () => {
-        settled = true;
-        this.connected = true;
-        console.error(`Connected to Unity Inspector at ${this.host}:${this.port}`);
-        resolve();
-      });
-
-      this.socket.on('error', (err) => {
-        this.connected = false;
-        if (!settled) {
-          settled = true;
-          reject(err);
-        } else {
-          console.error(`Socket error (idle): ${err.message}`);
-        }
-      });
-
-      this.socket.on('close', () => {
-        this.connected = false;
-        console.error('Connection to Unity Inspector closed');
-      });
-    });
-  }
-
   async checkHealth() {
     try {
       const result = await this.sendCommand("ping", {});
@@ -304,142 +231,6 @@ class UnityInspectorClient {
     }
   }
 
-  async sendCommand(method, params = {}) {
-    if (!this.connected) {
-      try {
-        await this.connect();
-      } catch (err) {
-        if (err.code === 'ECONNREFUSED') {
-          throw new Error('Game is not running. Use launch_game to start it.');
-        }
-        throw err;
-      }
-    }
-
-    return new Promise((resolve, reject) => {
-      const message = JSON.stringify({
-        id: Date.now().toString(),
-        method: method,
-        params: params
-      }) + '\n';
-      
-      console.error(`Sending message: ${message.trim()}`);
-
-      let responseData = '';
-      let settled = false;
-
-      let processCheckInterval = null;
-      let timeoutHandle = null;
-      let processCheckInFlight = false;
-
-      const cleanup = () => {
-        if (processCheckInterval) clearInterval(processCheckInterval);
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-        if (this.socket) {
-          this.socket.removeListener('data', dataHandler);
-          this.socket.removeListener('error', errorHandler);
-          this.socket.removeListener('close', closeHandler);
-        }
-      };
-
-      const settle = (fn) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        fn();
-      };
-
-      const dataHandler = (data) => {
-        responseData += data.toString();
-        if (responseData.includes('\n')) {
-          settle(() => {
-            try {
-              const response = JSON.parse(responseData.trim());
-              if (response.success) {
-                resolve(response.result);
-              } else {
-                reject(new Error(response.error || 'Command failed'));
-              }
-            } catch (e) {
-              reject(new Error(`Invalid response: ${responseData}`));
-            }
-          });
-        }
-      };
-
-      const errorHandler = (err) => {
-        settle(() => {
-          this.connected = false;
-          reject(new Error(`Connection lost during command: ${err.message}`));
-        });
-      };
-
-      const closeHandler = () => {
-        settle(() => {
-          this.connected = false;
-          reject(new Error('Connection closed — game likely crashed'));
-        });
-      };
-
-      this.socket.on('data', dataHandler);
-      this.socket.on('error', errorHandler);
-      this.socket.on('close', closeHandler);
-      this.socket.write(message);
-
-      // Calculate timeout based on command type
-      let timeout = 2000; // Default 2 seconds
-
-      // For simulate_input with multiple presses, calculate expected completion time
-      if (method === 'simulate_input' && params.count > 1) {
-        const count = params.count;
-        const interval = params.interval || 200;
-        // (count - 1) * interval + 1000ms buffer
-        timeout = (count - 1) * interval + 1000;
-      }
-
-      // Code/script execution can be slow
-      if (method === 'execute_code') {
-        timeout = 10000;
-      }
-      if (method === 'execute_script' || method === 'compile_script') {
-        timeout = 30000;
-      }
-      if (method === 'unload_script') {
-        timeout = 10000;
-      }
-
-      // Poll for game process death while waiting (faster crash detection)
-      processCheckInterval = setInterval(async () => {
-        if (processCheckInFlight || settled) return;
-        processCheckInFlight = true;
-        try {
-          if (await isBroforceRunning() === false) {
-            settle(() => {
-              this.connected = false;
-              reject(new Error('Game process died — the command likely caused a crash'));
-            });
-          }
-        } catch {
-          // Do not infer a game crash when process inspection itself fails.
-        } finally {
-          processCheckInFlight = false;
-        }
-      }, 500);
-
-      timeoutHandle = setTimeout(() => {
-        settle(() => {
-          reject(new Error('Command timeout'));
-        });
-      }, timeout);
-    });
-  }
-
-  disconnect() {
-    if (this.socket) {
-      this.socket.destroy();
-      this.connected = false;
-    }
-  }
 }
 
 // Find the UMM log file
@@ -745,6 +536,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
   return {
     tools: [
+      {
+        name: "configure_connection",
+        description: "Change the Unity Inspector target IP/hostname, TCP port or access token at runtime, then test connectivity. Settings last until this MCP process restarts; use UNITY_INSPECTOR_HOST/PORT/TOKEN for persistent configuration. Does not change the game-side listener.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            host: { type: "string", description: "Game machine IP or hostname" },
+            port: { type: "integer", minimum: 1, maximum: 65535 },
+            token: { type: "string", maxLength: 256, description: "Access token configured in the game; empty string clears it. Never returned in results." },
+            connectTimeoutMs: { type: "integer", minimum: 100, maximum: 30000 },
+            testConnection: { type: "boolean", default: true }
+          },
+          additionalProperties: false
+        }
+      },
+      {
+        name: "connection_status",
+        description: "Show the current Unity Inspector target, TCP connection state and whether a token is configured. Does not reveal the token or connect to the game.",
+        inputSchema: { type: "object", properties: {} }
+      },
       {
         name: "ping",
         description: "Test connection to Unity Inspector",
@@ -1285,12 +1096,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: args = {} } = request.params;
 
   try {
     let result;
 
     switch (name) {
+      case "configure_connection":
+        result = await unityClient.configure(args);
+        break;
+
+      case "connection_status":
+        result = unityClient.getConnectionStatus();
+        break;
+
       case "ping":
         result = await unityClient.sendCommand("ping");
         break;
@@ -1686,6 +1505,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           break;
         }
 
+        if (!isRemoteLaunchConfigured() && !canManageLocalGameProcess()) {
+          throw new Error('The target is remote. Configure a remote launch task or start the game on that machine.');
+        }
+
         if (gameRunning && args.restart) {
           if (isRemoteLaunchConfigured()) {
             throw new Error('Remote restart is not configured; stop the remote game before launching it again.');
@@ -1763,6 +1586,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "stop_game": {
+        if (isRemoteLaunchConfigured() || !canManageLocalGameProcess()) {
+          throw new Error('Remote game termination is not configured. Stop Broforce on the target machine.');
+        }
         // Disconnect TCP first
         unityClient.disconnect();
         try {
