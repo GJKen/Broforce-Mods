@@ -8,6 +8,6 @@
 | --- | --- |
 | `issues/evidence/2026-11-09-lobby-join-stream/` | `docs/evidence/2026-11-09-lobby-join-stream/` |
 
-`results.json` 原始回执保持原内容，仅本地保留。旧 `issues/evidence/` 已搬空并移除，迁移不改变附件的发布范围。
+上述路径映射仅为历史记录。2026-11-10 按用户要求删除 `docs/evidence/` 及其中仅本地保留的 `results.json`；验证结论保留在对应问题记录中。旧 `issues/evidence/` 已搬空并移除，原始附件未提交或推送。
 
 问题入口见 [问题索引](../issues/README.md)。

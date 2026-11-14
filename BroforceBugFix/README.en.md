@@ -6,16 +6,17 @@ This is a Unity Mod Manager + Harmony bug-fix plugin for the Steam version of Br
 
 ## Current Fixes
 
-The current version is `0.3.0` and contains two fixes:
+The current version is `0.3.0` and contains three fixes:
 
 - Prevents the same `DoodadCrate` from recursively entering `ActuallyCollapse` before the previous call has finished. This fixes infinite recursion, rapidly increasing explosion effects, severe frame drops, and `StackOverflowException` when adjacent explosive ammunition crates trigger one another.
 - Clears a previous room's paused RPC stream and queued messages when joining a new lobby from MainMenu. This prevents an unfinished Workshop load from blocking the next official-map join, independently of CustomMapMultiplayer.
+- Fixes the original null-target exception when a snake/facehugger detaches, allowing victim cleanup to finish instead of repeating death and blood each frame. Offline A/B and controlled FRP tests on both peers passed. The initial cause of the lost target reference remains unconfirmed; see the [issue record](issues/ISSUES-2026-11-14-蛇脱离空目标导致反复出血.md).
 
 | Item | Current value |
 | --- | --- |
 | Version | `0.3.0` |
 | Static build | Passed |
-| In-game retest | Lobby fix passed a two-machine official Steam retest; crate fix acceptance remains pending |
+| In-game retest | Lobby fix passed a two-machine official Steam retest; detach fix passed offline A/B and controlled FRP checks on both peers; crate fix acceptance remains pending |
 
 The first collapse still runs the complete original logic, including the explosion, area damage, normal chain reaction, drops, and network RPCs. The patch only skips nested re-entry while the same instance has not finished exiting.
 
@@ -26,6 +27,7 @@ The UMM Mod enabled state is the outermost switch. The plugin panel has two addi
 - `Enable all bug fixes`: The plugin-level master switch. When disabled, all fixes are unloaded immediately while each individual toggle selection is retained.
 - `Prevent recursive explosive-ammo crate collapse`: The individual toggle for the explosive ammunition crate recursion fix.
 - `Clear a stalled previous room's network stream when joining`: The individual toggle for clearing a stalled stream at the new-lobby boundary.
+- `Fix snake/facehugger detach errors and repeated bleeding`: The individual toggle for the null-target detach fix.
 
 All plugin-level toggles are enabled by default. Each fix requires UMM, the master switch, and its individual switch to be enabled. Setting changes apply immediately.
 

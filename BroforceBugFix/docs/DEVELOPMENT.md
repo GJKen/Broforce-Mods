@@ -14,6 +14,7 @@
 - `src/BugFixSettings.cs`：全部修复主开关和各修复的持久化独立开关。
 - `src/DoodadCrateReentryFix.cs`：`DoodadCrate.ActuallyCollapse` 单实例同步重入保护。
 - `src/LobbyJoinStreamFix.cs`：主菜单加入新房间时，清理上次未完成地图加载遗留的暂停 RPC 流。
+- `src/FaceHuggerDetachFix.cs`：修复原版蛇/抱脸虫脱离空目标的异常，保留原版脱离和弹开逻辑；不承担联机状态同步。
 - `BuildAndDeploy.ps1`：使用 .NET Framework 3.5 编译器构建，并更新本机、内网测试端和项目安装包。
 - `issues/`：保存问题记录、结论、修复边界和复测入口；运行证据统一放在 `docs/evidence/`。
 
@@ -24,6 +25,8 @@ GJKen.BroforceBugFix.DoodadCrateReentry
 ```
 
 加入房间修复使用独立 ID `GJKen.BroforceBugFix.LobbyJoinStream`。卸载本插件时只移除各修复自己的补丁，不影响 `CustomMapMultiplayer` 或其它 Mod。
+
+蛇脱离修复使用独立 ID `GJKen.BroforceBugFix.FaceHuggerDetach`，设置字段为 `EnableFaceHuggerDetachFix`，默认开启。仅将原版 `DisconnectFaceHugger` 的 `Unit.IsFlexing` 调用替换为空目标返回 false 的判断，其余指令保留。离线与双端受控复测和未确认的引用丢失触发条件见[独立问题记录](../issues/ISSUES-2026-11-14-蛇脱离空目标导致反复出血.md)。
 
 ## 开关模型
 

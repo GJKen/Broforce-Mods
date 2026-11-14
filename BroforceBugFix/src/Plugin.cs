@@ -90,6 +90,7 @@ namespace BroforceBugFix
             var previousMaster = Settings.EnableAllFixes;
             var previousDoodadCrate = Settings.EnableDoodadCrateReentryFix;
             var previousLobbyJoinStream = Settings.EnableLobbyJoinStreamFix;
+            var previousFaceHuggerDetach = Settings.EnableFaceHuggerDetachFix;
 
             Settings.EnableAllFixes = GUILayout.Toggle(
                 Settings.EnableAllFixes,
@@ -102,6 +103,9 @@ namespace BroforceBugFix
             Settings.EnableLobbyJoinStreamFix = GUILayout.Toggle(
                 Settings.EnableLobbyJoinStreamFix,
                 "Clear a stalled previous room's network stream when joining");
+            Settings.EnableFaceHuggerDetachFix = GUILayout.Toggle(
+                Settings.EnableFaceHuggerDetachFix,
+                "Fix snake/facehugger detach errors and repeated bleeding");
 
             var doodadCrateActive = _modEnabled &&
                                     Settings.EnableAllFixes &&
@@ -112,7 +116,8 @@ namespace BroforceBugFix
 
             if (previousMaster != Settings.EnableAllFixes ||
                 previousDoodadCrate != Settings.EnableDoodadCrateReentryFix ||
-                previousLobbyJoinStream != Settings.EnableLobbyJoinStreamFix)
+                previousLobbyJoinStream != Settings.EnableLobbyJoinStreamFix ||
+                previousFaceHuggerDetach != Settings.EnableFaceHuggerDetachFix)
             {
                 try
                 {
@@ -153,12 +158,19 @@ namespace BroforceBugFix
                 LobbyJoinStreamFix.Apply();
             else
                 LobbyJoinStreamFix.Remove();
+
+            if (_modEnabled && settings != null &&
+                settings.EnableAllFixes && settings.EnableFaceHuggerDetachFix)
+                FaceHuggerDetachFix.Apply();
+            else
+                FaceHuggerDetachFix.Remove();
         }
 
         private static void RemoveAllFixes()
         {
             DoodadCrateReentryFix.Remove();
             LobbyJoinStreamFix.Remove();
+            FaceHuggerDetachFix.Remove();
         }
 
         private static void SaveSettings(UnityModManager.ModEntry modEntry)
