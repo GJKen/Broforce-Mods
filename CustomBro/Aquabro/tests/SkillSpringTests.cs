@@ -702,9 +702,41 @@ public static class SkillSpringTests
         Check(respawn.SelectedSkill==first.SelectedSkill &&
             respawn.CurrentSpecialMaterials[0]==first.CurrentSpecialMaterials[0],"New hero instance lost the player's saved selection");
         Check(second.CurrentSpecialMaterials[0]==other,"Remote player's selection sync changed the other player's icon");
+        MethodInfo refresh=typeof(Aquabro).GetMethod("RefreshSkillHud",Private);
+        foreach(Aquabro holder in new Aquabro[] {respawn,second})
+        {
+            PlayerHUD hud=HeroController.players[holder.playerNum].hud;
+            foreach(PockettedSpecialAmmoType item in new PockettedSpecialAmmoType[] {
+                PockettedSpecialAmmoType.Airstrike,PockettedSpecialAmmoType.Timeslow,
+                PockettedSpecialAmmoType.RemoteControlCar,PockettedSpecialAmmoType.MechDrop,
+                PockettedSpecialAmmoType.AlienPheromones,PockettedSpecialAmmoType.Steroids})
+            {
+                int ammo=holder.SpecialAmmo;
+                holder.pockettedSpecialAmmo.Add(item);
+                refresh.Invoke(holder,null);
+                foreach(var icon in hud.grenadeIcons)
+                    Check(icon.meshRender.sharedMaterial.name=="pocket-"+item && icon.TestOffset.x==0f,
+                        "Pocketted item lost its native icon/offset on owning or remote hero");
+                holder.pockettedSpecialAmmo.Add(PockettedSpecialAmmoType.RemoteControlCar);
+                // A late framework refresh may restore the skill icon.
+                hud.grenadeIcons[0].meshRender.sharedMaterial=holder.CurrentSpecialMaterials[0];
+                refresh.Invoke(holder,null);
+                Check(hud.grenadeIcons[0].meshRender.sharedMaterial.name=="pocket-RemoteControlCar",
+                    "HUD did not display the last picked item after framework refresh");
+                holder.pockettedSpecialAmmo.RemoveAt(holder.pockettedSpecialAmmo.Count-1);
+                refresh.Invoke(holder,null);
+                Check(hud.grenadeIcons[0].meshRender.sharedMaterial.name=="pocket-"+item,
+                    "Consuming top item did not reveal the previous item");
+                holder.pockettedSpecialAmmo.Clear();
+                refresh.Invoke(holder,null);
+                Check(hud.grenadeIcons[0].meshRender.sharedMaterial==holder.CurrentSpecialMaterials[0] &&
+                    hud.grenadeIcons[0].TestOffset.x==(holder.playerNum==0?3f:-3f) && holder.SpecialAmmo==ammo,
+                    "Empty pockets did not restore the selected skill/offset without spending ammo");
+            }
+        }
         HeroController.players=null;
         Networking.Connect.IsOffline=false;
-        Console.WriteLine("PASS skill HUD: four icons; per-player switch; BroMaker material source; empty ammo/visibility preserved; cached refresh; replacement HUD/respawn; one selection RPC; remote value application without rebroadcast or increment; offline selection");
+        Console.WriteLine("PASS skill HUD: four icons; per-player switch; BroMaker material source; empty ammo/visibility preserved; cached refresh; replacement HUD/respawn; one selection RPC; remote value application without rebroadcast or increment; offline selection; six pocketted items on owner/remote; stacked items; framework refresh; selected skill restored without spending ammo");
     }
 
     private static void SetTestSkill(Aquabro hero,int skill)
@@ -1594,7 +1626,16 @@ public static class GestureElement { public enum Gestures { None,Flex } }
 public enum HeroType {BroDredd}
 public class BroDredd {public Projectile specialRocketPrefab=new Projectile();}
 public class Player {public Unit character;public PlayerHUD hud;}
-public class PlayerHUD {public SpriteSM[] grenadeIcons={new SpriteSM(),new SpriteSM(),new SpriteSM(),new SpriteSM(),new SpriteSM(),new SpriteSM()};}
+public enum PockettedSpecialAmmoType {None,Airstrike,Timeslow,RemoteControlCar,MechDrop,AlienPheromones,Steroids}
+public class PlayerHUD
+{
+    public SpriteSM[] grenadeIcons={new SpriteSM(),new SpriteSM(),new SpriteSM(),new SpriteSM(),new SpriteSM(),new SpriteSM()};
+    public void SetGrenadeMaterials(PockettedSpecialAmmoType type)
+    {
+        Material material=BroMakerLib.ResourcesController.GetMaterial("","pocket-"+type);
+        foreach(var icon in grenadeIcons) {icon.meshRender.sharedMaterial=material;icon.SetOffset(new Vector3(0f,0f,0f));}
+    }
+}
 public static class HeroController
 {
     public static Player[] players;
@@ -1700,6 +1741,8 @@ namespace AquabroMod
         public ActionState actionState;
         public Transform transform=new Transform();public TestInfo Info=new TestInfo();
         public List<Material> CurrentSpecialMaterials {get;set;}
+        public readonly List<PockettedSpecialAmmoType> pockettedSpecialAmmo=new List<PockettedSpecialAmmoType>();
+        protected PockettedSpecialAmmoType GetPockettedAmmoType() {return pockettedSpecialAmmo[pockettedSpecialAmmo.Count-1];}
         public Vector2 CurrentSpecialMaterialOffset {get;set;}
         public virtual void SetGestureAnimation(GestureElement.Gestures g) {}
         protected virtual void PressSpecial() {usingSpecial=true;frame=0;}protected virtual void UseSpecial() {}protected virtual void AnimateSpecial() {}

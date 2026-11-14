@@ -186,6 +186,13 @@ namespace AquabroMod
             }
             // Keep BroMaker's later HUD refreshes on this player's selected skill.
             CurrentSpecialMaterials = skillHudMaterials;
+            // Pocketted items take priority over the selected Aquabro skill.
+            // Reapply the native icon after any BroMaker HUD/variant refresh.
+            if (pockettedSpecialAmmo.Count > 0)
+            {
+                player.hud.SetGrenadeMaterials(GetPockettedAmmoType());
+                return;
+            }
             // Match the native HUD's 10px icon spacing while leaving room by the avatar.
             float offset = playerNum % 2 == 0 ? 3f : -3f;
             foreach (SpriteSM icon in player.hud.grenadeIcons)
