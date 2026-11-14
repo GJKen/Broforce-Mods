@@ -134,6 +134,7 @@ namespace AquabroMod
         private float chargeTime;
         private float throwDelay;
         private float throwCooldown;
+        private int tridentNetworkPhase;
         private bool tridentPoseActive;
         private bool tridentGunExpanded;
         private Vector2 normalGunPixelDimensions;
@@ -434,7 +435,7 @@ namespace AquabroMod
                 var makeEffects = (RpcSignature<bool, float, float, bool, Vector3, Vector3>)Delegate.CreateDelegate(
                     typeof(RpcSignature<bool, float, float, bool, Vector3, Vector3>), shot, tridentImpactMethod);
                 Networking.Networking.RPC<bool, float, float, bool, Vector3, Vector3>(PID.TargetOthers,
-                    makeEffects, false, x, y, false, Vector3.zero, Vector3.zero, false);
+                    makeEffects, false, x, y, false, Vector3.zero, Vector3.zero, true);
             }
             bool charged = Mathf.Abs(shot.xI) > 500f;
             float radius = charged ? WaterBlastRange : 12f;
@@ -736,7 +737,7 @@ namespace AquabroMod
 
         protected override void RunAvatarFiring()
         {
-            if (health > 0 && fire && chargeTime > 0f)
+            if (health > 0 && chargeTime > 0f)
             {
                 // Keep the firing portrait throughout charge instead of flashing at the base fire rate.
                 avatarGunFireTime = 0.04f;
@@ -809,6 +810,13 @@ namespace AquabroMod
                 return;
             }
 
+            // 远端只推进拥有端通知的表现，不从延迟 InputBits 重做蓄力或松键。
+            if (!IsMine)
+            {
+                if (chargeTime > 0f) chargeTime += t;
+                return;
+            }
+
             // 与 Predabro 一样保留基类的开火计时、翻滚取消和头像反馈。
             base.RunFiring();
 
@@ -839,6 +847,33 @@ namespace AquabroMod
                     SetGunSprite(0, 0);
                 }
             }
+        }
+
+        private void BroadcastTridentAnimation()
+        {
+            if (!IsMine) return;
+            int phase = chargeTime > 0f ? 1 : (throwDelay > 0f ? 2 : 0);
+            if (phase == tridentNetworkPhase) return;
+            tridentNetworkPhase = phase;
+            if (!Connect.IsOffline)
+                Networking.Networking.RPC<float, float>(PID.TargetOthers, true, false,
+                    new RpcSignature<float, float>(ReceiveTridentAnimation), chargeTime, throwDelay);
+        }
+
+        [AllowedRPC]
+        private void ReceiveTridentAnimation(float charge, float recovery)
+        {
+            if (IsMine) return;
+            chargeTime = charge;
+            throwDelay = recovery;
+            if (charge > 0f || recovery > 0f)
+            {
+                StopRolling();
+                SetGestureAnimation(GestureElement.Gestures.None);
+            }
+            if (recovery > 0f) PlayAttackSound();
+            // 表现事件不生成弹体，也不使用远端旧输入重新发射。
+            throwCooldown = 0f;
         }
 
         private bool CanShowTridentPose()
@@ -1189,6 +1224,7 @@ namespace AquabroMod
             RefreshSkillHud();
             if (!animationTimeStepReady)
                 return;
+            BroadcastTridentAnimation();
             TickSkillPreview(Mathf.Max(0f, t));
             if (IsMine && activeShark != null)
             {
@@ -1354,7 +1390,7 @@ namespace AquabroMod
             float speed = transform.localScale.x * 400f * (charged ? 1.66f : 1f);
             if (IsMine)
             {
-                ProjectileController.SpawnProjectileOverNetwork(prefab, this, x, y, speed, 0f, false, playerNum, false, false, 0f);
+                ProjectileController.SpawnProjectileOverNetwork(prefab, this, x, y, speed, 0f, false, playerNum, false, true, 0f);
             }
 
             PlayAttackSound();

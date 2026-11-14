@@ -47,10 +47,10 @@ namespace Networking {
  class NonStaticRPCObject { public string methodName;public int targetID; }
  static class RPCController { public static object CurrentRPC;public static int LastSender; }
  static class Networking {
-  public static int sends; public static float x,y;
+  public static int sends; public static float x,y; public static bool lastImmediate;
   public static void RPC<T1,T2,T3,T4,T5,T6>(PID target,
    RpcSignature<T1,T2,T3,T4,T5,T6> method,T1 a,T2 b,T3 c,T4 d,T5 e,T6 f,bool immediate) {
-   sends++;x=Convert.ToSingle(b);y=Convert.ToSingle(c);
+   sends++;x=Convert.ToSingle(b);y=Convert.ToSingle(c);lastImmediate=immediate;
   }
  }
 }
@@ -438,6 +438,7 @@ class Tests {
    var owner=new Aquabro();var sent=new PredabroSpear {xI=400};
    Aquabro.Impact(sent,owner,null);Aquabro.Impact(sent,owner,null);
    Check(Networking.Networking.sends==1,"Owner native impact notification must be sent once");
+   Check(Networking.Networking.lastImmediate,"Impact still waits for remote interpolation");
    var received=new PredabroSpear {xI=400};var remoteOwner=new Aquabro {IsMine=false};
    AquabroWaterEffect.Last=null;
    RPCController.CurrentRPC=new NonStaticRPCObject {methodName="MakeEffects",targetID=999};RPCController.LastSender=7;

@@ -19,6 +19,8 @@ function Read-Method([string]$signature) {
 $methods = @(
     Read-Method 'private void SetupTridentPrefabs()'
     Read-Method 'protected override void RunFiring()'
+    Read-Method 'private void BroadcastTridentAnimation()'
+    Read-Method 'private void ReceiveTridentAnimation('
     Read-Method 'private bool CanShowTridentPose()'
     Read-Method 'private void FireTrident()'
     Read-Method 'private static void ApplyTridentVisual('
@@ -77,12 +79,17 @@ namespace Networking {
  [AttributeUsage(AttributeTargets.Method)] public sealed class AllowedRPC : Attribute { }
  public delegate void RpcSignature<T1, T2, T3, T4, T5, T6, T7>(T1 a, T2 b, T3 c, T4 d, T5 e, T6 f, T7 g);
  public delegate void RpcSignature<T1,T2,T3,T4>(T1 a,T2 b,T3 c,T4 d);
+ public delegate void RpcSignature<T1,T2>(T1 a,T2 b);
  public static class Connect { public static bool IsOffline; }
  public static class Networking {
   public static int Calls;
   public static PID Target;
   public static object[] Arguments;
   public static List<string> Events=new List<string>();
+  public static List<object[]> AnimationEvents=new List<object[]>();
+  public static void RPC<T1,T2>(PID target,bool immediate,bool ignoreSessionID,RpcSignature<T1,T2> method,T1 a,T2 b) {
+   Calls++; Events.Add(method.Method.Name); AnimationEvents.Add(new object[] {target,immediate,ignoreSessionID,a,b});
+  }
   public static void RPC<T1, T2, T3, T4, T5, T6, T7>(PID target, bool immediate, bool ignoreSessionID,
       RpcSignature<T1, T2, T3, T4, T5, T6, T7> method, T1 a, T2 b, T3 c, T4 d, T5 e, T6 f, T7 g) {
    Calls++; Target = target; Arguments = new object[] { a, b, c, d, e, f, g }; Events.Add(method.Method.Name);
@@ -167,13 +174,13 @@ class ProjectileController {
     public static Projectile Last;
     public static Projectile LastPrefab;
     public static MonoBehaviour LastOwner;
-    public static bool LastSynced;
+    public static bool LastSynced, LastImmediate;
     public static float X, Y, Speed;
     public static Projectile SpawnProjectileOverNetwork(Projectile p, MonoBehaviour owner, float x, float y,
         float speed, float verticalSpeed, bool synced, int player, bool target, bool immediate, float z) {
         NativeSpawnCalls++;
         Last = UnityEngine.Object.Instantiate(p, new Vector3(x,y,0f), Quaternion.identity);
-        LastOwner = owner; LastSynced = synced;
+        LastOwner = owner; LastSynced = synced; LastImmediate = immediate;
         Networking.Networking.Events.Add("Instantiate"); SeedAtFire = Last.seed;
         Last.Fire(x,y,speed,verticalSpeed,z,player,owner);
         Networking.Networking.Events.Add("Fire"); Last.SetSeed(4242);
@@ -200,10 +207,11 @@ class AquabroProbe : SimulationBase {
     static Projectile normalTridentPrefab, chargedTridentPrefab;
     static SoundHolder tridentSoundHolder;
     public float chargeTime, throwDelay, throwCooldown, meleeElapsed, counter, X = 100f, Y = 50f;
+    private int tridentNetworkPhase;
     public int health = 1, frame, playerNum;
     public bool fire, wasFire, doingMelee, meleeAttackEmitted, ducking, highFive, IsMine = true;
     public Mook nearbyMook, ThrownMook;
-    public int KnifeHits, ThrowCalls;
+    public int KnifeHits, ThrowCalls, AttackSounds;
     public static int DamageCalls;
     public bool isOnHelicopter, throwingHeldObject, hasBeenCoverInAcid, Incapacitated;
     public bool usingSpecial, usingPockettedSpecial, usingSpecial2, usingSpecial3, usingSpecial4;
@@ -226,8 +234,12 @@ class AquabroProbe : SimulationBase {
     void CancelMelee() { doingMelee = false; }
     void ThrowBackMook(Mook mook) { ThrownMook = mook; ThrowCalls++; throwingHeldObject = true; }
     void ChangeFrame() { }
-    void PlayAttackSound() { }
+    void PlayAttackSound() { AttackSounds++; }
+    void StopRolling() { rollingFrames=0; }
+    void SetGestureAnimation(GestureElement.Gestures gesture) { currentGesture=gesture; }
     public void Tick(bool held, float delta) { wasFire = fire; fire = held; t = delta; RunFiring(); }
+    public void NetworkTick(bool held, float delta) { Tick(held,delta); BroadcastTridentAnimation(); }
+    public void ReceiveAnimation(float charge,float recovery) { ReceiveTridentAnimation(charge,recovery); }
     public static void Visual(Projectile shot, MonoBehaviour owner) { ApplyTridentVisual(shot, owner); }
     public static int WaterFrame(float elapsed, bool charged) { return GetAnimationFrame(elapsed, charged); }
     public static bool Trail(BrocheteMachete shot) { return AllowOriginalSpearTrail(shot); }
@@ -254,6 +266,7 @@ class ChargeTests {
         Check(Near(ProjectileController.Speed, direction * (charged ? 664f : 400f)), "弹速不符合 Predabro");
         Check(Near(ProjectileController.X, 100f + direction * 14f) && Near(ProjectileController.Y, ducking ? 58f : 61f), "发射位置不符合 Predabro");
         Check(ProjectileController.NativeSpawnCalls == 1 && ProjectileController.InstantiateCalls == 1 && ProjectileController.LocalSpawnCalls == 0, "拥有端未且仅调用一次公共网络生成入口");
+        Check(ProjectileController.LastImmediate, "弹体仍等待远端插值时间轴");
         Check(object.ReferenceEquals(ProjectileController.LastOwner,p) && ProjectileController.Last.playerNum==p.playerNum && Near(ProjectileController.Last.yI,0f), "原生生成参数丢失");
         Check(ProjectileController.SeedAtFire==0 && ProjectileController.Last.seed==4242, "未遵循原生 Fire 后 SetSeed 时序");
         Check(string.Join(",",Networking.Networking.Events.ToArray())=="Instantiate,Fire,SetSeed", "公共路径调用顺序错误");
@@ -264,6 +277,59 @@ class ChargeTests {
         Check(Near(p.chargeTime, 0f) && Near(p.fireDelay, 0.4f), "发射后未重置");
         p.Tick(false, 0.02f);
         Check(ProjectileController.Count == 1, "松键重复发射");
+    }
+    static void AnimationNetwork() {
+        Networking.Connect.IsOffline = false;
+        Networking.Networking.AnimationEvents.Clear();
+        var owner = new AquabroProbe();
+        var remote = new AquabroProbe { IsMine=false };
+        int count = ProjectileController.Count;
+        remote.NetworkTick(true,.6f);
+        Check(remote.chargeTime==0f && Networking.Networking.AnimationEvents.Count==0,
+            "远端旧输入自行蓄力或发送表现事件");
+        owner.NetworkTick(true,.01f);
+        Check(Near(owner.chargeTime,.01f), "本端起手等待网络");
+        Check(Networking.Networking.AnimationEvents.Count==1, "起手没有发送一次表现事件");
+        object[] start = Networking.Networking.AnimationEvents[0];
+        Check((Networking.PID)start[0]==Networking.PID.TargetOthers && (bool)start[1] && !(bool)start[2],
+            "表现事件未使用当前关卡的立即可靠 RPC");
+        remote.ReceiveAnimation((float)start[3],(float)start[4]);
+        remote.NetworkTick(false,.02f);
+        Check(Near(remote.chargeTime,.03f), "表现仍等待远端 fire 输入或不推进");
+        owner.NetworkTick(true,.6f);
+        Check(Networking.Networking.AnimationEvents.Count==1, "持火逐帧重复广播");
+        Check(ProjectileController.Count==count, "蓄力表现提前生成弹体");
+        owner.NetworkTick(false,.01f);
+        Check(Networking.Networking.AnimationEvents.Count==2 && ProjectileController.Count==count+1,
+            "释放没有且仅发射一次、通知一次表现");
+        object[] release = Networking.Networking.AnimationEvents[1];
+        remote.ReceiveAnimation((float)release[3],(float)release[4]);
+        remote.NetworkTick(true,.01f);
+        Check(remote.chargeTime==0f && Near(remote.throwDelay,.182f-.01f) && remote.AttackSounds==1,
+            "投掷表现被旧持火输入覆盖");
+        remote.NetworkTick(true,.3f);
+        Check(remote.chargeTime==0f && remote.throwDelay==0f && ProjectileController.Count==count+1,
+            "远端延迟松键重播了攻击或弹体");
+        owner.NetworkTick(false,.3f);
+        Check(Networking.Networking.AnimationEvents.Count==3, "收招结束没有通知一次");
+        owner.NetworkTick(true,.1f);
+        owner.Incapacitated=true;
+        owner.NetworkTick(true,.01f);
+        object[] cancel = Networking.Networking.AnimationEvents[Networking.Networking.AnimationEvents.Count-1];
+        Check((float)cancel[3]==0f && (float)cancel[4]==0f, "被打断没有取消远端蓄力");
+        remote.ReceiveAnimation((float)cancel[3],(float)cancel[4]);
+        remote.NetworkTick(true,.5f);
+        Check(remote.chargeTime==0f && remote.throwDelay==0f, "取消后被旧输入重新激活");
+        float localCharge = owner.chargeTime;
+        owner.ReceiveAnimation(1f,.1f);
+        Check(owner.chargeTime==localCharge && owner.throwDelay==0f, "接收方法覆盖拥有端状态");
+        Networking.Connect.IsOffline=true;
+        int sent=Networking.Networking.AnimationEvents.Count;
+        var offline = new AquabroProbe();
+        offline.NetworkTick(true,.01f); offline.NetworkTick(false,.01f);
+        Check(Networking.Networking.AnimationEvents.Count==sent && ProjectileController.Count==count+2,
+            "离线攻击发送网络事件或未发射");
+        Networking.Connect.IsOffline=false;
     }
     static void Interrupted(int kind) {
         ProjectileController.Count = 0;
@@ -332,6 +398,7 @@ class ChargeTests {
             Check(ProjectileController.Count == count + 1, "连续投掷失败");
             for (int i = 0; i < 4; i++) Interrupted(i);
             MeleeThrow();
+            AnimationNetwork();
             var ledge = new AquabroProbe { actionState = ActionState.Jumping, ledgeGrapple = true };
             ledge.Tick(true, 0.5f);
             Check(ledge.GunVisible && ledge.chargeTime > 0f, "翻上平台边缘蓄力时双臂被隐藏");
@@ -377,7 +444,7 @@ class ChargeTests {
             AquabroProbe.Visual(otherProjectile, p);
             Check(otherProjectile.Sprite.meshRender.material == null, "修改了其他类型的投射物");
             Check(Near(otherProjectile.Sprite.offset.z,10.82f), "修改了其他类型投射物的显示深度");
-            Console.WriteLine("PASS: 水花帧时序、蓄力/连续投掷/打断、公共生成入口与原生 Fire/SetSeed 顺序、远端不自行开火、外观和零时间步；近战丢兵/前刺/15-120 FPS。传输和命中权威另由双端实机与水爆测试验证。");
+            Console.WriteLine("PASS: 水花帧时序、蓄力/连续投掷/打断、公共生成入口与原生 Fire/SetSeed 顺序、立即攻击表现与旧输入不重播、远端不自行开火、外观和零时间步；近战丢兵/前刺/15-120 FPS。传输和命中权威另由双端实机与水爆测试验证。");
             return 0;
         } catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
     }

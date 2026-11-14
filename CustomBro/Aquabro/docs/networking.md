@@ -12,8 +12,9 @@ The repository records compatible framework revisions through its RocketLibMulti
 
 | Behavior | Implementation |
 | --- | --- |
-| Normal and charged trident spawning | `FireTrident` in [Aquabro.cs](../src/Aquabro.cs) uses the game's `SpawnProjectileOverNetwork` entry point on the owning character. Remote characters retain their animation without initiating a second spawn. |
-| Trident impact and splash | `ResolveWaterImpact` reuses the registered spear's native `MakeEffects` RPC. The remote path requires the matching projectile NID and sender owner before applying the splash, and the impact marker prevents repeated application to the same instance. |
+| Normal and charged trident spawning | `FireTrident` in [Aquabro.cs](../src/Aquabro.cs) uses the game's `SpawnProjectileOverNetwork` entry point on the owning character with immediate execution. Remote characters do not initiate a second spawn. |
+| Charge and throw animation | `BroadcastTridentAnimation` sends a reliable immediate event when the owner enters charge, throw recovery or idle/cancellation. Remote characters advance that visual state instead of reconstructing attacks from interpolated input snapshots. |
+| Trident impact and splash | `ResolveWaterImpact` reuses the registered spear's native `MakeEffects` RPC with immediate execution. The remote path requires the matching projectile NID and sender owner before applying the splash, and the impact marker prevents repeated application to the same instance. |
 | Projectile lifetime | `RunTridentLife`, `LimitTridentStep`, and `RestoreTridentStep` stop remote travel at expiry while retaining the object for the owner's impact notification. They also preserve the charged spear's per-frame movement budget. |
 | Skill selection and casting | [AquabroSkills.cs](../src/AquabroSkills.cs) sends character-specific selection and cast events; remote peers apply the corresponding visuals. |
 | Shark control | Shark position and direction use state updates. Breaching uses a separate reliable event, including handling when that event arrives before the remote shark visual exists. |
@@ -23,16 +24,12 @@ Other character authors can reuse the public framework interfaces, but must adap
 
 ## Validation and limits
 
-Earlier limited two-player testing covered normal character registration, normal and charged tridents in both ownership directions, matching impact positions and splashes, and selected skill and short-melee behavior. Historical failures and different installed versions must not be combined into a claim that all mechanisms pass on the latest framework.
-
 The checked-in offline tests cover extracted production methods with controlled dependencies:
 
-- [Test-Charge.ps1](../tests/Test-Charge.ps1): charge and interruption timing, the network spawn call, owner-only firing, visual handling, and melee timing.
+- [Test-Charge.ps1](../tests/Test-Charge.ps1): charge and interruption timing, immediate animation events and spawning, rejection of stale remote input as an attack trigger, owner-only firing, visual handling, and melee timing.
 - [Test-TridentLifetime.ps1](../tests/Test-TridentLifetime.ps1): movement budgets, expiry, wall contact, and remote waiting for the owner's impact.
 - [Test-WaterBlastZones.ps1](../tests/Test-WaterBlastZones.ps1): splash contacts and damage boundaries, owner/NID checks, and duplicate-impact suppression.
 
-These tests do not simulate real transport or certify shared damage. After the latest RocketLib upstream merge, the public frameworks were compiled and their offline fixtures passed; a full in-game regression was not rerun. Full skill coverage, shared damage across all targets, cross-map behavior, and three-player sessions remain outside the verified scope.
+These tests do not simulate real transport or certify shared damage. The 2026-11-13 attack-animation update passed its offline checks and compiled for .NET 3.5, but only the local machine was updated. Dual-peer animation timing, late-join charge recovery, and multiplayer damage remain unverified; see the [issue record](../issues/2026-11-13-普攻与蓄力攻击动画联机延迟.md). Full skill coverage, cross-map behavior, and three-player sessions also remain outside the verified scope.
 
-For the 2026-11-07 source publication, Aquabro also compiled against those updated framework builds and all three tests above passed, including 1,363 lifetime checks and 24,576 pixel-contact comparisons. This was an offline check, with no game launch or deployment.
-
-Publishing this source does not replace the bundled Aquabro DLL or deploy it to either test machine. Build matching dependencies and the character before testing the current source.
+Publishing source does not update the bundled DLL or either test machine. Build matching dependencies and the character before testing the current source.

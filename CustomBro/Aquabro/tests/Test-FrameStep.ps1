@@ -29,6 +29,10 @@ class AquabroProbe : SimulationBase
 {
     public bool doingMelee;
     public bool animationTimeStepReady;
+    public bool IsMine;
+    public object activeShark;
+    public float sharkNetworkTimer;
+    public int AnimationBroadcasts;
     public float counter;
     public int health = 1, frame, BodySlot = 111, VisualCalls, ChangedFrames;
     public ActionState actionState = ActionState.Idle;
@@ -36,6 +40,8 @@ class AquabroProbe : SimulationBase
     void AnimateCustomMelee() { VisualCalls++; }
     void SyncCrouchWeapon() { VisualCalls++; }
     void RefreshSkillHud() {}
+    void BroadcastTridentAnimation() { AnimationBroadcasts++; }
+    void BroadcastSharkState() {}
     void TickSkillPreview(float delta) {}
     void SyncLadderWeapon() { VisualCalls++; }
     bool CanShowTridentPose() { return true; }
@@ -54,6 +60,7 @@ class FrameStepTests
         var p = new AquabroProbe { Frozen = true, actionState = running ? ActionState.Running : ActionState.Idle };
         for (int i = 0; i < 120; i++) p.Tick();
         Check(p.VisualCalls == 0 && !p.animationTimeStepReady, "Frozen pose was rewritten");
+        Check(p.AnimationBroadcasts == 0, "Frozen update broadcast an attack");
         Check(Near(p.t, 0.02f), "Previous delta was discarded");
         p.Frozen = false;
         p.Tick();
@@ -76,6 +83,7 @@ class FrameStepTests
             var zero = new AquabroProbe { NextDelta = 0f, doingMelee = true };
             zero.Tick();
             Check(zero.VisualCalls == 0, "Zero-time animation changed");
+            Check(zero.AnimationBroadcasts == 0, "Zero-time update broadcast an attack");
             var boosted = new AquabroProbe { Boosted = true };
             boosted.Tick();
             Check(boosted.animationTimeStepReady && boosted.VisualCalls > 0, "Boosted time step was skipped");
