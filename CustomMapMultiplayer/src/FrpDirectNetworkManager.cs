@@ -115,6 +115,21 @@ namespace CustomMapMultiplayer
                    _transport.IsEnabled;
         }
 
+        private static bool DoHostGamePrefix()
+        {
+            if (!ShouldCreateFrpLayer() || !(Connect.Layer is FrpDirectLayer) || _transport.IsHost)
+            {
+                return true;
+            }
+
+            // The native menu transitions to newJoin even when CreateMatch rejects the request.
+            // Reject the Client role at the menu entry so the host menu stays usable.
+            Plugin.ShowFrpDirectNotice(
+                SettingsUiLocalization.Get(Plugin.Settings.SettingsLanguage).FrpClientCannotHost);
+            DiagnosticLog.Warning("FRP_DIRECT host menu rejected room creation while configured as Client.");
+            return false;
+        }
+
         private static void EnsurePatched()
         {
             if (_harmony != null)
@@ -142,6 +157,11 @@ namespace CustomMapMultiplayer
             {
                 _harmony = new Harmony(HarmonyId);
                 _harmony.Patch(target, new HarmonyMethod(prefix), null, null, null);
+                _harmony.Patch(
+                    typeof(MakeOnlineMenu).GetMethod("DoHostGame", BindingFlags.NonPublic | BindingFlags.Instance),
+                    new HarmonyMethod(typeof(FrpDirectNetworkManager).GetMethod(
+                        "DoHostGamePrefix", BindingFlags.NonPublic | BindingFlags.Static)),
+                    null, null, null);
                 DiagnosticLog.Info(
                     "FRP_DIRECT platform connection-layer selector installed.");
             }

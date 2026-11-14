@@ -91,6 +91,7 @@ namespace CustomMapMultiplayer
         internal string FrpDisabledHelp;
         internal string FrpRole;
         internal string FrpRoleHelp;
+        internal string FrpClientCannotHost;
         internal string Host;
         internal string Client;
         internal string LocalUdpPort;
@@ -205,7 +206,8 @@ namespace CustomMapMultiplayer
             FrpEnabledHelp = "FRP Direct transport is active.",
             FrpDisabledHelp = "Native Steam networking is active.",
             FrpRole = "FRP Direct role",
-            FrpRoleHelp = "Select your FRP Direct role using the buttons below.",
+            FrpRoleHelp = "Choose Host to create a room, or Client to join a room.",
+            FrpClientCannotHost = "To create a room, set FRP Direct role to Host in Custom Map Multiplayer settings. Client can only join rooms.",
             Host = "Host",
             Client = "Client",
             LocalUdpPort = "Local UDP listen port",
@@ -329,7 +331,8 @@ namespace CustomMapMultiplayer
             FrpEnabledHelp = "当前使用 FRP 直连传输。",
             FrpDisabledHelp = "当前使用原生 Steam 联机。",
             FrpRole = "FRP 直连角色",
-            FrpRoleHelp = "使用下面的按钮选择 FRP 直连角色。",
+            FrpRoleHelp = "创建房间请选择“房主”，加入房间请选择“加入方”。",
+            FrpClientCannotHost = "创建房间前，请在 Custom Map Multiplayer 的 FRP 设置中将角色改为“房主”；“加入方”只能加入房间。",
             Host = "房主",
             Client = "加入方",
             LocalUdpPort = "本地 UDP 监听端口",
