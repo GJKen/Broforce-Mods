@@ -6,6 +6,8 @@
 
 `FrpDirectTransport` 复用 Lidgren，应用标识为 `CustomMapMultiplayer.FrpDirect.v1`。`EnableFrpDirect` 同时控制传输和游戏连接层；Host/Client 配置隔离，角色、总开关和连接文本自动应用，无 Apply 按钮。
 
+建房端必须选择 Host，加入端必须选择 Client。Client 在原生建房菜单点击创建时会保留当前菜单并提示切换角色，避免建房被拒绝后仍进入没有房间和玩家的 `newJoin` 场景。
+
 - Host 监听配置的 UDP 端口（默认 27045），可在地图内设置 `1` 至 `4` 人总上限；Client 以临时端口连接 `host:port`，普通断线后每 5 秒重试。
 - Host 以挑战、密码、协议版本、双方 `buildHash` 和机器 ID 完成 HMAC-SHA256 握手。协议 v4 提供房间、加入/离开、机器路由 `GameData` 和 RTT 快照；协议不匹配或认证失败会拒绝连接。
 - Host 使用原生 PID 分配与定向映射同步；客户端数据经 Host 中继，目标非 Host 的 RPC 不在 Host 重复执行。房间层按 `capacity - 1` 拒绝新加入，降额不移除既有成员或 PID。

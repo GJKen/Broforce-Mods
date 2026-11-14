@@ -34,7 +34,10 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 - `src/HarmonyDiagnostics.Afk.cs`：原生 AFK 倒计时、存活及死亡主动 AFK、死亡返回控制器记录、本地化标题提示、超时和槽位移除观测。
 - `src/HarmonyDiagnostics.Chat.cs`：联机聊天的 Enter/Esc 边界、真实键盘重复编辑、Unity IME 提交、500 UTF-16 字符上限、相对输入框 `RectTransform` 右下角的本地字数显示，以及基于 Unity `TextGenerator` 的多行 viewport、按实际视觉行的 Up/Down 与 preferred X、`MessageController.UpdateText`/`ChatTextBox.Update` 时序同步和聊天 `Text.OnPopulateMesh` 前置校正。
 - `src/HarmonyDiagnostics.Acid.cs`：英雄酸液入口、酸池扫描、本地预测、Host 权威校验和死亡链日志。
-- `src/HarmonyDiagnostics.EntityFinalState.cs`：普通网络 Mook 的死亡事件、尸体终态同步、待提交候选和生命周期清理。
+- `src/HarmonyDiagnostics.WorldState.cs`：非英雄世界对象的持续状态、拥有端校验、版本与基线恢复、生命周期重放，以及单位副本的 LateUpdate 校正；替换原普通 Mook 一次尸体终态通路。
+- `src/HarmonyDiagnostics.WorldProjectiles.cs`：非英雄世界对象本地发射弹体的拥有端生成参数、Fire 前网络登记及副本生成恢复。
+- `src/HarmonyDiagnostics.WorldActors.cs`：状态异常的目标拥有端请求与副本计时恢复，以及普通／亡灵自爆兵的权威爆炸表现；角色更新上下文按运行时类型登记，兼容自定义角色。
+- `src/HarmonyDiagnostics.Melee.cs`：近身玩家击掌设置，以及实际近战命中视觉与血液的独立同步。
 - `src/HarmonyDiagnostics.LevelOutcome.cs`：`LevelFinish`/`RemoveLife` 前后快照。
 - `src/HarmonyDiagnostics.Reflection.cs`：连接层状态读取及反射元数据缓存。
 - `src/HarmonyDiagnostics.Trace.cs`：Harmony 方法追踪消息格式化及追踪反射缓存。
@@ -53,4 +56,7 @@ Workshop 专用行为必须同时满足有效的 Workshop 注入配置、线上�
 - 聊天 viewport 使用输入框 `RectTransform` 的实际宽度、字体设置和 Unity `TextGenerator` 行表按光标行推进；可视行数使用相同生成设置下 `VerticalOverflow.Truncate` 的实际行数。完整消息更新后同步 `Caret.message`、主文本和显示光标位置，并在聊天文本进入 `OnPopulateMesh` 前再次校正，避免把 Canvas 网格刷新误认为输入状态同步。多行 Up/Down 使用 `UILineInfo.startCharIdx` 找视觉行、使用 `UICharInfo.cursorPos/charWidth` 保留 preferred X，并保存导航行号处理短行和换行边界；单行 Up 仍放行原生上一条消息编辑行为。
 - Workshop 专用补丁不得因遗留场景名、Lobby phase 或本地旧配置误作用于普通官方联机。
 - 不因为可选 Mod 指纹不同拒绝会话。
-- 活动 AI、敌方弹体、钱币、金色奖励、载具和普通 `Grenade` 地形伤害不在持续同步范围内。
+- 世界状态采用拥有端权威、带版本的增量快照；加入、重入或权威代次变更时请求完整基线，静态对象只在变化时发送。瞬时弹体同步生成描述、运动和终态，销毁对象退出活动候选扫描。
+- 登记的非英雄 Unit、Doodad、Block、Projectile 和 Grenade 共用状态通路；尸体、近战命中、自爆兵、盾牌、装甲和 Boss 接收器按对象语义补充状态或本地表现。副本不重复执行拥有端伤害、奖励、派生爆炸或完整死亡结算。
+- 协议字段和对象覆盖随版本演进；当前构建与逐项验证范围以[README 当前状态](../README.md#当前状态)及对应 [issue 记录](../issues/README.md) 为准。编译、部署或少量样本通过不代表所有 Boss、特殊弹体和地形伤害闭环均已验收。
+- 普通 Grenade 仍沿用原生生成；特殊 Boss、复合单位、钱币和金色奖励等特殊语义及完整地形伤害闭环尚未逐项验收。

@@ -74,6 +74,10 @@ namespace CustomMapMultiplayer
                     : new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
                         prefixName,
                         BindingFlags.NonPublic | BindingFlags.Static));
+                // BroMaker's local-only custom-hero scan otherwise consumes the
+                // item first and skips this networked replacement entirely.
+                if (prefix != null && methodName == "UsePickupables")
+                    prefix.before = new[] { "BroMakerLib" };
                 var postfix = string.IsNullOrEmpty(postfixName)
                     ? null
                     : new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
@@ -133,15 +137,13 @@ namespace CustomMapMultiplayer
 
         private static bool AllowWorkshopPickupCollectPrefix(Pickupable __instance)
         {
-            if (!IsWorkshopOnlineSession() || __instance == null ||
-                (!__instance.collected && __instance.gameObject.activeInHierarchy))
+            if (!IsWorkshopOnlineSession() || __instance == null || !__instance.collected)
             {
                 return true;
             }
 
-            // Reliable RPCs queued before the first collection can still target the
-            // disabled object. The native method has no idempotency guard and would
-            // replay its sound/effect on every invocation.
+            // Inactivity can come from an earlier world snapshot or a release that
+            // has not arrived yet. Only native collection proves hero delivery.
             if (!_workshopDuplicatePickupCollectLogged)
             {
                 _workshopDuplicatePickupCollectLogged = true;
@@ -249,7 +251,7 @@ namespace CustomMapMultiplayer
                     PID.TargetAll,
                     new RpcSignature<TestVanDammeAnim>(pickupable.Collect),
                     self,
-                    false);
+                    true);
             }
 
             if (previousAmmoFullContacts != null)

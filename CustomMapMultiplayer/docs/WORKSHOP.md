@@ -54,7 +54,7 @@ FRP Direct 的房主退出仍按现有协议结束房间，不支持主机迁移
 
 Workshop 地图加载期间再次加入当前同一 Steam 房间时，保留第一次请求，避免清除仍在使用的下载状态及角色兼容清单。切换房间、已完成加入和超时后的重试仍正常执行。复现及验证见[重复加入问题记录](../issues/ISSUES-2026-11-09-Workshop加载中重复加入导致换人与入图失败.md)。
 
-晚加入流程等待玩家列表稳定 250ms，再用本机主控制器调用一次 `HeroController.AddLocalPlayer(-1, controllerId)`。已有本地槽位或待处理请求时复用，避免重复生成 P2-P4；45 秒内没有观察到本地 `Player.Start` 或 `SetPlayerCharacter` 时允许重试一次。创建方仍在 `newJoin`/选关界面时不启动地图加载，进入 Workshop 过场后最长等待约 120 秒。
+晚加入流程等待玩家列表稳定 250ms、本端向房主的场景同步发送门打开，且已收到房主 `Registry.SyncedWith` 初始状态完成标记，再用本机主控制器调用一次 `HeroController.AddLocalPlayer(-1, controllerId)`。只完成场景加载不足以发送普通 RPC；过早请求会被原生 `RPCBatcher.QueueSend` 丢弃。已有本地槽位或待处理请求时复用，避免重复生成 P2-P4；45 秒内没有观察到本地 `Player.Start` 或 `SetPlayerCharacter` 时允许重试一次。创建方仍在 `newJoin`/选关界面时不启动地图加载，进入 Workshop 过场后最长等待约 120 秒。
 
 每次本地 Workshop `Player.Start` 成功后，清理 `WorkshopLocalJoinRequests` 及关联槽位请求，而不是只在首次晚加入完成时清理。已完成请求不会阻挡下一次主动 AFK 返回；尚未创建 Player 的请求仍使用原有 10 秒重复加入保护。这与首次晚加入流程的 45 秒观察窗口不同。
 
@@ -96,6 +96,8 @@ Workshop 玩家发生 `Dropout` 后，按槽位保存英雄类型和本地 `play
 离线、普通线上原版关卡和未启用有效 Workshop 注入的会话保持原生行为。当前仅有 FRP 双端道具证据，官方 Steam 大厅和更多地图仍需复测。
 
 ## Mook 终态与主动引爆
+
+持续世界快照使用协议 8：每批完整状态先经 Deflate 无损压缩，再由接收端解压并沿用原有状态解析和应用流程。状态字段、12Hz 发送时序和可靠性选择保持原样，双方必须更新到相同构建。Steam 原生网络层会将名为 `UnreliableRPC` 的调用也放进可靠通道；此前未压缩的世界运动快照在本次外网现场挤占了角色与加入消息，停发运动快照的对照及正式构建回归见 [Steam 角色延迟与停滞记录](../issues/ISSUES-2026-11-13-Steam大厅晚加入角色延迟与位置停滞.md)。
 
 实体同步只覆盖普通、非载具、非 Boss 的网络 `PolymorphicAI` Mook：拥有端广播首次死亡事件和最终停稳位置，远端用非空 `DamageObject` 补全死亡链。终态提交只遍历待提交的 NID 候选集合；完成且不再等待其它状态的记录保留 15 秒，每 5 秒清理一次。
 

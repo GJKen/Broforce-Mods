@@ -103,6 +103,11 @@ namespace CustomMapMultiplayer
             PerformanceTelemetry.Update();
         }
 
+        private void LateUpdate()
+        {
+            HarmonyDiagnostics.LateUpdateWorldReplicas();
+        }
+
         internal void ApplyFrpDirectSettings(bool forceRestart)
         {
             if (_frpDirectTransport != null)

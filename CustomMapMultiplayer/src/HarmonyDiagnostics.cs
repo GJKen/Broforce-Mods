@@ -650,15 +650,9 @@ namespace CustomMapMultiplayer
             TryApplyWorkshopRemoteHeroAcid();
             PerformanceTelemetry.End(PerformanceMetric.AcidAuthority, acidAuthorityStartedAt);
             TryRebroadcastWorkshopSpawns();
-            var entityPendingStartedAt = PerformanceTelemetry.Begin();
-            TryApplyPendingEntityFinalStates();
-            PerformanceTelemetry.End(PerformanceMetric.EntityPending, entityPendingStartedAt);
             var entitySubmitStartedAt = PerformanceTelemetry.Begin();
-            TrySubmitEntityFinalStates();
+            UpdateWorldStateSynchronization();
             PerformanceTelemetry.End(PerformanceMetric.EntitySubmit, entitySubmitStartedAt);
-            var entityPruneStartedAt = PerformanceTelemetry.Begin();
-            TryPruneEntityFinalStates();
-            PerformanceTelemetry.End(PerformanceMetric.EntityPrune, entityPruneStartedAt);
             TryApplyPendingMcBroverTurkeyDetonations();
             TryReturnToWorkshopOnlineLobby();
             TryRecoverWorkshopOnlineLobbyNavigationFailure();

@@ -89,7 +89,12 @@
     <Compile Include="src\HarmonyDiagnostics.Acid.cs" />
     <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopLevelEnd.cs" />
-    <Compile Include="src\HarmonyDiagnostics.EntityFinalState.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldState.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldPickups.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldProjectiles.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldHitPresentation.cs" />
+      <Compile Include="src\HarmonyDiagnostics.WorldSpecialHits.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldActors.cs" />
     <Compile Include="src\HarmonyDiagnostics.DemolitionBro.cs" />
     <Compile Include="src\HarmonyDiagnostics.McBrover.cs" />
     <Compile Include="src\HarmonyDiagnostics.NativeMapSafety.cs" />

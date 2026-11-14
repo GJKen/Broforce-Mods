@@ -91,6 +91,17 @@ namespace CustomMapMultiplayer
                 return false;
             }
 
+            // RPCBatcher drops ordinary RPCs until our scene handshake has opened
+            // the host's send gate. Also wait for its baseline so slot data is current.
+            IDWrapper host;
+            var registry = SingletonMono<Registry>.Instance;
+            if (!Connect.Layer.PlayerIDPairs.TryGetValue(PID.ServerID, out host) ||
+                !host.HaveSentSyncStateToPlayer || registry == null ||
+                !registry.playersThatIHaveSyncedWith.Contains(PID.ServerID))
+            {
+                return false;
+            }
+
             if (HasActiveWorkshopLocalPlayer())
             {
                 _lateJoinPlayerJoinRequested = true;
