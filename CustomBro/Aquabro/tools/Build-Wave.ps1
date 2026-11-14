@@ -19,7 +19,7 @@ foreach ($waveName in @('Assembly-CSharp','UnityEngine','UnityEngine.CoreModule'
 $waveRefs['0Harmony'] = Join-Path $waveUmm 'Core/0Harmony.dll'
 $waveRefs['BroMakerLib'] = Join-Path $waveUmm 'Mods/BroMaker-BroMaker/BroMakerLib/BroMakerLib.dll'
 $waveRefs['RocketLib'] = Join-Path $waveUmm 'Mods/RocketLib-RocketLib/RocketLib/RocketLib.dll'
-$waveRsp = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $waveProject 'aquabro-build.rsp')
+$waveRsp = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PSScriptRoot 'aquabro-build.rsp')
 # Roslyn's default csc.rsp targets .NET 4.x. Broforce runs the Mono 2.0 API.
 $waveFramework = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v2.0.50727'
 $waveFramework35 = Join-Path ${env:ProgramFiles(x86)} 'Reference Assemblies/Microsoft/Framework/v3.5'

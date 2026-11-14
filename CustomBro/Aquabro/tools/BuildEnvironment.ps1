@@ -39,7 +39,7 @@ function New-AquabroCompilerResponse {
         [Parameter(Mandatory = $true)][string]$OutputDirectory,
         [Parameter(Mandatory = $true)][string]$GeneratedDirectory
     )
-    $response = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'aquabro-build.rsp'))
+    $response = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'tools/aquabro-build.rsp'))
     $response = $response.Replace('@PROJECT_ROOT@', $ProjectRoot)
     $response = $response.Replace('@REFERENCES_ROOT@', $ReferenceDirectory)
     $response = $response.Replace('@OUTPUT_ROOT@', $OutputDirectory)

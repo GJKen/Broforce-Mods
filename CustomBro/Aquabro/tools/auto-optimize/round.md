@@ -12,7 +12,7 @@
 
 当前已知基线：正式构建已 /optimize+ /debug-，使用 Framework v3.5 csc；DLL为761856字节，PE元数据约706808字节，其中#US字符串堆676500字节。五份生成蒙版以Base64字符串保存，是优先调查方向。不能把Python压缩估算当成.NET可运行证据；如选无损编码，要求旧Unity Mono/.NET3.5实际解码成功，五种蒙版每帧每字节完全相同，初始化只做一次且稳定调用不新增分配。
 
-禁止改编译器、响应参数、csproj、构建配置和Assembly名称来伪造体积差；不得更改aquabro-build.rsp、BuildAssets.ps1、tools/BuildEnvironment.ps1。禁止混淆、程序集压壳、删除功能/资源、降低像素精度、改变帧顺序或缩小命中区域。压缩后的数据仍内嵌DLL，PNG、JSON、部署目录结构保持不变。
+禁止改编译器、响应参数、csproj、构建配置和Assembly名称来伪造体积差；不得更改tools/aquabro-build.rsp、BuildAssets.ps1、tools/BuildEnvironment.ps1。禁止混淆、程序集压壳、删除功能/资源、降低像素精度、改变帧顺序或缩小命中区域。压缩后的数据仍内嵌DLL，PNG、JSON、部署目录结构保持不变。
 
 ## 最高验收要求
 

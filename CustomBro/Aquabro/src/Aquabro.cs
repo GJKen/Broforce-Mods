@@ -539,7 +539,7 @@ namespace AquabroMod
                 float distance = Mathf.Sqrt(dx * dx + dy * dy);
                 float contactDistance = distance;
                 bool contact = charged && FindChargedWaterContact(target, frame, x, y, out contactDistance);
-                if (charged ? (!contact && target != directTarget) : (distance > radius && target != directTarget)) continue;
+                if (charged ? (!contact && (object)target != directTarget) : (distance > radius && (object)target != directTarget)) continue;
                 if (!charged || !contact)
                 {
                     RaycastHit wall;
@@ -550,7 +550,7 @@ namespace AquabroMod
                 int direction = dx == 0f ? (int)Mathf.Sign(shotXI) : (int)Mathf.Sign(dx);
                 int damage = contactDistance <= damageRadius ? blastDamage : 0;
                 // 戟尖直接碰撞独立于爆心距离；不能把确实命中的头部当成零伤害外圈。
-                if (target == directTarget)
+                if ((object)target == directTarget)
                     damage = System.Math.Max(directDamage, blastDamage);
                 float forceX = distance < 0.001f ? direction * 100f : dx / distance * 400f;
                 float forceY = (distance < 0.001f ? 0f : dy / distance * 400f) + 260f;

@@ -13,5 +13,5 @@ $rsp = Join-Path $output 'compile.rsp'
 & $compiler /nologo ('@' + $rsp)
 if ($LASTEXITCODE -ne 0) { throw '正式参数复编译失败' }
 $dll = Join-Path $output 'Aquabro.dll'
-[pscustomobject]@{Bytes=(Get-Item -LiteralPath $dll).Length; Sha256=(Get-FileHash -LiteralPath $dll).Hash; CompilerSha256=(Get-FileHash -LiteralPath $compiler).Hash; ResponseSha256=(Get-FileHash -LiteralPath (Join-Path $project 'aquabro-build.rsp')).Hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'build.json') -Encoding utf8
+[pscustomobject]@{Bytes=(Get-Item -LiteralPath $dll).Length; Sha256=(Get-FileHash -LiteralPath $dll).Hash; CompilerSha256=(Get-FileHash -LiteralPath $compiler).Hash; ResponseSha256=(Get-FileHash -LiteralPath (Join-Path $project 'tools/aquabro-build.rsp')).Hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'build.json') -Encoding utf8
 Write-Output ('DLL_BYTES=' + (Get-Item -LiteralPath $dll).Length)
