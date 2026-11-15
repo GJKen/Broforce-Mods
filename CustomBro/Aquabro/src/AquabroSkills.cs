@@ -961,10 +961,9 @@ namespace AquabroMod
         }
 
         internal bool MoveSharkFlight(ref float x, ref float y, float destinationX, float destinationY,
-            float facing, float scale, int frame, HashSet<GameObject> hitObjects, out bool ceiling)
+            float facing, float scale, int frame, HashSet<GameObject> hitObjects)
         {
             if (!SharkFlightBlocked(destinationX, y, facing, scale, frame, hitObjects)) x = destinationX;
-            ceiling = false;
             RaycastHit contact;
             if (destinationY < y && RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down,
                 y - destinationY + 2f, Map.groundLayer, out contact))
@@ -972,9 +971,9 @@ namespace AquabroMod
                 y = contact.point.y;
                 return true;
             }
-            if (destinationY > y && SharkFlightBlocked(x, destinationY, facing, scale, frame, hitObjects))
-                ceiling = true;
-            else y = destinationY;
+            // Body contact still damages terrain after each movement step.
+            // A surviving roof must not shorten the ballistic arc or its animation.
+            y = destinationY;
             return false;
         }
 
@@ -1750,12 +1749,11 @@ namespace AquabroMod
                 {
                     float nextX = x + sharkVelocityX * step;
                     float nextY = y + sharkVelocityY * step - .5f * SharkGravity * step * step;
-                    bool ceiling;
                     bool landed = owner.MoveSharkFlight(ref x, ref y, nextX, nextY,
-                        facing, scale, SharkBreachFrame(), hitObjects, out ceiling);
+                        facing, scale, SharkBreachFrame(), hitObjects);
                     // Keep trying the launch speed: SkillSharkObjects may break
                     // the blocking terrain after this movement step.
-                    sharkVelocityY = ceiling ? 0f : sharkVelocityY - SharkGravity * step;
+                    sharkVelocityY -= SharkGravity * step;
                     if (landed)
                     {
                         sharkLandingElapsed = 0f;
