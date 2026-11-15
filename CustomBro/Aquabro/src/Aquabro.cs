@@ -1390,7 +1390,7 @@ namespace AquabroMod
             float speed = transform.localScale.x * 400f * (charged ? 1.66f : 1f);
             if (IsMine)
             {
-                ProjectileController.SpawnProjectileOverNetwork(prefab, this, x, y, speed, 0f, false, playerNum, false, true, 0f);
+                ProjectileController.SpawnProjectileOverNetwork(prefab, this, x, y, speed, 0f, true, playerNum, false, true, 0f);
             }
 
             PlayAttackSound();

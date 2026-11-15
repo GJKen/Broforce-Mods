@@ -30,6 +30,7 @@ public static class SkillSpringTests
                 using (System.Drawing.Bitmap atlas = new System.Drawing.Bitmap(args[1])) CheckTidalWave(atlas);
                 BossSkillDamageTests.RunWave(); return;
             }
+            CheckBloodDepth(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(args[0])));
             CheckAcid();
             CheckBlood();
             PixelMaskTests.Run();
@@ -47,6 +48,50 @@ public static class SkillSpringTests
             CheckWaveNetwork();
         }
         catch (Exception error) { Console.WriteLine("FAIL: " + error); Environment.Exit(1); }
+    }
+    private static void CheckBloodDepth(string assets)
+    {
+        Reset();
+        DoodadBloodPool pool = new DoodadBloodPool();
+        pool.sprite = new SpriteSM();
+        pool.sprite.meshRender.bounds = new Bounds(0, 0);
+        pool.sprite.meshRender.bounds.min.z = pool.sprite.meshRender.bounds.max.z = -12.1f;
+        pool.sprite.offset = new Vector3(3, 4, -16);
+        DoodadBloodPool.bloodDoodads.Add(pool);
+        Aquabro first = new Aquabro(), second = new Aquabro();
+        first.Info.path = second.Info.path = assets;
+        AquabroSkillVisual left = null, right = null;
+        try
+        {
+            for (int kind = 0; kind < 4; kind++)
+            {
+                left = new AquabroSkillVisual(first, kind, 0, 0, 1, 5, 0, 1);
+                AquabroSkillVisual.RefreshBloodDepth();
+                Check(pool.sprite.offset.z == -16, "Hidden skill moves blood");
+                left.Tick(.01f); AquabroSkillVisual.RefreshBloodDepth();
+                Check(pool.sprite.offset.z > -3 && pool.sprite.offset.z < -1, "Blood stays in front of skill");
+                Check(pool.sprite.offset.x == 3 && pool.sprite.offset.y == 4, "Blood XY offset changed");
+                right = new AquabroSkillVisual(second, kind, 0, 0, -1, 5, 0, 1);
+                right.Tick(.01f); AquabroSkillVisual.RefreshBloodDepth();
+                left.Dispose(); left = null;
+                Check(pool.sprite.offset.z != -16, "One owner restores blood used by another");
+                right.Dispose(); right = null;
+                Check(pool.sprite.offset.z == -16, "Last skill did not restore original blood depth");
+            }
+            left = new AquabroSkillVisual(first, 0, 0, 0, 1, 5, 0, 1);
+            left.Tick(.01f); AquabroSkillVisual.RefreshBloodDepth();
+            pool.sprite.meshRender.bounds = new Bounds(9000, 9000);
+            AquabroSkillVisual.RefreshBloodDepth();
+            Check(pool.sprite.offset.z == -16, "Leaving blood overlap did not restore depth");
+            left.Dispose(); left = null;
+        }
+        finally
+        {
+            if (left != null) left.Dispose();
+            if (right != null) right.Dispose();
+            DoodadBloodPool.bloodDoodads.Remove(pool);
+        }
+        Console.WriteLine("PASS blood depth: four skills; hidden cast; XY preserved; opposite facings/two owners; last dispose and overlap exit restore original depth");
     }
     private static void CheckBlood()
     {
@@ -1384,7 +1429,7 @@ namespace UnityEngine
         public float x,y;public Vector2(float x,float y) { this.x=x;this.y=y; }
         public static float Distance(Vector2 a,Vector2 b) { return new Vector3(a.x-b.x,a.y-b.y,0).magnitude; }
     }
-    public class Transform { public Transform parent;public Vector3 position;public Vector3 localScale=new Vector3(1,1,1); }
+    public class Transform { public Transform parent;public Vector3 position;public Vector3 localScale=new Vector3(1,1,1);public Vector3 lossyScale {get{return localScale;}} }
     public class GameObject : Object
     {
         private readonly Dictionary<Type,object> components=new Dictionary<Type,object>();
@@ -1589,7 +1634,7 @@ public class Doodad
     public Doodad(float x,float y) {centerX=x;centerY=y;}
     public void DamageOptional(DamageObject damage,ref bool hit) {Damaged=true;hit=true;Map.DoodadHits++;}
 }
-public class DoodadBloodPool : Doodad { public enum FluidType { Blood, Oil, Sewerage, Acid } public FluidType fluidType; public Transform transform { get { return gameObject.transform; } } public static List<DoodadBloodPool> bloodDoodads=new List<DoodadBloodPool>(); public float X,Y; public DoodadBloodPool():base(0,0){} }
+public class DoodadBloodPool : Doodad { public enum FluidType { Blood, Oil, Sewerage, Acid } public FluidType fluidType; public SpriteSM sprite; public Transform transform { get { return gameObject.transform; } } public static List<DoodadBloodPool> bloodDoodads=new List<DoodadBloodPool>(); public float X,Y; public DoodadBloodPool():base(0,0){} }
 public class DoodadAcidPool : DoodadBloodPool {}
 public enum BloodColor { Red,Green }
 public enum DirectionEnum { None,Up,Down,Left,Right }
@@ -1688,15 +1733,15 @@ public static class Map
       if(DamageObserver!=null)DamageObserver(target,damage); }
     public static void HitProjectiles(int p,int n,DamageType t,float r,float x,float y,float fx,float fy,float time) {}
 }
-public class SpriteSM
+public class SpriteSM : UnityEngine.Object
 {
-    public Vector3 TestOffset;public void SetOffset(Vector3 offset) {TestOffset=offset;}
+    public Transform transform=new Transform();public Vector3 offset;public Vector3 TestOffset;public void SetOffset(Vector3 value) {offset=TestOffset=value;}
     public MeshRenderer meshRender=new MeshRenderer();public static int LastFrame;public int TestFrame;
     public void SetPixelDimensions(int w,int h) {}public void SetSize(float w,float h) {}
     public void SetLowerLeftPixel(int x,int y) {TestFrame=LastFrame=x/128;}
     public void RecalcTexture() {}public void CalcUVs() {}public void UpdateUVs() {}
 }
-public class MeshRenderer { public object material; public Material sharedMaterial {get{return material as Material;}set{material=value;}} public bool enabled=true; }
+public class MeshRenderer { public UnityEngine.Bounds bounds; public object material; public Material sharedMaterial {get{return material as Material;}set{material=value;}} public bool enabled=true; }
 public class Material : UnityEngine.Object {
     public string name;public UnityEngine.Texture2D mainTexture=new UnityEngine.Texture2D(4096,128,UnityEngine.TextureFormat.ARGB32,false);
     public Material() {} public Material(Material source) { name=source.name;mainTexture=source.mainTexture; }

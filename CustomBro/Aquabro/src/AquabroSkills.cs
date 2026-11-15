@@ -1165,6 +1165,7 @@ namespace AquabroMod
             foreach (AquabroSkillVisual effect in skillVisuals) effect.PrepareSpringWater(delta);
             for (int i = skillVisuals.Count - 1; i >= 0; i--)
                 if (!skillVisuals[i].Tick(delta)) { skillVisuals[i].Dispose(); skillVisuals.RemoveAt(i); }
+            AquabroSkillVisual.RefreshBloodDepth();
         }
 
         private void ClearSkillPreview()
@@ -1314,6 +1315,11 @@ namespace AquabroMod
             }
             uploadedFrame = frame; uploadedColor = blood.ColorLevel;
         }
+        internal bool CoversBloodPool(Bounds bounds)
+        {
+            return (objects[0].activeInHierarchy || objects[1].activeInHierarchy) &&
+                AquabroSkillVisual.OverlapsBloodPool(bounds, x, y, scale);
+        }
         internal void Dispose()
         {
             for (int i = 0; i < 2; i++)
@@ -1329,6 +1335,60 @@ namespace AquabroMod
     // freeze both damage and animation. Objects are children for scene cleanup.
     internal sealed class AquabroSkillVisual
     {
+        private static readonly List<AquabroSkillVisual> ActiveVisuals = new List<AquabroSkillVisual>();
+        private static readonly Dictionary<SpriteSM, float> BloodOffsets = new Dictionary<SpriteSM, float>();
+        private static readonly List<SpriteSM> RestoredBlood = new List<SpriteSM>();
+
+        internal static bool OverlapsBloodPool(Bounds bounds, float x, float y, float scale)
+        {
+            return bounds.max.x >= x - 64f * scale && bounds.min.x <= x + 64f * scale &&
+                bounds.max.y >= y - 16f * scale && bounds.min.y <= y + 112f * scale;
+        }
+
+        private static bool CoversBloodPool(SpriteSM pool)
+        {
+            Bounds bounds = pool.meshRender.bounds;
+            foreach (AquabroSkillVisual effect in ActiveVisuals)
+                if (effect.obj != null && effect.obj.activeInHierarchy &&
+                    (OverlapsBloodPool(bounds, effect.x, effect.y, effect.scale) ||
+                    (effect.sharkLaunchWater != null && effect.sharkLaunchWater.CoversBloodPool(bounds)))) return true;
+            return false;
+        }
+
+        internal static void RefreshBloodDepth()
+        {
+            RestoredBlood.Clear();
+            foreach (KeyValuePair<SpriteSM, float> entry in BloodOffsets)
+                if (entry.Key == null || !CoversBloodPool(entry.Key))
+                {
+                    if (entry.Key != null)
+                    {
+                        Vector3 offset = entry.Key.offset;
+                        offset.z = entry.Value;
+                        entry.Key.SetOffset(offset);
+                    }
+                    RestoredBlood.Add(entry.Key);
+                }
+            foreach (SpriteSM sprite in RestoredBlood) BloodOffsets.Remove(sprite);
+            if (ActiveVisuals.Count == 0) return;
+            foreach (DoodadBloodPool pool in DoodadBloodPool.bloodDoodads)
+            {
+                if (pool == null || pool is DoodadAcidPool || pool.fluidType != DoodadBloodPool.FluidType.Blood ||
+                    !pool.gameObject.activeInHierarchy || pool.sprite == null || BloodOffsets.ContainsKey(pool.sprite) ||
+                    !CoversBloodPool(pool.sprite)) continue;
+                SpriteSM sprite = pool.sprite;
+                // Native blood meshes can sit near z=-12 despite their parent
+                // being at z=4. Move only overlapping blood behind the skills;
+                // enemies stay near z=0, skills at z=1, and terrain near z=5.
+                float shift = VisualDepth + 1f - sprite.meshRender.bounds.min.z;
+                if (shift <= 0f) continue;
+                BloodOffsets.Add(sprite, sprite.offset.z);
+                Vector3 offset = sprite.offset;
+                offset.z += shift / sprite.transform.lossyScale.z;
+                sprite.SetOffset(offset);
+            }
+        }
+
         internal const int SpringDissolveStartFrame = 18;
         internal const int MaelstromDissolveStartFrame = 24;
         internal const float MaelstromActiveDuration = 3.6f;
@@ -1349,9 +1409,9 @@ namespace AquabroMod
         internal static bool IsSharkDamageFrame(int frame)
         { return frame >= 6 && (frame < 27 || (frame >= SharkFlightFirstFrame && frame < SharkBodyFrameCount)); }
         private const float TidalSpeed = 160f;
-        // Blood pool sprites have a -16 offset and render near z=-12.1.
-        // Keep all four skills and both shark splash layers in front of them.
-        internal const float VisualDepth = -13f;
+        // Enemies render near z=0 and terrain near z=5; keep all four
+        // skill sprites behind enemies while remaining in front of terrain.
+        internal const float VisualDepth = 1f;
         private readonly Aquabro owner;
         private readonly int kind;
         private float facing;
@@ -1454,6 +1514,7 @@ namespace AquabroMod
             if (kind != 1) waterBarrier=new WaterProjectileBarrier(owner,kind,x,y,facing,scale,
                 kind == 3 ? springDamage.Acid : null, blood);
             obj.SetActive(false);
+            ActiveVisuals.Add(this);
         }
 
         private void RememberSharkElevator()
@@ -1843,6 +1904,8 @@ namespace AquabroMod
 
         public void Dispose()
         {
+            ActiveVisuals.Remove(this);
+            RefreshBloodDepth();
             if (kind == 1) owner.EndShark(this);
             if (waterBarrier!=null) waterBarrier.Dispose();
             if (sharkLaunchWater != null) sharkLaunchWater.Dispose();
