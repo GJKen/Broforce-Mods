@@ -29,6 +29,7 @@ $declarations = @(
     Read-Declaration $worldSource 'private static bool WorldMutationPrefix('
     Read-Declaration $worldSource 'private static void WorldBlockRpcPrefix('
     Read-Declaration $collectSource 'private static bool AllowWorkshopPickupCollectPrefix('
+    Read-Declaration $collectSource 'private static bool IsWorkshopPickupAmmoFull('
     Read-Declaration $worldSource 'private static void WriteWorldId('
     Read-Declaration $worldSource 'private static NID ReadWorldId('
     Read-Declaration $worldSource 'private static void WriteWorldState('
@@ -149,7 +150,7 @@ public class Unit:BroforceObject {
  public void HeadShot(int d,DamageType t,float vx,float vy,int dir,float x,float y,MonoBehaviour a) { DamageCalls++; }
  public void Knock(DamageType t,float vx,float vy,bool local) { KnockCalls++; }
 }
-public class TestVanDammeAnim:Unit { public bool canGib=true,WillReviveAlready,hasBeenCoverInAcid; public object inseminatorUnit; public float xIBlast,yIBlast; public BloodColor bloodColor; public void ChangeFrame() { } public void Sound() { } }
+public class TestVanDammeAnim:Unit { public bool canGib=true,WillReviveAlready,hasBeenCoverInAcid,AmmoFull; public object inseminatorUnit; public float xIBlast,yIBlast; public BloodColor bloodColor; public bool IsAmmoFull() { return AmmoFull; } public void ChangeFrame() { } public void Sound() { } }
 public class Mook:TestVanDammeAnim { }
 public class MookTrooper:Mook { }
 public class MookBigGuy:Mook { }
@@ -293,6 +294,22 @@ namespace CustomMapMultiplayer {
    try { RunChecks(); } catch(Exception e) { Console.WriteLine("FAIL after "+Checks+": "+e.GetType().Name+" "+e.Message); Environment.Exit(1); }
   }
   private static void RunChecks() {
+   var ammoHero=new TestVanDammeAnim { Owner=new PID(8), AmmoFull=true };
+   RPCController.CurrentRPC=new RPCObject(); RPCController.CurrentRPC.messageInfo.Sender=ammoHero.Owner;
+   Check(!IsWorkshopPickupAmmoFull(ammoHero),"owner Collect must consume ammo even when the remote hero mirror is already full");
+   ammoHero.IsMine=true;
+   Check(IsWorkshopPickupAmmoFull(ammoHero),"a local full-ammo hero must still reject collection");
+   ammoHero.AmmoFull=false;
+   Check(!IsWorkshopPickupAmmoFull(ammoHero),"a local hero with missing ammo can collect");
+   ammoHero.IsMine=false; ammoHero.AmmoFull=true;
+   RPCController.CurrentRPC.messageInfo.Sender=PID.ServerID;
+   Check(IsWorkshopPickupAmmoFull(ammoHero),"another peer cannot override the owning hero's ammo decision");
+   RPCController.CurrentRPC=null;
+   Check(IsWorkshopPickupAmmoFull(ammoHero),"a direct remote-mirror call retains the native full-ammo check");
+   RPCController.CurrentRPC=new RPCObject(); RPCController.CurrentRPC.messageInfo.Sender=ammoHero.Owner;
+   Session=false;
+   Check(IsWorkshopPickupAmmoFull(ammoHero),"offline collection retains the native full-ammo check");
+   Session=true; RPCController.CurrentRPC=null;
    var p=new Pickupable { Nid=new NID(new SID(20),PID.TargetServer,20140,27), xExtraOffset=3, extraLaunchForce=20 };
    var crate=new CrateBlock(); crate.Hold(p);
    Check(IsWorldObject(p),"hidden registered pickups must enroll in world sync");

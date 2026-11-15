@@ -2,6 +2,7 @@ using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Reflection.Emit;
 using Networking;
 using UnityEngine;
 
@@ -83,7 +84,11 @@ namespace CustomMapMultiplayer
                     : new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
                         postfixName,
                         BindingFlags.NonPublic | BindingFlags.Static));
-                _harmony.Patch(target, prefix, postfix, null, null);
+                var transpiler = methodName == "Collect"
+                    ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
+                        "WorkshopPickupAmmoTranspiler", BindingFlags.NonPublic | BindingFlags.Static))
+                    : null;
+                _harmony.Patch(target, prefix, postfix, transpiler, null);
                 DiagnosticLog.Info(
                     "Workshop pickup synchronization enabled for " +
                     targetType.Name + "." + methodName + ".");
@@ -151,6 +156,31 @@ namespace CustomMapMultiplayer
                     "Suppressed a duplicate Workshop pickup collection RPC.");
             }
             return false;
+        }
+
+        private static IEnumerable<CodeInstruction> WorkshopPickupAmmoTranspiler(IEnumerable<CodeInstruction> instructions)
+        {
+            foreach (var instruction in instructions)
+            {
+                var method = instruction.operand as MethodInfo;
+                if (method != null && method.DeclaringType == typeof(TestVanDammeAnim) && method.Name == "IsAmmoFull")
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = typeof(HarmonyDiagnostics).GetMethod(
+                        "IsWorkshopPickupAmmoFull", BindingFlags.NonPublic | BindingFlags.Static);
+                }
+                yield return instruction;
+            }
+        }
+
+        private static bool IsWorkshopPickupAmmoFull(TestVanDammeAnim hero)
+        {
+            if (!IsWorkshopOnlineSession() || hero.IsMine) return hero.IsAmmoFull();
+            // The owning hero already rejected full-ammo attempts before sending Collect.
+            // Its replica may still be full, or receive the refill before collection.
+            var rpc = RPCController.CurrentRPC;
+            var owner = hero.Owner == PID.TargetServer ? PID.ServerID : hero.Owner;
+            return (rpc == null || rpc.messageInfo.Sender != owner) && hero.IsAmmoFull();
         }
 
         private static bool UseWorkshopPickupablesPrefix(
