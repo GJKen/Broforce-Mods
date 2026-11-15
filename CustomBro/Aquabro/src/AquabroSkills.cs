@@ -15,6 +15,7 @@ namespace AquabroMod
         internal static readonly string[] SkillAssets = { "tidal-wave", "shark-hunt", "maelstrom", "abyssal-spring" };
         private readonly List<AquabroSkillVisual> skillVisuals = new List<AquabroSkillVisual>();
         private static int tidalSequence;
+        private static int maelstromSequence;
         private int castingSkill;
         internal int CurrentAcidStage;
         private static readonly System.Random AcidRandom = new System.Random();
@@ -215,7 +216,7 @@ namespace AquabroMod
         private void BroadcastSkillCast(int skill, float x, float y, float facing, int tidalId)
         {
             if (!IsMine || Connect.IsOffline) return;
-            Networking.Networking.RPC<int, float, float, float, int>(PID.TargetOthers, false, false,
+            Networking.Networking.RPC<int, float, float, float, int>(PID.TargetOthers, skill == 2, false,
                 new RpcSignature<int, float, float, float, int>(ReceiveSkillCast), skill, x, y, facing, tidalId);
         }
 
@@ -250,7 +251,12 @@ namespace AquabroMod
                 }
             }
             else if (skill == 2)
-                AddSkillVisual(2, x, y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
+            {
+                if (tidalId == 0) return;
+                foreach (AquabroSkillVisual effect in skillVisuals)
+                    if (effect.MaelstromNetworkId == tidalId) return;
+                AddSkillVisual(2, x, y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f).MaelstromNetworkId = tidalId;
+            }
             else
                 StartSpringColumns(x, y);
         }
@@ -275,6 +281,25 @@ namespace AquabroMod
                     return;
                 }
             // An expired/cleared wave must not be recreated by a late motion update.
+        }
+
+        internal void BroadcastMaelstromState(int id, Vector3 state, Vector3 route, Vector2 start)
+        {
+            if (!IsMine || Connect.IsOffline || id == 0) return;
+            Networking.Networking.RPC<int, Vector3, Vector3, Vector2>(PID.TargetOthers, true, false,
+                new RpcSignature<int, Vector3, Vector3, Vector2>(ReceiveMaelstromState), id, state, route, start);
+        }
+
+        [AllowedRPC]
+        private void ReceiveMaelstromState(int id, Vector3 state, Vector3 route, Vector2 start)
+        {
+            if (IsMine || id == 0) return;
+            foreach (AquabroSkillVisual effect in skillVisuals)
+                if (effect.MaelstromNetworkId == id)
+                {
+                    effect.ApplyMaelstromNetworkState(state, route, start);
+                    return;
+                }
         }
 
         private void BroadcastSharkState()
@@ -386,8 +411,10 @@ namespace AquabroMod
                     break;
                 case 2:
                     Vector2 center = FindMaelstromDestination(facing);
-                    AddSkillVisual(2, center.x, center.y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
-                    BroadcastSkillCast(2, center.x, center.y, facing, 0);
+                    AquabroSkillVisual vortex = AddSkillVisual(2, center.x, center.y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
+                    vortex.MaelstromNetworkId = ++maelstromSequence;
+                    BroadcastSkillCast(2, center.x, center.y, facing, vortex.MaelstromNetworkId);
+                    vortex.BroadcastMaelstromState();
                     break;
                 case 3:
                     StartSpringColumns();
@@ -785,7 +812,8 @@ namespace AquabroMod
         internal void SkillMaelstromPullAtTime(float x, float y, float facing, float scale, int frame,
             float delta, bool pulse, HashSet<object> caught, float age)
         {
-            if (!IsMine || delta <= 0f || frame < 0 || frame >= AquabroSkillVisual.MaelstromDissolveStartFrame) return;
+            if (delta <= 0f || frame < 0 || frame >= AquabroSkillVisual.MaelstromDissolveStartFrame) return;
+            pulse &= IsMine;
             HashSet<object> pulseHits = pulse ? new HashSet<object>() : null;
             HashSet<object> partTargets = pulse ? SkillDamageRelays(2, x, y, facing, scale, frame,
                 AquabroSkillVisual.MaelstromPulseDamage, 0f, 0f, false, pulseHits) : null;
@@ -796,7 +824,9 @@ namespace AquabroMod
                 caught.Add(target);
                 if (pulse && !partTargets.Contains(target))
                     DamageSkillUnit(target, AquabroSkillVisual.MaelstromPulseDamage, 0f, 0f, 0, false, x, target.Y + 6f);
-                if (target == null || !(target is Mook) || !target.gameObject.activeInHierarchy ||
+                // The caster owns damage; the victim owns its continuous physics.
+                // Replica velocities are overwritten by authoritative world snapshots.
+                if (target == null || (!Connect.IsOffline && !target.IsMine) || !(target is Mook) || !target.gameObject.activeInHierarchy ||
                     target.HasBeenCoveredInAcid()) continue;
                 Vector2 destination = MaelstromAttractor(target, x, y, scale, age);
                 float vx = Mathf.MoveTowards(target.xI, Mathf.Clamp((destination.x - target.X) * 6f, -170f, 170f), delta * 1200f);
@@ -1434,6 +1464,30 @@ namespace AquabroMod
         private bool resolved;
         private bool tidalBlocked;
         internal int TidalNetworkId;
+        internal int MaelstromNetworkId;
+        private float maelstromNetworkTimer, maelstromNetworkAge = -1f;
+
+        internal void BroadcastMaelstromState()
+        {
+            owner.BroadcastMaelstromState(MaelstromNetworkId, new Vector3(x, y, elapsed),
+                new Vector3(maelstromLeftX, maelstromRightX, maelstromRouteStartTime),
+                new Vector2(maelstromRouteStartX, maelstromRouteLeg));
+        }
+
+        internal void ApplyMaelstromNetworkState(Vector3 state, Vector3 route, Vector2 start)
+        {
+            if (state.z <= maelstromNetworkAge) return;
+            maelstromNetworkAge = state.z;
+            elapsed = Mathf.Max(elapsed, state.z);
+            x = state.x;
+            y = state.y;
+            maelstromLeftX = route.x;
+            maelstromRightX = route.y;
+            maelstromRouteStartTime = route.z;
+            maelstromRouteStartX = start.x;
+            maelstromRouteLeg = (int)start.y;
+        }
+
         private float tidalNetworkTimer, tidalNetworkAge = -1f;
         internal void ApplyTidalNetworkState(Vector3 state, bool blocked)
         {
@@ -1726,6 +1780,7 @@ namespace AquabroMod
         private bool TickCore(float delta)
         {
             if (delta <= 0f) return obj != null && (kind == 1 || elapsed < lifetime);
+            if (kind == 2 && !owner.IsMine && !Connect.IsOffline && maelstromNetworkAge < 0f) return obj != null;
             float previousElapsed = elapsed;
             elapsed += delta;
             if (obj == null) return false;
@@ -1853,10 +1908,17 @@ namespace AquabroMod
             {
                 // Removed walls can open the remaining route, bounded by the
                 // original +/-48px. Keep completed turns and the 3.6s deadline.
-                ExpandMaelstromRoute(previousElapsed);
+                if (owner.IsMine) ExpandMaelstromRoute(previousElapsed);
                 int leg;
                 float destination = MaelstromDestination(elapsed, out leg);
-                x = owner.MoveSkillHorizontally(x, y, destination);
+                x = owner.IsMine ? owner.MoveSkillHorizontally(x, y, destination) : destination;
+                maelstromNetworkTimer -= delta;
+                if (owner.IsMine && (maelstromNetworkTimer <= 0f ||
+                    previousElapsed < MaelstromActiveDuration && elapsed >= MaelstromActiveDuration))
+                {
+                    BroadcastMaelstromState();
+                    maelstromNetworkTimer = .08f;
+                }
                 waterBarrier.MoveTo(x, y);
                 if (elapsed < MaelstromActiveDuration)
                 {

@@ -66,10 +66,10 @@ internal static class SkillMaelstromTests
         Check(outside.KnockCalls==1,"Captured enemy pulled from outside effect");
         outside.X=55;Physics.Blocked=true;owner.SkillMaelstromPull(0,0,1,1,22,.016f,true,caughtSet);
         Check(outside.KnockCalls==1 && Map.TotalHits==0,"Captured target pulled/damaged through solid wall");
-        Physics.Blocked=false;owner.IsMine=false;
+        Physics.Blocked=false;owner.IsMine=false;outside.IsMine=false;
         owner.SkillMaelstromPull(0,0,1,1,22,.016f,true,caughtSet);
         owner.SkillMaelstromFinish(0,0,1,1,24,caughtSet,new HashSet<object>());
-        Check(outside.KnockCalls==1 && Map.TotalHits==0,"Remote owner applies pull/damage");owner.IsMine=true;
+        Check(outside.KnockCalls==1 && Map.TotalHits==0,"Remote owner applies pull/damage");owner.IsMine=true;outside.IsMine=true;
         owner.SkillMaelstromPull(0,0,1,1,22,0,true,caughtSet);
         Check(outside.KnockCalls==1,"Paused suction changes velocity");
         // Original 650px/s^2 vertical pull lost to the game's 1100px/s^2 gravity.
@@ -117,10 +117,103 @@ internal static class SkillMaelstromTests
         CheckWallTravel(owner);
         CheckWallExpansion(owner);
         CheckFinishVisualFrame(owner,atlas);
+        RunNetwork();
         Console.WriteLine("PASS maelstrom: 24 active masks; mirror/scales; live-scene upper-platform rim; physical knock without canTumble gate; gravity lift; captured gaps; wall/floor/ally/pause/ownership; pulse/one finisher; dissolve inactive");
     }
 
     private sealed class ArmouredHeavy : MookBigGuy {}
+
+    internal static void RunNetwork() {CheckNetworkAuthority();CheckNetworkRoute();}
+
+    private static void CheckNetworkAuthority()
+    {
+        Networking.Connect.IsOffline=false;
+        foreach(bool casterOwned in new bool[]{false,true})
+        foreach(bool victimOwned in new bool[]{false,true})
+        foreach(Mook victim in new Mook[]{new Mook(),new MookBigGuy(),new ArmouredHeavy()})
+        foreach(bool dead in new bool[]{false,true})
+        {
+            Reset();Aquabro caster=new Aquabro();caster.IsMine=casterOwned;
+            victim.X=20;victim.Y=20;victim.playerNum=-1;victim.IsMine=victimOwned;
+            victim.KnockCalls=victim.StunCalls=0;victim.stunTime=0;victim.xI=victim.yI=0;
+            victim.health=dead?0:100;victim.actionState=dead?ActionState.Dead:ActionState.Running;
+            Map.Targets.Add(victim);HashSet<object> caught=new HashSet<object>();caught.Add(victim);
+            caster.SkillMaelstromPullAtTime(0,0,1,.85f,22,.02f,true,caught,.4f);
+            Check(victim.KnockCalls==(victimOwned?1:0),"Suction does not follow victim authority");
+            Check(Map.TotalHits==(casterOwned?1:0),"Pulse does not follow caster authority");
+            Check(victim.StunCalls==(victimOwned && !dead && victim is MookBigGuy?1:0),"Heavy stun authority/dead guard");
+            int hits=Map.TotalHits;
+            caster.SkillMaelstromFinish(0,0,1,.85f,24,caught,new HashSet<object>());
+            Check(Map.TotalHits==hits+(casterOwned?1:0),"Remote caster duplicated finisher");
+            if(dead)Check(victim.actionState==ActionState.Dead,"Network suction revived corpse");
+        }
+        Reset();Aquabro offline=new Aquabro();Mook unowned=Enemy(20,20);unowned.IsMine=false;
+        Networking.Connect.IsOffline=true;HashSet<object> offlineCaught=new HashSet<object>();offlineCaught.Add(unowned);
+        offline.SkillMaelstromPull(0,0,1,.85f,22,.02f,false,offlineCaught);
+        Check(unowned.KnockCalls==1,"Offline suction now depends on network owner");
+        Networking.Connect.IsOffline=false;Reset();
+        Console.WriteLine("PASS vortex authority: independent caster/victim ownership; normal/heavy/subclass; live/corpse; victim-only suction/stun; caster-only pulse/finisher; offline");
+    }
+
+    private static void CheckNetworkRoute()
+    {
+        var flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+        var use=typeof(Aquabro).GetMethod("UseSpecial",flags);
+        var cast=typeof(Aquabro).GetMethod("ReceiveSkillCast",flags);
+        var receive=typeof(Aquabro).GetMethod("ReceiveMaelstromState",flags);
+        var clear=typeof(Aquabro).GetMethod("ClearSkillPreview",flags);
+        var visuals=typeof(Aquabro).GetField("skillVisuals",flags);
+        var selection=typeof(Aquabro).GetField("SkillSelections",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+        Check(receive.IsDefined(typeof(Networking.AllowedRPCAttribute),true),"Vortex motion RPC not allowed");
+        foreach(int fps in new int[]{30,60,120})
+        foreach(float facing in new float[]{-1,1})
+        {
+            Reset();Networking.Networking.MaelstromStates.Clear();Networking.Connect.IsOffline=false;
+            Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkFloorY=0;Physics.SharkWallX=98;
+            Aquabro owner=new Aquabro(),remote=new Aquabro();remote.IsMine=false;
+            owner.transform.localScale=new Vector3(facing,1,1);((int[])selection.GetValue(null))[owner.playerNum]=2;
+            try
+            {
+                typeof(Aquabro).GetMethod("PressSpecial",flags).Invoke(owner,null);
+                use.Invoke(owner,null);object[] creation=Networking.Networking.CastArguments;
+                Check(Networking.Networking.CastImmediate && (int)creation[4]!=0,"Vortex cast missing immediate identity");
+                cast.Invoke(remote,creation);cast.Invoke(remote,creation);
+                var local=(List<AquabroSkillVisual>)visuals.GetValue(owner);
+                var copies=(List<AquabroSkillVisual>)visuals.GetValue(remote);
+                Check(local.Count==1 && copies.Count==1,"Vortex cast replay created duplicates");
+                AquabroSkillVisual vortex=local[0],copy=copies[0];
+                Check(vortex.MaelstromNetworkId==copy.MaelstromNetworkId,"Vortex identity mismatch");
+                copy.Tick(.3f);Check(copy.NetworkX==(float)creation[1],"Uninitialized remote vortex moved");
+                object[] first=Networking.Networking.MaelstromStates[0];receive.Invoke(remote,first);
+                int consumed=1;
+                for(int tick=0;tick<fps*4;tick++)
+                {
+                    // Owner discovers/removes a wall; the remote sees conflicting terrain.
+                    Physics.SharkWallX=tick<fps/2?owner.X+98:float.PositiveInfinity;
+                    vortex.Tick(1f/fps);
+                    while(consumed<Networking.Networking.MaelstromStates.Count)
+                        receive.Invoke(remote,Networking.Networking.MaelstromStates[consumed++]);
+                    Physics.SharkWallX=owner.X+70;
+                    copy.Tick(1f/fps);
+                    // The receiver may be one frame ahead of the latest received age.
+                    Check(Math.Abs(vortex.NetworkX-copy.NetworkX)<3f,"Remote terrain changed authoritative route: fps="+fps+" facing="+facing+" tick="+tick+" local="+vortex.NetworkX+" remote="+copy.NetworkX);
+                    Check(Map.TotalHits==0,"Network route test unexpectedly dealt damage");
+                }
+                Check(Networking.Networking.MaelstromImmediate,"Vortex state was interpolation-delayed");
+                float end=copy.NetworkX;receive.Invoke(remote,first);copy.Tick(0);
+                Check(copy.NetworkX==end,"Stale vortex state rewound position");
+                clear.Invoke(remote,null);receive.Invoke(remote,first);
+                Check(copies.Count==0,"Late motion recreated a disposed vortex");
+            }
+            finally
+            {
+                clear.Invoke(owner,null);clear.Invoke(remote,null);
+                ((int[])selection.GetValue(null))[owner.playerNum]=0;
+                Physics.SharkWallX=float.PositiveInfinity;Physics.SharkTerrainEnabled=false;Reset();
+            }
+        }
+        Console.WriteLine("PASS vortex network: immediate cast/state; unique cast identity; delayed initialization; stale/late state; owner-only route with conflicting remote walls; 30/60/120 FPS; both facings");
+    }
 
     private static void CheckCorpsePull(Aquabro owner)
     {
@@ -142,7 +235,7 @@ internal static class SkillMaelstromTests
             corpse.X=200;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);
             corpse.X=25*facing;Physics.Blocked=true;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);Physics.Blocked=false;
             owner.SkillMaelstromPull(0,0,facing,.85f,22,0,false,caught);
-            owner.IsMine=false;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);owner.IsMine=true;
+            owner.IsMine=false;corpse.IsMine=false;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);owner.IsMine=true;corpse.IsMine=true;
             corpse.hasBeenCoverInAcid=true;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);corpse.hasBeenCoverInAcid=false;
             corpse.gameObject.SetActive(false);owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);corpse.gameObject.SetActive(true);
             Check(corpse.KnockCalls==calls,"Corpse pulled outside/wall/pause/remote/acid/inactive");
@@ -379,7 +472,7 @@ internal static class SkillMaelstromTests
             owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);Physics.Blocked=false;
             Check(!target.IsStunned && target.fire,"Control passes through wall");
             owner.SkillMaelstromPull(0,0,1,.85f,22,0,false,caught);
-            owner.IsMine=false;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);owner.IsMine=true;
+            owner.IsMine=false;target.IsMine=false;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);owner.IsMine=true;target.IsMine=true;
             owner.SkillMaelstromPull(0,0,1,.85f,24,.016f,false,caught);
             Check(!target.IsStunned && target.fire,"Pause/remote/dissolve applies control");
             target.health=0;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
@@ -414,8 +507,8 @@ internal static class SkillMaelstromTests
             knock.Invoke(null,new object[]{target,80f,180f});knock.Invoke(null,new object[]{normal,80f,180f});
             Check(Math.Abs(target.xI-normal.xI)<.01f && Math.Abs(target.yI-normal.yI)<.01f && Math.Abs(target.yI-180f)<.01f,
                 "Heavy/normal impulse compensation differs for the same requested velocity");
-            float vx=target.xI,vy=target.yI;owner.IsMine=false;
-            owner.SkillMaelstromPull(0,0,facing,.85f,22,.1f,false,caught);owner.IsMine=true;
+            float vx=target.xI,vy=target.yI;owner.IsMine=false;target.IsMine=false;
+            owner.SkillMaelstromPull(0,0,facing,.85f,22,.1f,false,caught);owner.IsMine=true;target.IsMine=true;
             Check(vx==target.xI && vy==target.yI,"Remote compensation changes heavy velocity");
         }
         Reset();

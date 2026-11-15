@@ -56,7 +56,7 @@
 | --- | --- |
 | [SkillSpringTests.cs](SkillSpringTests.cs) | 综合入口与模拟对象；七柱展开、低台阶／牢笼／高墙、共享七击和整组污染、狂潮、拦弹、切换与次数、HUD；Big Guy／Grenadier 固定一次 26 点且存活不挡浪 |
 | [SkillSharkTests.cs](SkillSharkTests.cs) | 潜行操控、梯子／电梯／Boss 顶面支撑；多帧率重力飞行、深坑／无底洞、实墙阻挡与破墙后恢复、低顶实际接触与拆砖飞行、镜头与暂停；固定水花、59 格本体与蒙版、鼻尖触水和入水停破坏 |
-| [SkillMaelstromTests.cs](SkillMaelstromTests.cs) | 普通兵／载具／露头虫类落点、分散吸附、普通／重装尸体吸力及死亡状态、重装控制、拆墙扩路线、收尾显示帧与伤害一致 |
+| [SkillMaelstromTests.cs](SkillMaelstromTests.cs) | 普通兵／载具／露头虫类落点、分散吸附、普通／重装尸体吸力及死亡状态、重装控制、拆墙扩路线、收尾显示帧与伤害一致；施法者／敌人独立所有权、漩涡实例与权威路线同步 |
 | [SkillDamageTargetTests.cs](SkillDamageTargetTests.cs) | 单位、Boss 和物件的伤害资格；毒水两阶段、原生腐蚀、免疫与普通伤害回退 |
 | [SkillOcclusionTests.cs](SkillOcclusionTests.cs) | 墙后狂潮／猎杀物件、三种屏障拦弹与酸池污染，含贴身薄墙、弹丸先撞墙和拆墙恢复 |
 | [BossSkillDamageTests.cs](BossSkillDamageTests.cs) | 部件、代理链与未知接收者；阶段保护、关联去重、伤害预算；狂潮载具挡停／击杀恢复、Big Guy／Grenadier 单次 26 点后穿行和锯齿打落 |

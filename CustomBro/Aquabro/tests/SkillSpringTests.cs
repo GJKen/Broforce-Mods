@@ -24,6 +24,7 @@ public static class SkillSpringTests
             if(args.Length==1 && args[0]=="--skill-hud") {CheckSkillHud();return;}
             if(args.Length==1 && args[0]=="--skill-network") {CheckSkillHud();CheckSkillNetwork();return;}
             if(args.Length==1 && args[0]=="--shark-flight") {SkillSharkTests.RunFlight();return;}
+            if(args.Length==1 && args[0]=="--maelstrom-network") {SkillMaelstromTests.RunNetwork();return;}
             if(args.Length==2 && args[0]=="--wave-network")
             {
                 CheckSkillNetwork(); CheckWaveNetwork();
@@ -1578,6 +1579,7 @@ namespace UnityEngine
 }
 public class Unit
 {
+    public bool IsMine=true;
     public float X,Y,xI,yI,width=8,height=8,headHeight=18;public int health=100,playerNum;public bool invulnerable;
     public int KnockCalls;public bool ForcedTumble;
     public virtual void Knock(DamageType type,float vx,float vy,bool tumble) {xI+=vx*.5f;yI+=vy;KnockCalls++;ForcedTumble=tumble;}
@@ -1772,7 +1774,7 @@ namespace AquabroMod
     {
         public bool WallDrag,wallClimbing,ledgeGrapple,canWallClimb=true,canLedgeGrapple=true;
         public object attachedToZipline;
-        public bool usingSpecial,usingPockettedSpecial,doingMelee,IsMine=true,specialResolved;
+        public bool usingSpecial,usingPockettedSpecial,doingMelee,specialResolved;
         public bool TestGunVisible=true;public int TestBodyCell;public Vector2 TestGunPosition;
         public bool up,down,buttonJump,left,right,canCeilingHang=true,wallClimbAnticipation,Grounded=true,Incapacitated;
         public bool fire,highFive,buttonGesture;
@@ -1832,6 +1834,8 @@ namespace Networking
         public static Delegate BreachCallback;
         public static object[] CastArguments;
         public static readonly List<object[]> TidalStates=new List<object[]>();
+        public static readonly List<object[]> MaelstromStates=new List<object[]>();
+        public static bool CastImmediate,MaelstromImmediate;
         public static void RPC<T1>(PID target,bool immediate,bool ignoreSessionID,
             RpcSignature<T1> callback,T1 first)
         {
@@ -1847,10 +1851,11 @@ namespace Networking
             BreachState=(Vector3)(object)first;BreachFlags=(int)(object)second;
         }
         public static void RPC<T1,T2,T3,T4>(PID target,bool reliable,bool runLocally,
-            RpcSignature<T1,T2,T3,T4> callback,T1 first,T2 second,T3 third,T4 fourth) {}
+            RpcSignature<T1,T2,T3,T4> callback,T1 first,T2 second,T3 third,T4 fourth)
+        { MaelstromImmediate=reliable;MaelstromStates.Add(new object[]{first,second,third,fourth}); }
         public static void RPC<T1,T2,T3,T4,T5>(PID target,bool reliable,bool runLocally,
             RpcSignature<T1,T2,T3,T4,T5> callback,T1 first,T2 second,T3 third,T4 fourth,T5 fifth)
-        { CastArguments=new object[]{first,second,third,fourth,fifth}; }
+        { CastImmediate=reliable;CastArguments=new object[]{first,second,third,fourth,fifth}; }
         public static void RPC<T1,T2,T3>(PID target,bool reliable,bool runLocally,
             RpcSignature<T1,T2,T3> callback,T1 first,T2 second,T3 third)
         { TidalStates.Add(new object[]{first,second,third}); }
