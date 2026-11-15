@@ -28,6 +28,7 @@ namespace CustomMapMultiplayer
             new Dictionary<Type, FieldInfo[]>();
         private static readonly HashSet<string> WorldMissingProjectilePrefabs = new HashSet<string>();
         private static readonly FieldInfo WorldRocketTrail = AccessTools.Field(typeof(Rocket), "trailParticles");
+        private static readonly FieldInfo WorldProjectileDelta = AccessTools.Field(typeof(Projectile), "t");
         private static readonly Dictionary<Type, MethodInfo> WorldProjectileEffectMethods = new Dictionary<Type, MethodInfo>();
         private static readonly FieldInfo[] WorldRandomStateFields = GetWorldRandomStateFields();
         private static readonly bool WorldRandomStateSupported = SupportsWorldRandomState();
@@ -51,6 +52,15 @@ namespace CustomMapMultiplayer
 
         private static void PatchWorldProjectiles()
         {
+            PatchWorldMethod(AccessTools.Method(typeof(PredabroSpear), "Death", Type.EmptyTypes, null), "WorldSpearDeathPrefix", null);
+            PatchWorldMethod(typeof(Projectile).GetMethod("RunLife", WorldFields), "WorldSpearRunLifePrefix", null);
+            PatchWorldMethod(AccessTools.Method(typeof(ProjectileController), "SpawnProjectileOverNetwork", null, null), "WorldSpearSyncSpawnPrefix", null);
+            var syncUpdate = AccessTools.Method(typeof(SyncController), "Update", null, null);
+            _harmony.Patch(syncUpdate,
+                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldSpearSyncUpdatePrefix", BindingFlags.NonPublic | BindingFlags.Static)),
+                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldSpearSyncUpdatePostfix", BindingFlags.NonPublic | BindingFlags.Static)),
+                null,
+                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldSpearSyncUpdateFinalizer", BindingFlags.NonPublic | BindingFlags.Static)));
             foreach (var method in typeof(ProjectileController).GetMethods(BindingFlags.Public | BindingFlags.Static))
                 if (method.Name == "SpawnProjectileLocally")
                     PatchWorldMethod(method, "WorldSpawnProjectilePrefix", null);
@@ -413,6 +423,221 @@ namespace CustomMapMultiplayer
             return false;
         }
 
+        private static bool WorldNativeStatePrefix(NetworkObject __instance, State state)
+        {
+            if (WorldNativeSyncPrefix(__instance)) return true;
+            var spear = __instance as PredabroSpear;
+            if (spear == null) return false;
+            var entry = RegisterWorldObject(spear);
+            if (entry.SpearEnding) return false;
+            var motion = entry.SpearMotion;
+            if (motion != null && motion.Count > 0 && state.TimeStamp <= motion[motion.Count - 1].Time) return false;
+            var position = spear.Position;
+            var velocity = spear.Velocity;
+            var properties = spear.Props;
+            for (var i = 0; i < properties.Length; i++)
+            {
+                if (properties[i].Name == "Position") position = (Vector2)state.Values[i];
+                else if (properties[i].Name == "Velocity") velocity = (Vector2)state.Values[i];
+            }
+            // Render in the receiver's clock domain; the native timestamp remains for ordering.
+            var owner = spear.Owner == PID.TargetServer ? PID.ServerID : spear.Owner;
+            var receivedAt = Time.unscaledTime - Mathf.Max(0f, PingController.GetPing(owner));
+            if (motion == null)
+            {
+                motion = new List<WorldProjectileSample>(6);
+                motion.Add(new WorldProjectileSample
+                {
+                    Time = state.TimeStamp - WorldSpearSyncInterval,
+                    LocalTime = receivedAt - WorldSpearSyncInterval,
+                    X = spear.X, Y = spear.Y, VX = velocity.x, VY = velocity.y,
+                    Rotation = spear.transform.eulerAngles.z
+                });
+                entry.SpearMotion = motion;
+            }
+            if (receivedAt <= motion[motion.Count - 1].LocalTime)
+                receivedAt = motion[motion.Count - 1].LocalTime + 0.001f;
+            motion.Add(new WorldProjectileSample
+            {
+                Time = state.TimeStamp, LocalTime = receivedAt,
+                X = position.x, Y = position.y, VX = velocity.x, VY = velocity.y,
+                Rotation = entry.Last == null ? spear.transform.eulerAngles.z : entry.Last.Rotation
+            });
+            if (motion.Count > 6) motion.RemoveAt(0);
+            return false;
+        }
+
+        private static bool WorldSpearDeathPrefix(PredabroSpear __instance)
+        {
+            if (_worldEpoch == 0 || !IsWorldSession()) return true;
+            var entry = RegisterWorldObject(__instance);
+            // RunLife already presented the terminal impact. OnDisable calls Death again;
+            // direct Death also destroys the object before presenting its own impact.
+            if (_worldApplying != 0 || !__instance.IsMine || entry.SpearEnding ||
+                entry.SpearEffectFrame == Time.frameCount) return false;
+            SendWorldSpearTermination(__instance, entry);
+            return true;
+        }
+
+        private static void WorldSpearRunLifePrefix(Projectile __instance)
+        {
+            var spear = __instance as PredabroSpear;
+            if (spear == null || _worldEpoch == 0 || !IsWorldSession() || !spear.IsMine || !spear.Syncronize)
+                return;
+            var delta = WorldProjectileDelta == null ? Time.deltaTime : (float)WorldProjectileDelta.GetValue(spear);
+            if (spear.life <= delta) SendWorldSpearTermination(spear, RegisterWorldObject(spear));
+        }
+
+        private static void SendWorldSpearTermination(PredabroSpear spear, WorldEntry entry)
+        {
+            if (entry.SpearEnding) return;
+            var revision = ++_worldSequence;
+            var x = spear.X;
+            var y = spear.Y;
+            ApplyWorldSpearTermination(entry, spear, x, y, revision);
+            global::Networking.Networking.RPC<long, NID, byte, int, float, float>(PID.TargetOthers,
+                new RpcSignature<long, NID, byte, int, float, float>(ReceiveWorldSpearTerminationRPC),
+                _worldEpoch, spear.Nid, (byte)spear.Owner.AsInt, revision, x, y, true);
+        }
+
+        private static bool ApplyWorldSpearTermination(WorldEntry entry, PredabroSpear spear,
+            float x, float y, int revision)
+        {
+            if (entry.Last != null && entry.Last.Revision >= revision) return false;
+            entry.SpearEnding = true;
+            entry.SpearMotion = null;
+            entry.ProjectileMotion = null;
+            if (entry.Last == null)
+                entry.Last = new WorldSnapshot { Id = entry.Id, Type = spear.GetType().Name, Owner = spear.Owner.AsInt };
+            entry.Last.Revision = revision;
+            entry.Last.X = x;
+            entry.Last.Y = y;
+            entry.Last.VX = 0f;
+            entry.Last.VY = 0f;
+            entry.Last.Rotation = spear.transform.eulerAngles.z;
+            entry.Last.SentAt = Time.unscaledTime;
+            spear.SetXY(x, y);
+            spear.SetPosition();
+            return true;
+        }
+
+        [AllowedRPC]
+        private static void ReceiveWorldSpearTerminationRPC(long epoch, NID id, byte owner, int revision, float x, float y)
+        {
+            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null ||
+                id.Sid != Connect.SessionID) return;
+            var sender = RPCController.CurrentRPC.messageInfo.Sender;
+            if (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner) return;
+            WorldEntry entry;
+            if (!WorldEntries.TryGetValue(id, out entry))
+            {
+                var registered = Registry.GetObject(id) as PredabroSpear;
+                if (registered == null || registered.IsMine) return;
+                entry = RegisterWorldObject(registered);
+            }
+            var spear = entry.Object as PredabroSpear;
+            if (spear == null || spear.IsMine) return;
+            ApplyWorldSpearTermination(entry, spear, x, y, revision);
+        }
+
+        private static void WorldSpearSyncSpawnPrefix(Projectile prefab, ref bool synced)
+        {
+            if (IsWorldSession() && prefab is PredabroSpear)
+                synced = true;
+        }
+
+        private static void WorldSpearSyncUpdatePrefix(
+            out List<KeyValuePair<NID, NetworkObject>> __state)
+        {
+            __state = null;
+            if (_worldEpoch == 0 || !IsWorldSession() || Connect.IsOffline) return;
+
+            var components = Registry.ComponentsToSync;
+            foreach (var pair in components)
+            {
+                if (!(pair.Value is PredabroSpear) || !pair.Value.Syncronize || !pair.Value.IsMine) continue;
+                if (__state == null) __state = new List<KeyValuePair<NID, NetworkObject>>();
+                __state.Add(pair);
+            }
+
+            if (__state == null) return;
+            foreach (var pair in __state) components.Remove(pair.Key);
+        }
+
+        private static void WorldSpearSyncUpdatePostfix(
+            List<KeyValuePair<NID, NetworkObject>> __state)
+        {
+            SendWorldSpearStates(__state);
+            RestoreWorldSpearSyncTargets(__state);
+        }
+
+        private static Exception WorldSpearSyncUpdateFinalizer(
+            Exception __exception,
+            List<KeyValuePair<NID, NetworkObject>> __state)
+        {
+            RestoreWorldSpearSyncTargets(__state);
+            return __exception;
+        }
+
+        private static void SendWorldSpearStates(List<KeyValuePair<NID, NetworkObject>> spears)
+        {
+            if (spears == null || spears.Count == 0 || Time.unscaledTime < _worldSpearSyncAt) return;
+
+            var stream = new UnityStream();
+            var stateCount = 0;
+            foreach (var pair in spears)
+            {
+                var spear = pair.Value as PredabroSpear;
+                if (spear == null || !spear.Syncronize || !spear.IsMine || !spear.ReadyTobeSynced()) continue;
+                stream.Serialize<State>(new State(pair.Key, spear));
+                stateCount++;
+            }
+
+            if (stateCount == 0) return;
+            global::Networking.Networking.UnreliableRPC<byte[]>(
+                PID.TargetOthers, true, false,
+                new RpcSignature<byte[]>(ReceiveWorldSpearStatesRPC), stream.ByteArray);
+            _worldSpearSyncAt = Time.unscaledTime + WorldSpearSyncInterval;
+            if (_worldSpearLoggedFirstSend) return;
+            _worldSpearLoggedFirstSend = true;
+            DiagnosticLog.Info("WORLD_STATE first 60 Hz spear state sent.");
+        }
+
+        private static void RestoreWorldSpearSyncTargets(List<KeyValuePair<NID, NetworkObject>> spears)
+        {
+            if (spears == null || spears.Count == 0) return;
+            var components = Registry.ComponentsToSync;
+            foreach (var pair in spears)
+                if (pair.Value != null && pair.Value.Syncronize)
+                    components[pair.Key] = pair.Value;
+            spears.Clear();
+        }
+
+        [AllowedRPC]
+        private static void ReceiveWorldSpearStatesRPC(byte[] bytes)
+        {
+            if (_worldEpoch == 0 || RPCController.CurrentRPC == null) return;
+            var sender = RPCController.CurrentRPC.messageInfo.Sender;
+            var stream = new UnityStream(bytes);
+            while (!stream.Finished)
+            {
+                var state = (State)stream.DeserializeNext();
+                if (state.Key.Sid != Connect.SessionID) continue;
+                object component;
+                if (!Registry.Components.TryGetValue(state.Key, out component)) continue;
+                var spear = component as PredabroSpear;
+                if (spear == null || spear.IsMine) continue;
+                var owner = spear.Owner == PID.TargetServer ? PID.ServerID : spear.Owner;
+                if (sender != owner) continue;
+                var entry = RegisterWorldObject(spear);
+                if (entry.SpearEnding) continue;
+                spear.AddState(state);
+                if (_worldSpearLoggedFirstReceive) continue;
+                _worldSpearLoggedFirstReceive = true;
+                DiagnosticLog.Info("WORLD_STATE first 60 Hz spear state received.");
+            }
+        }
+
         private static void RecordWorldProjectileMotion(WorldEntry entry, WorldSnapshot state, float receivedAt)
         {
             if (entry.ProjectileMotion == null) entry.ProjectileMotion = new List<WorldProjectileSample>(6);
@@ -446,6 +671,7 @@ namespace CustomMapMultiplayer
 
         private static void ResetWorldProjectileMotion(WorldEntry entry)
         {
+            entry.SpearMotion = null;
             entry.ProjectileMotion = null;
             entry.ProjectileClockOffset = 0f;
             entry.HasProjectileClockOffset = false;
@@ -454,6 +680,14 @@ namespace CustomMapMultiplayer
         private static void ApplyWorldProjectileMotion(Projectile projectile, WorldEntry entry, float now,
             WorldSnapshot state, out Vector2 position, out float rotation)
         {
+            if (TryGetWorldSpearTerminalMotion(projectile, entry, out position, out rotation)) return;
+            if (entry.SpearMotion != null && entry.SpearMotion.Count > 0)
+            {
+                var owner = projectile.Owner == PID.TargetServer ? PID.ServerID : projectile.Owner;
+                var spearRenderTime = now - Mathf.Max(0f, PingController.GetPing(owner)) - WorldSpearSyncInterval;
+                if (TryGetWorldSpearMotion(entry.SpearMotion, spearRenderTime, WorldSpearSyncInterval, projectile.life,
+                    projectile.doubleSpeed, out position, out rotation)) return;
+            }
             var samples = entry.ProjectileMotion;
             if (samples == null || samples.Count < 2)
             {
@@ -494,6 +728,59 @@ namespace CustomMapMultiplayer
             rotation = latest.Rotation;
         }
 
+        private static bool TryGetWorldSpearMotion(List<WorldProjectileSample> samples, float renderTime,
+            float maxExtrapolation, float remainingLife, bool doubleSpeed, out Vector2 position, out float rotation)
+        {
+            if (samples == null || samples.Count == 0)
+            {
+                position = Vector2.zero;
+                rotation = 0f;
+                return false;
+            }
+
+            var first = samples[0];
+            if (renderTime <= first.LocalTime)
+            {
+                position = new Vector2(first.X, first.Y);
+                rotation = first.Rotation;
+                return true;
+            }
+
+            for (var i = 1; i < samples.Count; i++)
+            {
+                var next = samples[i];
+                if (renderTime > next.LocalTime) continue;
+                var previous = samples[i - 1];
+                var duration = next.LocalTime - previous.LocalTime;
+                var fraction = duration <= 0f ? 1f : Mathf.Clamp01((renderTime - previous.LocalTime) / duration);
+                position = Vector2.Lerp(new Vector2(previous.X, previous.Y), new Vector2(next.X, next.Y), fraction);
+                rotation = Mathf.LerpAngle(previous.Rotation, next.Rotation, fraction);
+                return true;
+            }
+
+            var latest = samples[samples.Count - 1];
+            var extrapolation = Mathf.Min(renderTime - latest.LocalTime,
+                Mathf.Min(maxExtrapolation, Mathf.Max(0f, remainingLife)));
+            var speed = doubleSpeed ? 2f : 1f;
+            position = new Vector2(latest.X, latest.Y) + new Vector2(latest.VX, latest.VY) * (extrapolation * speed);
+            rotation = latest.Rotation;
+            return true;
+        }
+
+        private static bool TryGetWorldSpearTerminalMotion(Projectile projectile, WorldEntry entry,
+            out Vector2 position, out float rotation)
+        {
+            if (!(projectile is PredabroSpear) || !entry.SpearEnding)
+            {
+                position = Vector2.zero;
+                rotation = 0f;
+                return false;
+            }
+            position = new Vector2(projectile.X, projectile.Y);
+            rotation = projectile.transform.eulerAngles.z;
+            return true;
+        }
+
         private static bool WorldProjectileSpawnCheckPrefix(Projectile __instance)
         {
             if (!IsWorldReplica(__instance)) return true;
@@ -509,7 +796,12 @@ namespace CustomMapMultiplayer
             __state.EffectContext = true;
             _worldProjectileEffectsDepth++;
             if (_worldApplying != 0 || !tracked) return true;
-            if (__instance.IsMine) return true;
+            if (__instance.IsMine)
+            {
+                if (__instance is PredabroSpear)
+                    RegisterWorldObject(__instance).SpearEffectFrame = Time.frameCount;
+                return true;
+            }
             var rpc = RPCController.CurrentRPC as NonStaticRPCObject;
             var owner = __instance.Owner == PID.TargetServer ? PID.ServerID : __instance.Owner;
             if (rpc != null && rpc.targetID == __instance.Nid && rpc.methodName == "MakeEffects" && rpc.messageInfo.Sender == owner)

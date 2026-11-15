@@ -8,12 +8,14 @@ When Workshop map injection or FRP Direct is used, every player must install the
 
 ## Current Status
 
-The current version is experimental `0.5.1` and is not yet a stable release.
+The current version is experimental `0.5.1` and is not yet a stable release. Predabro normal/charged spears and Aquabro tridents reuse the projectile prefab and use this Mod's dedicated 60 Hz state stream and remote smoothing without depending on `BroforceBugFix`. The endpoint and terminal-effects repair passed targeted two-sided retesting, and the user confirmed normal behavior on 2026-11-16. See the [spear synchronization record](issues/ISSUES-2026-11-15-长矛60Hz同步整合与结束特效.md) for implementation and acceptance boundaries.
+
+The Release build passed compilation and the 112 existing regression checks; the 10 targeted spear checks also passed. The 483,328-byte CMM DLL has been deployed to both test machines, and the running build was confirmed on both peers. Targeted two-sided spear flight, endpoint, and impact checks passed; high-latency and long-session coverage remain open.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=df6cc152ed646ccbea82465c2b65f1c7928510933edcf8f360f7e2de3aab33b0` |
-| DLL SHA-256 | `78D811500368551D33D55A04A3AAB32D24360F35EF1A88B3C1D054224492AD49` |
+| Current distributed build | `buildHash=2cec8374a6d56d3075187cca1d27cce3b4a5ff38f60eb74fb1908b5ea54c227d` |
+| DLL SHA-256 | `AAD9717469B351C81CEF99910598E2F11377B21A67D425619505A8F41C3A197A` |
 | DLL assembly version | `0.5.1.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |

@@ -13,6 +13,7 @@ namespace CustomMapMultiplayer
     internal static partial class HarmonyDiagnostics
     {
         private const float WorldSendInterval = 1f / 12f;
+        private const float WorldSpearSyncInterval = 1f / 60f;
         private const int WorldProtocol = 12;
         private const BindingFlags WorldFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Dictionary<NID, WorldEntry> WorldEntries = new Dictionary<NID, WorldEntry>();
@@ -37,7 +38,10 @@ namespace CustomMapMultiplayer
         private static int _worldServer = -1;
         private static bool _worldSeeded;
         private static float _worldSendAt;
+        private static float _worldSpearSyncAt;
         private static float _worldRequestAt;
+        private static bool _worldSpearLoggedFirstSend;
+        private static bool _worldSpearLoggedFirstReceive;
 
         [Flags]
         private enum WorldFlags : ushort
@@ -74,6 +78,7 @@ namespace CustomMapMultiplayer
         private struct WorldProjectileSample
         {
             internal float Time, X, Y, VX, VY, Rotation;
+            internal float LocalTime;
         }
 
         private sealed class WorldEntry
@@ -96,6 +101,9 @@ namespace CustomMapMultiplayer
             internal List<WorldProjectileSample> ProjectileMotion;
             internal float ProjectileClockOffset;
             internal bool HasProjectileClockOffset;
+            internal List<WorldProjectileSample> SpearMotion;
+            internal int SpearEffectFrame = -1;
+            internal bool SpearEnding;
             internal int PendingHit;
             internal float PendingHitUntil;
             internal WorldHitPresentation Presentation;
@@ -195,7 +203,7 @@ namespace CustomMapMultiplayer
             PatchWorldMethod(typeof(Registry).GetMethod("Reset", BindingFlags.Public | BindingFlags.Static), null, "ClearEntityFinalStateSynchronizationState");
             PatchWorldMethod(typeof(NetworkObject).GetMethod("OnDestroy", WorldFields), "WorldDestroyPrefix", null);
             PatchWorldMethod(typeof(NetworkObject).GetMethod("RunSync", WorldFields), "WorldNativeSyncPrefix", null);
-            PatchWorldMethod(typeof(NetworkObject).GetMethod("AddState", WorldFields), "WorldNativeSyncPrefix", null);
+            PatchWorldMethod(typeof(NetworkObject).GetMethod("AddState", WorldFields), "WorldNativeStatePrefix", null);
             PatchWorldMethod(WorldDisarmShield, "WorldShieldDisarmPrefix", "WorldShieldDisarmPostfix");
             PatchWorldMethod(typeof(Unit).GetMethod("DeathRPC", WorldFields), "WorldDeathRpcPrefix", null);
             PatchWorldMethod(typeof(Unit).GetMethod("QuietDeathRPC", WorldFields), "WorldDeathRpcPrefix", null);
@@ -427,6 +435,8 @@ namespace CustomMapMultiplayer
             var entry = RegisterWorldObject(obj);
             // Overrides which do call base can pass through several patched OnDestroy methods.
             if (entry.Last != null && (entry.Last.Flags & WorldFlags.Removed) != 0) return;
+            var spear = obj as PredabroSpear;
+            if (spear != null) SendWorldSpearTermination(spear, entry);
             entry.Last = CaptureWorldState(entry);
             entry.Last.Flags |= WorldFlags.Removed;
             entry.Last.Revision = ++_worldSequence;
@@ -560,10 +570,14 @@ namespace CustomMapMultiplayer
                 _worldServer = PID.ServerID.AsInt;
                 _worldEpoch = 0;
                 _worldRequestAt = 0f;
+                _worldSpearSyncAt = 0f;
+                _worldSpearLoggedFirstSend = false;
+                _worldSpearLoggedFirstReceive = false;
                 WorldPending.Clear();
                 foreach (var entry in WorldCandidates)
                 {
                     entry.Last = null; entry.Dirty = true; ResetWorldProjectileMotion(entry);
+                    entry.SpearEnding = false; entry.SpearEffectFrame = -1;
                 }
             }
             if (!_worldSeeded)
@@ -661,10 +675,14 @@ namespace CustomMapMultiplayer
             if (_worldEpoch == epoch) return;
             _worldEpoch = epoch;
             _worldServer = PID.ServerID.AsInt;
+            _worldSpearSyncAt = 0f;
+            _worldSpearLoggedFirstSend = false;
+            _worldSpearLoggedFirstReceive = false;
             WorldPending.Clear();
             foreach (var entry in WorldCandidates)
             {
                 entry.Last = null; entry.Dirty = true; entry.DeathLife = -1; ResetWorldProjectileMotion(entry);
+                entry.SpearEnding = false; entry.SpearEffectFrame = -1;
             }
             global::Networking.Networking.RPC<int, PID, long>(PID.TargetOthers,
                 new RpcSignature<int, PID, long>(RequestWorldBaselineRPC), WorldProtocol, PID.MyID, _worldEpoch, false);
@@ -850,6 +868,7 @@ namespace CustomMapMultiplayer
             if (entry == null || entry.Last != null && entry.Last.Revision >= state.Revision) return true;
             var obj = entry.Object;
             if (obj != null && (!IsWorldObject(obj) || obj.IsMine || obj.GetType().Name != state.Type || obj.Owner.AsInt != state.Owner)) return true;
+            if (entry.SpearEnding && obj is PredabroSpear && (state.Flags & WorldFlags.Removed) == 0) return true;
             if (obj == null && (state.Flags & WorldFlags.Removed) == 0) return false;
             if (WaitForWorldGibConfirmation(entry, state))
             {
@@ -873,6 +892,9 @@ namespace CustomMapMultiplayer
                     if ((state.Flags & WorldFlags.Removed) != 0)
                     {
                         RecordWorldRemoval(state.Id);
+                        var spear = obj as PredabroSpear;
+                        if (spear != null)
+                            ApplyWorldSpearTermination(entry, spear, state.X, state.Y, state.Revision);
                         var block = obj as Block;
                         if (block != null && !block.destroyed) block.DestroyBlockInternal(false);
                         var unit = obj as Unit;

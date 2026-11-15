@@ -14,6 +14,7 @@ This directory contains issue records, conclusions, boundaries, and acceptance e
 
 | Document | Status | Reading notes |
 | --- | --- | --- |
+| [Spear 60 Hz sync integration and duplicate terminal effects](ISSUES-2026-11-15-长矛60Hz同步整合与结束特效.md) | Targeted two-sided retest passed; user confirmed normal behavior on 2026-11-16 | Deployed build `2cec8374…`; Predabro normal/charged and Aquabro endpoints, single terminal effects, and one live hit/damage check passed. High-latency and long-session coverage remain open. |
 | [Repeated Steam host queries](ISSUES-2026-11-11-Steam房主身份重复查询.md) | User confirmed stable high host FPS and normal joining-player FPS; fix integrated into 0.5.1 | Reuses the native result within a frame and invalidates around Steam callbacks; enemy bounds are unchanged. |
 | [Online host enemy update load](ISSUES-2026-11-11-联机房主敌人逐帧更新负载.md) | Historical culling experiment ineffective; excluded from integration | Preserves profiling, the failed approach, and the subsequent root cause. |
 | [Official lobby join blocked after disabling the multiplayer Mod](../../BroforceBugFix/issues/ISSUES-2026-11-09-未完成地图加载后加入官方房卡在主菜单.md) | Localized and passed two-sided retest after the BroforceBugFix repair | See the BroforceBugFix record for the permanent fix, reproduction, and two-sided verification; the initial incident record and raw screenshot remain local. |
