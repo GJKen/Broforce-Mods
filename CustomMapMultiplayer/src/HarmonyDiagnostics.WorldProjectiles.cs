@@ -29,6 +29,7 @@ namespace CustomMapMultiplayer
         private static readonly HashSet<string> WorldMissingProjectilePrefabs = new HashSet<string>();
         private static readonly FieldInfo WorldRocketTrail = AccessTools.Field(typeof(Rocket), "trailParticles");
         private static readonly FieldInfo WorldProjectileDelta = AccessTools.Field(typeof(Projectile), "t");
+        private static readonly FieldInfo WorldShellDip = AccessTools.Field(typeof(HeavyShell), "dipCounter");
         private static readonly Dictionary<Type, MethodInfo> WorldProjectileEffectMethods = new Dictionary<Type, MethodInfo>();
         private static readonly FieldInfo[] WorldRandomStateFields = GetWorldRandomStateFields();
         private static readonly bool WorldRandomStateSupported = SupportsWorldRandomState();
@@ -71,6 +72,9 @@ namespace CustomMapMultiplayer
                     .Patch(HarmonyReversePatchType.Original);
             _harmony.CreateReversePatcher(typeof(Rocket).GetMethod("RunSmokeTrail", WorldFields),
                 new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldBaseRocketSmoke", BindingFlags.NonPublic | BindingFlags.Static)))
+                .Patch(HarmonyReversePatchType.Original);
+            _harmony.CreateReversePatcher(typeof(HeavyShell).GetMethod("RunPredictionTrail", WorldFields),
+                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldBaseHeavyShellPrediction", BindingFlags.NonPublic | BindingFlags.Static)))
                 .Patch(HarmonyReversePatchType.Original);
             foreach (var method in typeof(Map).GetMethods(BindingFlags.Public | BindingFlags.Static))
                 if (method.Name == "HeadShotUnit" || method.Name == "KnockAndDamageUnit" && method.GetParameters().Length == 11)
@@ -413,6 +417,17 @@ namespace CustomMapMultiplayer
             ApplyWorldProjectileMotion(__instance, entry, Time.unscaledTime, state, out xy, out rotation);
             __instance.SetPosition(new Vector3(xy.x, xy.y, __instance.transform.position.z));
             __instance.transform.rotation = Quaternion.Euler(0f, 0f, rotation);
+            var shell = __instance as HeavyShell;
+            if (shell != null && shell.cross != null && shell.showPredictionTrail)
+            {
+                // HeavyShell.RunProjectile also draws the red trajectory and landing marker.
+                // Advance only its visual prediction; movement and hits remain owner-controlled.
+                var delta = Mathf.Clamp(Time.deltaTime, 0f, 0.0334f);
+                WorldProjectileDelta.SetValue(shell, delta);
+                WorldShellDip.SetValue(shell, (float)WorldShellDip.GetValue(shell) + delta);
+                WorldBaseHeavyShellPrediction(shell);
+                WorldBaseHeavyShellPrediction(shell);
+            }
             var rocket = __instance as Rocket;
             if (rocket != null)
             {
@@ -928,6 +943,11 @@ namespace CustomMapMultiplayer
         private static void WorldBaseHeavyShellEffects(HeavyShell instance, bool particles, float x, float y, bool useRayCast, Vector3 hitNormal, Vector3 hitPoint)
         {
             throw new NotSupportedException("HeavyShell visuals must be reverse patched before use.");
+        }
+
+        private static void WorldBaseHeavyShellPrediction(HeavyShell instance)
+        {
+            throw new NotSupportedException("HeavyShell prediction visuals must be reverse patched before use.");
         }
 
         private static bool WorldSpawnProjectilePrefix(object[] __args, ref Projectile __result)
