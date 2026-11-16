@@ -310,6 +310,7 @@ namespace TestMod
         private static void Stop()
         {
             _bindingTarget = 0;
+            StopPlayerCheats();
             if (_speedController != null) SendGameSpeedCommand(SpeedCommand.Enable, 0f);
             ResetGameSpeedNetwork();
             if (_frameRateController != null)
@@ -339,7 +340,8 @@ namespace TestMod
         {
             if (Settings.SettingsPanel != "speed" && Settings.SettingsPanel != "enemies" &&
                 Settings.SettingsPanel != "camera" && Settings.SettingsPanel != "resolution" &&
-                Settings.SettingsPanel != "fps" && Settings.SettingsPanel != "language")
+                Settings.SettingsPanel != "fps" && Settings.SettingsPanel != "language" &&
+                Settings.SettingsPanel != "cheats")
                 Settings.SettingsPanel = "speed";
             if (float.IsNaN(Settings.GameSpeed) || float.IsInfinity(Settings.GameSpeed))
                 Settings.GameSpeed = 1f;

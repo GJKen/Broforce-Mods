@@ -37,6 +37,7 @@ namespace TestMod
 
         private void Update()
         {
+            Plugin.UpdatePlayerCheats();
             UpdateCameraCompatibility();
             var sceneName = Application.loadedLevelName;
             if (sceneName != _sceneName)

@@ -10,6 +10,7 @@ namespace TestMod
         private static List<Resolution> _availableResolutions;
         private static Vector2 _resolutionScroll;
         private static string _targetFrameRateText;
+        private static int _cheatPlayerNumber;
         private static readonly float[] SpeedPresets = { 0.1f, 0.25f, 0.5f, 1f, 2f, 4f };
         private static readonly int[] FrameRatePresets = { 30, 60, 120, 144, 240, -1 };
 
@@ -24,6 +25,7 @@ namespace TestMod
             GUILayout.Space(14f);
             DrawNavigation(modEntry, "speed", chinese ? "速度与动作帧" : "Speed & Frames");
             DrawNavigation(modEntry, "enemies", chinese ? "敌人清理" : "Enemy Cleanup");
+            DrawNavigation(modEntry, "cheats", chinese ? "作弊" : "Cheats");
             DrawNavigation(modEntry, "camera", chinese ? "镜头跟随" : "Camera Follow");
             DrawNavigation(modEntry, "resolution", chinese ? "分辨率" : "Resolution");
             DrawNavigation(modEntry, "fps", chinese ? "帧率设置" : "Frame Rate Settings");
@@ -35,6 +37,7 @@ namespace TestMod
             switch (Settings.SettingsPanel)
             {
                 case "enemies": DrawEnemySettings(chinese); break;
+                case "cheats": DrawCheatSettings(chinese); break;
                 case "camera": DrawCameraSettings(modEntry, chinese); break;
                 case "resolution": DrawResolutionSettings(chinese); break;
                 case "fps": DrawFrameRateSettings(modEntry, chinese); break;
@@ -170,6 +173,58 @@ namespace TestMod
             GUILayout.Space(8f);
             GUILayout.Label(chinese ? "联机所有玩家需启用新版 TestMod；任意一端操作会同步慢放、暂停和步进。关闭控制会同步恢复。" :
                 "All peers need the current TestMod enabled. Either peer can control shared speed, pause and stepping. Disabling control releases all peers.", _uiStyles.Help);
+        }
+
+        private static void DrawCheatSettings(bool chinese)
+        {
+            DrawPageHeading(chinese ? "作弊" : "Cheats",
+                chinese ? "选择玩家，设置无敌、无限技能和复活功能。可同时对多名玩家启用。" :
+                "Choose a player to control invincibility, specials and revival. Multiple players can be enabled.");
+            BeginSettingsSection(chinese ? "指定玩家" : "Target player");
+            GUILayout.BeginHorizontal();
+            for (var playerNumber = 0; playerNumber < 4; playerNumber++)
+            {
+                var active = HeroController.IsPlaying(playerNumber);
+                var label = "P" + (playerNumber + 1) + (active ? "" : (chinese ? "（未加入）" : " (inactive)"));
+                if (GUILayout.Button(label, _cheatPlayerNumber == playerNumber ?
+                    _uiStyles.SelectedButton : _uiStyles.Button, GUILayout.ExpandWidth(true)))
+                    _cheatPlayerNumber = playerNumber;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+            GUILayout.Space(10f);
+
+            BeginSettingsSection("P" + (_cheatPlayerNumber + 1));
+            var guiEnabled = GUI.enabled;
+            GUI.enabled = guiEnabled && _behaviour != null;
+            var invincible = IsPlayerInvincibleEnabled(_cheatPlayerNumber);
+            var newInvincible = GUILayout.Toggle(invincible, chinese ? "无敌" : "Invincibility", _uiStyles.Toggle);
+            if (newInvincible != invincible) SetPlayerInvincible(_cheatPlayerNumber, newInvincible);
+            GUILayout.Label(chinese ? "免疫常规伤害，不消耗复活次数。坠出地图仍按原流程重生；不会复活已死亡的角色。" :
+                "Block normal damage and preserve lives. Falling out of bounds uses native respawning; dead characters are not revived.", _uiStyles.Help);
+            GUILayout.Space(8f);
+            var special = IsPlayerInfiniteSpecialEnabled(_cheatPlayerNumber);
+            var newSpecial = GUILayout.Toggle(special, chinese ? "无限技能" : "Unlimited specials", _uiStyles.Toggle);
+            if (newSpecial != special) SetPlayerInfiniteSpecial(_cheatPlayerNumber, newSpecial);
+            GUILayout.Label(chinese ? "自动补充技能次数，保留特殊弹药；技能自身的动画、持续时间与冷却仍然生效。" :
+                "Refill special uses and preserve pocketed ammo. Native animations, durations and cooldowns still apply.", _uiStyles.Help);
+            GUILayout.Space(8f);
+            var autoRevive = IsPlayerAutoReviveEnabled(_cheatPlayerNumber);
+            var newAutoRevive = GUILayout.Toggle(autoRevive, chinese ? "自动复活" : "Auto revive", _uiStyles.Toggle);
+            if (newAutoRevive != autoRevive) SetPlayerAutoRevive(_cheatPlayerNumber, newAutoRevive);
+            GUILayout.Label(chinese ? "死亡后立即在死亡位置重新生成，不消耗复活次数。与无敌独立，可单独开启。" :
+                "Respawn at the death position immediately without spending lives. Can be enabled independently of invincibility.", _uiStyles.Help);
+            GUILayout.Space(8f);
+            GUI.enabled = guiEnabled && CanRevivePlayer(_cheatPlayerNumber);
+            if (GUILayout.Button(chinese ? "立即原地复活" : "Revive here now", _uiStyles.Button))
+                RevivePlayer(_cheatPlayerNumber);
+            GUILayout.Label(chinese ? "手动复活只在所选玩家死亡且本关尚未结束时可用；复活位置仍有危险时可能再次死亡。" :
+                "Manual revival is available while the selected player is dead and the level is still active. A dangerous death position can kill them again.", _uiStyles.Help);
+            GUI.enabled = guiEnabled;
+            GUILayout.EndVertical();
+            GUILayout.Space(10f);
+            GUILayout.Label(chinese ? "联机各端需启用新版 TestMod，任意一端可修改任意玩家，由房主同步。换人、重生和换关后继续生效。离开联机、房主变更或停用 Mod 后清除，作弊开关不保存。" :
+                "All peers need the current TestMod enabled. Either peer can change any player via the host. Cheats survive swaps, respawns and level changes, and reset on disconnect, host change or mod disable. Toggles are not saved.", _uiStyles.Help);
         }
 
         private static void DrawEnemySettings(bool chinese)
