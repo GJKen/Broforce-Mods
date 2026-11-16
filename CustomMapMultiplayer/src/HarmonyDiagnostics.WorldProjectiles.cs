@@ -65,9 +65,10 @@ namespace CustomMapMultiplayer
             foreach (var method in typeof(ProjectileController).GetMethods(BindingFlags.Public | BindingFlags.Static))
                 if (method.Name == "SpawnProjectileLocally")
                     PatchWorldMethod(method, "WorldSpawnProjectilePrefix", null);
-            foreach (var type in new[] { typeof(Projectile), typeof(Rocket), typeof(HeavyShell) })
+            foreach (var type in new[] { typeof(Projectile), typeof(Rocket), typeof(HeavyShell), typeof(PlasmaBullet) })
                 _harmony.CreateReversePatcher(type.GetMethod("MakeEffects", WorldFields | BindingFlags.DeclaredOnly),
-                    new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(type == typeof(HeavyShell) ? "WorldBaseHeavyShellEffects" :
+                    new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(type == typeof(PlasmaBullet) ? "WorldBasePlasmaEffects" :
+                        type == typeof(HeavyShell) ? "WorldBaseHeavyShellEffects" :
                         type == typeof(Rocket) ? "WorldBaseRocketEffects" : "WorldBaseProjectileEffects", BindingFlags.NonPublic | BindingFlags.Static)))
                     .Patch(HarmonyReversePatchType.Original);
             _harmony.CreateReversePatcher(typeof(Rocket).GetMethod("RunSmokeTrail", WorldFields),
@@ -80,6 +81,9 @@ namespace CustomMapMultiplayer
                 if (method.Name == "HeadShotUnit" || method.Name == "KnockAndDamageUnit" && method.GetParameters().Length == 11)
                     PatchWorldMethod(method, "WorldProjectileHitPrefix", null);
             PatchWorldMethod(typeof(MapController).GetMethod("Damage_Networked", BindingFlags.Public | BindingFlags.Static), "WorldProjectileBlockHitPrefix", null);
+            // Grenades inherit Shrapnel, so Projectile's six-argument hook never sees this effect.
+            PatchWorldMethod(AccessTools.DeclaredMethod(typeof(Grenade), "MakeEffects", Type.EmptyTypes, null),
+                "WorldGrenadeEffectsPrefix", "WorldGrenadeEffectsPostfix");
         }
 
         private static void PatchWorldDamageContext(MethodBase method, string prefix)
@@ -87,7 +91,8 @@ namespace CustomMapMultiplayer
             var postfix = prefix == "WorldProjectileEffectsPrefix" ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
                 "WorldProjectileEffectsPostfix", BindingFlags.NonPublic | BindingFlags.Static)) : null;
             var transpiler = prefix == "WorldProjectileEffectsPrefix" &&
-                (method.DeclaringType == typeof(Rocket) || method.DeclaringType == typeof(HeavyShell))
+                (method.DeclaringType == typeof(Rocket) || method.DeclaringType == typeof(HeavyShell) ||
+                 method.DeclaringType == typeof(PlasmaBullet))
                 ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldProjectileVisualRandomTranspiler", BindingFlags.NonPublic | BindingFlags.Static))
                 : null;
             _harmony.Patch(method, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(prefix, BindingFlags.NonPublic | BindingFlags.Static)), postfix, transpiler,
@@ -99,11 +104,13 @@ namespace CustomMapMultiplayer
             var capture = typeof(HarmonyDiagnostics).GetMethod("CaptureWorldProjectileVisualRandomState",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var shell = __originalMethod.DeclaringType == typeof(HeavyShell);
+            var plasma = __originalMethod.DeclaringType == typeof(PlasmaBullet);
             var matches = 0;
             foreach (var instruction in instructions)
             {
                 var called = instruction.operand as MethodInfo;
-                if (called != null && (shell ? called.DeclaringType == typeof(Map) && called.Name == "ShakeTrees" :
+                if (called != null && (plasma ? called.DeclaringType == typeof(EffectsController) && called.Name == "CreateShrapnel" :
+                    shell ? called.DeclaringType == typeof(Map) && called.Name == "ShakeTrees" :
                     called.DeclaringType == typeof(EffectsController) &&
                     (called.Name == "CreateSparkShower" || called.Name == "CreateHugeExplosion" || called.Name == "CreateMassiveExplosion")))
                 {
@@ -113,7 +120,7 @@ namespace CustomMapMultiplayer
                 }
                 yield return instruction;
             }
-            if (matches != (shell ? 1 : 3))
+            if (matches != (shell || plasma ? 1 : 3))
                 throw new InvalidOperationException("Could not locate every " + __originalMethod.DeclaringType.Name + ".MakeEffects visual branch.");
         }
 
@@ -863,6 +870,7 @@ namespace CustomMapMultiplayer
                 writer.Write(__0); writer.Write(__1); writer.Write(__2); writer.Write(__3);
                 writer.Write(__4.x); writer.Write(__4.y); writer.Write(__4.z);
                 writer.Write(__5.x); writer.Write(__5.y); writer.Write(__5.z);
+                writer.Write(__instance.xI); writer.Write(__instance.yI);
                 writer.Write(hasRandomState);
                 if (hasRandomState) WriteWorldRandomState(writer, randomState);
                 // Removal snapshots execute immediately. Keep impact presentation ahead of them
@@ -888,13 +896,18 @@ namespace CustomMapMultiplayer
                 var particles = reader.ReadBoolean(); var x = reader.ReadSingle(); var y = reader.ReadSingle(); var ray = reader.ReadBoolean();
                 var normal = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 var point = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                var vx = reader.ReadSingle(); var vy = reader.ReadSingle();
                 var hasRandomState = reader.ReadBoolean();
                 UnityEngine.Random.State randomState = default(UnityEngine.Random.State);
                 if (hasRandomState && !TryReadWorldRandomState(reader, out randomState)) return;
                 _worldApplying++;
                 var previousRandomState = UnityEngine.Random.state;
+                var projectile = (Projectile)entry.Object;
+                var previousVX = projectile.xI; var previousVY = projectile.yI;
                 try
                 {
+                    // HitUnits can temporarily scale velocity; use the values at the actual impact.
+                    projectile.xI = vx; projectile.yI = vy;
                     var rocket = entry.Object as Rocket;
                     if (rocket != null)
                     {
@@ -911,10 +924,17 @@ namespace CustomMapMultiplayer
                         // during replay; keep the shell's cross, tree shake and huge explosion.
                         WorldBaseHeavyShellEffects((HeavyShell)entry.Object, particles, x, y, ray, normal, point);
                     }
-                    else WorldBaseProjectileEffects((Projectile)entry.Object, particles, x, y, ray, normal, point);
+                    else
+                    {
+                        if (hasRandomState) UnityEngine.Random.state = randomState;
+                        if (projectile is PlasmaBullet)
+                            WorldBasePlasmaEffects((PlasmaBullet)projectile, particles, x, y, ray, normal, point);
+                        else WorldBaseProjectileEffects(projectile, particles, x, y, ray, normal, point);
+                    }
                 }
                 finally
                 {
+                    projectile.xI = previousVX; projectile.yI = previousVY;
                     if (hasRandomState) UnityEngine.Random.state = previousRandomState;
                     _worldApplying--;
                 }
@@ -925,6 +945,12 @@ namespace CustomMapMultiplayer
         private static void WorldBaseRocketSmoke(Rocket instance, float t)
         {
             throw new NotSupportedException("Rocket smoke must be reverse patched before use.");
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static void WorldBasePlasmaEffects(PlasmaBullet instance, bool particles, float x, float y, bool useRayCast, Vector3 hitNormal, Vector3 hitPoint)
+        {
+            throw new NotSupportedException("Plasma visuals must be reverse patched before use.");
         }
 
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -953,7 +979,11 @@ namespace CustomMapMultiplayer
         private static bool WorldSpawnProjectilePrefix(object[] __args, ref Projectile __result)
         {
             var actor = __args[1] as BroforceObject;
-            if (_worldEpoch == 0 || !IsWorldSession() || !IsWorldObject(actor)) return true;
+            // Heroes are excluded from world-state snapshots, but their locally spawned
+            // projectiles still need a shared identity before Fire can hit anything.
+            var hero = actor as Unit;
+            if (_worldEpoch == 0 || !IsWorldSession() || actor == null || actor.Nid == NID.NoID ||
+                !IsWorldObject(actor) && (hero == null || !hero.IsHero)) return true;
             var prefab = (Projectile)__args[0];
             WorldProjectilePrefabs[prefab.GetType().FullName + "|" + prefab.name] = prefab;
             var position = new Vector3((float)__args[2], (float)__args[3], 0f);

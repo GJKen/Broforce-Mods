@@ -14,7 +14,7 @@ namespace CustomMapMultiplayer
     {
         private const float WorldSendInterval = 1f / 12f;
         private const float WorldSpearSyncInterval = 1f / 60f;
-        private const int WorldProtocol = 15;
+        private const int WorldProtocol = 17;
         private const BindingFlags WorldFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Dictionary<NID, WorldEntry> WorldEntries = new Dictionary<NID, WorldEntry>();
         private static readonly Dictionary<NID, WorldSnapshot> WorldPending = new Dictionary<NID, WorldSnapshot>();
@@ -30,6 +30,10 @@ namespace CustomMapMultiplayer
         private static readonly FieldInfo WorldTruckUnfold = AccessTools.Field(typeof(MookArtilleryTruck), "unfoldFrame");
         private static readonly FieldInfo WorldTankDead = AccessTools.Field(typeof(Tank), "isDead");
         private static readonly FieldInfo WorldUnitSprite = AccessTools.Field(typeof(TestVanDammeAnim), "sprite");
+        private static readonly FieldInfo WorldUnitGunSprite = AccessTools.Field(typeof(TestVanDammeAnim), "gunSprite");
+        private static readonly FieldInfo WorldPlasmaCounter = AccessTools.Field(typeof(Unit), "plasmaCounter");
+        private static readonly FieldInfo WorldPlasmaDamage = AccessTools.Field(typeof(Unit), "plasmaDamage");
+        private static readonly FieldInfo WorldShockCounter = AccessTools.Field(typeof(Unit), "shockCounter");
         private static readonly FieldInfo WorldDogCorpse = AccessTools.Field(typeof(DogAI), "attractedToCorpse");
         private static readonly MethodInfo WorldDisarmShield = typeof(MookRiotShield).GetMethod("DisarmShield", WorldFields);
         private static long _worldEpoch;
@@ -46,8 +50,9 @@ namespace CustomMapMultiplayer
         [Flags]
         private enum WorldFlags : ushort
         {
+            // SpritePose preserves corpses and electrified living mooks.
             None = 0, Removed = 1, Dead = 2, Mega = 4, Collapsed = 8,
-            Destroyed = 16, DoodadDead = 32, Disturbed = 64, Zombie = 128, CorpsePose = 256, Gibbed = 512, Shield = 1024, Exploded = 2048,
+            Destroyed = 16, DoodadDead = 32, Disturbed = 64, Zombie = 128, SpritePose = 256, Gibbed = 512, Shield = 1024, Exploded = 2048,
             Pickup = 4096, PickupActive = 8192, PickupCollected = 16384, MechAnimated = 32768
         }
 
@@ -61,11 +66,12 @@ namespace CustomMapMultiplayer
             internal int Row, Column;
             internal NID Parent, Pilot, ReviveSource;
             internal WorldFlags Flags;
-            internal int CorpseFrame;
-            internal float CorpseBlastX, CorpseBlastY, CorpseScaleY, GibX, GibY;
+            internal int PoseFrame;
+            internal float PoseBlastX, PoseBlastY, PoseScaleY, GibX, GibY;
             internal DamageType GibType;
-            internal Vector2 CorpsePixel;
-            internal Vector3 CorpseOffset;
+            internal Vector2 PosePixel;
+            internal Vector3 PoseOffset;
+            internal bool Electrified, PoseGunActive;
             internal float BlindTime, ScaredTime;
             internal int Mental;
             internal float PickupDelay;
@@ -186,7 +192,7 @@ namespace CustomMapMultiplayer
                             new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldPickupUpdatePrefix", BindingFlags.NonPublic | BindingFlags.Static)),
                             null, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldPickupVisibilityTranspiler", BindingFlags.NonPublic | BindingFlags.Static)), null);
                     else if (name == "ChangeFrame" && typeof(TestVanDammeAnim).IsAssignableFrom(type))
-                        PatchWorldMethod(method, "WorldCorpseAnimationPrefix", null);
+                        PatchWorldMethod(method, "WorldPoseAnimationPrefix", "WorldElectrifiedPosePostfix");
                     else if (name == "CreateGibEffects" && typeof(TestVanDammeAnim).IsAssignableFrom(type))
                         PatchWorldMethod(method, "WorldGibEffectsPrefix", null);
                     else if ((name == "Update" || name == "FixedUpdate") && typeof(Projectile).IsAssignableFrom(type))
@@ -398,7 +404,7 @@ namespace CustomMapMultiplayer
             throw new NotSupportedException("The base gib visual method must be reverse patched before use.");
         }
 
-        private static bool WorldCorpseAnimationPrefix(TestVanDammeAnim __instance)
+        private static bool WorldPoseAnimationPrefix(TestVanDammeAnim __instance)
         {
             if (_worldApplying != 0 || !IsWorldReplica(__instance)) return true;
             WorldEntry entry;
@@ -409,10 +415,41 @@ namespace CustomMapMultiplayer
                 return false;
             }
             if (!WorldEntries.TryGetValue(__instance.Nid, out entry) || entry.Last == null ||
-                (entry.Last.Flags & WorldFlags.CorpsePose) == 0) return true;
-            // Ground tests and random local death animations must not choose a new replica pose.
-            ApplyWorldCorpsePose(entry, entry.Last);
+                (entry.Last.Flags & WorldFlags.SpritePose) == 0) return true;
+            // Preserve the owner's corpse or electrified pose instead of choosing a local animation.
+            ApplyWorldPose(entry, entry.Last);
             return false;
+        }
+
+        private static bool HasWorldElectrifiedPose(TestVanDammeAnim unit)
+        {
+            var mook = unit as Mook;
+            return mook != null && mook.showElectrifiedFrames &&
+                ((float)WorldPlasmaCounter.GetValue(unit) > 0f || (float)WorldShockCounter.GetValue(unit) > 0f ||
+                (unit.health <= 0 && (int)WorldPlasmaDamage.GetValue(unit) > 0));
+        }
+
+        private static void WorldElectrifiedPosePostfix(TestVanDammeAnim __instance, bool __runOriginal)
+        {
+            if (!__runOriginal || _worldApplying != 0 || _worldEpoch == 0 || !IsWorldSession() ||
+                !(__instance is Mook) || !IsWorldObject(__instance) || !__instance.IsMine) return;
+            var entry = RegisterWorldObject(__instance);
+            var previous = entry.Last;
+            var electrified = HasWorldElectrifiedPose(__instance);
+            if (!electrified && (previous == null || !previous.Electrified)) return;
+            if (entry.Sprite == null) entry.Sprite = (SpriteSM)WorldUnitSprite.GetValue(__instance);
+            var gun = (SpriteSM)WorldUnitGunSprite.GetValue(__instance);
+            // Base and override postfixes can observe the same pose. Reject it before allocating a snapshot.
+            if (previous != null && previous.Electrified == electrified && entry.Sprite != null &&
+                previous.PosePixel == entry.Sprite.lowerLeftPixel && previous.PoseOffset == entry.Sprite.offset &&
+                previous.PoseGunActive == (gun != null && gun.gameObject.activeSelf)) return;
+            var state = CaptureWorldState(entry);
+            // The flash alternates every .033 seconds. The 12 Hz movement tick would skip its frames.
+            // Use the existing versioned state channel at each actual visual change, including its end.
+            state.Revision = ++_worldSequence;
+            entry.Last = state;
+            entry.SentAt = Time.unscaledTime;
+            SendWorldStates(new[] { state }, PID.TargetOthers, true);
         }
 
         private static bool WorldNativeSyncPrefix(NetworkObject __instance)
@@ -505,17 +542,20 @@ namespace CustomMapMultiplayer
                 state.Parent = Registry.GetNID(tvd.SyncParent);
                 state.Pilot = Registry.GetNID(tvd.pilottedUnit);
                 state.ReviveSource = Registry.GetNID(WorldReviveSource.GetValue(tvd));
-                if ((state.Flags & WorldFlags.Dead) != 0)
+                state.Electrified = HasWorldElectrifiedPose(tvd);
+                if ((state.Flags & WorldFlags.Dead) != 0 || state.Electrified || entry.Last != null && entry.Last.Electrified)
                 {
                     if (entry.Sprite == null) entry.Sprite = (SpriteSM)WorldUnitSprite.GetValue(tvd);
                     if (entry.Sprite != null)
                     {
-                        state.Flags |= WorldFlags.CorpsePose;
-                        state.CorpseFrame = tvd.frame;
-                        state.CorpseBlastX = tvd.xIBlast; state.CorpseBlastY = tvd.yIBlast;
-                        state.CorpseScaleY = tvd.transform.localScale.y;
-                        state.CorpsePixel = entry.Sprite.lowerLeftPixel;
-                        state.CorpseOffset = entry.Sprite.offset;
+                        state.Flags |= WorldFlags.SpritePose;
+                        state.PoseFrame = tvd.frame;
+                        state.PoseBlastX = tvd.xIBlast; state.PoseBlastY = tvd.yIBlast;
+                        state.PoseScaleY = tvd.transform.localScale.y;
+                        state.PosePixel = entry.Sprite.lowerLeftPixel;
+                        state.PoseOffset = entry.Sprite.offset;
+                        var gun = (SpriteSM)WorldUnitGunSprite.GetValue(tvd);
+                        state.PoseGunActive = gun != null && gun.gameObject.activeSelf;
                     }
                 }
             }
@@ -564,6 +604,7 @@ namespace CustomMapMultiplayer
                 a.Health != b.Health || a.MaxHealth != b.MaxHealth || a.Facing != b.Facing ||
                 a.ArmourDamage != b.ArmourDamage || a.FireDamage != b.FireDamage || a.Invulnerable != b.Invulnerable || a.BossDamaged != b.BossDamaged ||
                 a.GunnerEjected != b.GunnerEjected ||
+                a.Electrified != b.Electrified ||
                 a.BurnDamage != b.BurnDamage || a.Oily != b.Oily || (a.BurnTime > 0f) != (b.BurnTime > 0f) ||
                 (a.BurnExplosion > 0f) != (b.BurnExplosion > 0f) ||
                 a.Mental != b.Mental || (a.BlindTime > 0f) != (b.BlindTime > 0f) || (a.ScaredTime > 0f) != (b.ScaredTime > 0f) ||
@@ -578,8 +619,9 @@ namespace CustomMapMultiplayer
                 a.Row != b.Row || a.Column != b.Column || Mathf.Abs(a.Rotation - b.Rotation) > 0.1f ||
                 a.GroundHeight != b.GroundHeight || a.BlindTime != b.BlindTime || a.ScaredTime != b.ScaredTime ||
                 a.BurnTime != b.BurnTime || a.BurnExplosion != b.BurnExplosion ||
-                a.CorpseBlastX != b.CorpseBlastX || a.CorpseBlastY != b.CorpseBlastY ||
-                a.CorpseScaleY != b.CorpseScaleY || a.CorpsePixel != b.CorpsePixel || a.CorpseOffset != b.CorpseOffset;
+                a.PoseBlastX != b.PoseBlastX || a.PoseBlastY != b.PoseBlastY ||
+                a.PoseScaleY != b.PoseScaleY || a.PosePixel != b.PosePixel || a.PoseOffset != b.PoseOffset ||
+                a.PoseGunActive != b.PoseGunActive;
         }
 
         private static void UpdateWorldStateSynchronization()
@@ -750,14 +792,15 @@ namespace CustomMapMultiplayer
             w.Write(s.LifeTime); w.Write(s.Row); w.Write(s.Column); w.Write(s.GroundHeight);
             w.Write(s.BlindTime); w.Write(s.ScaredTime); w.Write(s.Mental);
             w.Write(s.ArmourDamage); w.Write(s.FireDamage); w.Write(s.ArmourKnocks); w.Write(s.ShieldTime); w.Write(s.Invulnerable); w.Write(s.BossDamaged);
-            w.Write(s.GunnerEjected);
+            w.Write(s.GunnerEjected); w.Write(s.Electrified);
             w.Write(s.BurnTime); w.Write(s.BurnDamage); w.Write(s.Oily); w.Write(s.BurnExplosion);
             WriteWorldId(w, s.Parent); WriteWorldId(w, s.Pilot); WriteWorldId(w, s.ReviveSource);
-            if ((s.Flags & WorldFlags.CorpsePose) != 0)
+            if ((s.Flags & WorldFlags.SpritePose) != 0)
             {
-                w.Write(s.CorpseFrame); w.Write(s.CorpseBlastX); w.Write(s.CorpseBlastY);
-                w.Write(s.CorpseScaleY); w.Write(s.CorpsePixel.x); w.Write(s.CorpsePixel.y);
-                w.Write(s.CorpseOffset.x); w.Write(s.CorpseOffset.y); w.Write(s.CorpseOffset.z);
+                w.Write(s.PoseFrame); w.Write(s.PoseBlastX); w.Write(s.PoseBlastY);
+                w.Write(s.PoseScaleY); w.Write(s.PosePixel.x); w.Write(s.PosePixel.y);
+                w.Write(s.PoseOffset.x); w.Write(s.PoseOffset.y); w.Write(s.PoseOffset.z);
+                w.Write(s.PoseGunActive);
             }
             if ((s.Flags & WorldFlags.Gibbed) != 0)
             {
@@ -780,15 +823,16 @@ namespace CustomMapMultiplayer
             s.LifeTime = r.ReadSingle(); s.Row = r.ReadInt32(); s.Column = r.ReadInt32(); s.GroundHeight = r.ReadSingle();
             s.BlindTime = r.ReadSingle(); s.ScaredTime = r.ReadSingle(); s.Mental = r.ReadInt32();
             s.ArmourDamage = r.ReadInt32(); s.FireDamage = r.ReadInt32(); s.ArmourKnocks = r.ReadInt32(); s.ShieldTime = r.ReadSingle(); s.Invulnerable = r.ReadBoolean(); s.BossDamaged = r.ReadBoolean();
-            s.GunnerEjected = r.ReadBoolean();
+            s.GunnerEjected = r.ReadBoolean(); s.Electrified = r.ReadBoolean();
             s.BurnTime = r.ReadSingle(); s.BurnDamage = r.ReadInt32(); s.Oily = r.ReadBoolean(); s.BurnExplosion = r.ReadSingle();
             s.Parent = ReadWorldId(r); s.Pilot = ReadWorldId(r); s.ReviveSource = ReadWorldId(r);
-            if ((s.Flags & WorldFlags.CorpsePose) != 0)
+            if ((s.Flags & WorldFlags.SpritePose) != 0)
             {
-                s.CorpseFrame = r.ReadInt32();
-                s.CorpseBlastX = r.ReadSingle(); s.CorpseBlastY = r.ReadSingle(); s.CorpseScaleY = r.ReadSingle();
-                s.CorpsePixel = new Vector2(r.ReadSingle(), r.ReadSingle());
-                s.CorpseOffset = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                s.PoseFrame = r.ReadInt32();
+                s.PoseBlastX = r.ReadSingle(); s.PoseBlastY = r.ReadSingle(); s.PoseScaleY = r.ReadSingle();
+                s.PosePixel = new Vector2(r.ReadSingle(), r.ReadSingle());
+                s.PoseOffset = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                s.PoseGunActive = r.ReadBoolean();
             }
             if ((s.Flags & WorldFlags.Gibbed) != 0)
             {
@@ -1083,24 +1127,27 @@ namespace CustomMapMultiplayer
                 pickup.SetPosition(new Vector3(state.X, state.Y, pickup.transform.position.z));
                 entry.LerpFrom = new Vector2(state.X, state.Y);
             }
-            ApplyWorldCorpsePose(entry, state);
+            ApplyWorldPose(entry, state);
             return true;
         }
 
-        private static void ApplyWorldCorpsePose(WorldEntry entry, WorldSnapshot state)
+        private static void ApplyWorldPose(WorldEntry entry, WorldSnapshot state)
         {
-            if ((state.Flags & WorldFlags.CorpsePose) == 0) return;
+            if ((state.Flags & WorldFlags.SpritePose) == 0) return;
             var unit = (TestVanDammeAnim)entry.Object;
-            unit.frame = state.CorpseFrame;
+            unit.frame = state.PoseFrame;
             unit.groundHeight = state.GroundHeight;
             unit.xI = state.VX; unit.yI = state.VY;
-            unit.xIBlast = state.CorpseBlastX; unit.yIBlast = state.CorpseBlastY;
+            unit.xIBlast = state.PoseBlastX; unit.yIBlast = state.PoseBlastY;
             unit.transform.rotation = Quaternion.Euler(0f, 0f, state.Rotation);
-            unit.transform.localScale = new Vector3(state.Scale, state.CorpseScaleY, unit.transform.localScale.z);
+            unit.transform.localScale = new Vector3(state.Scale, state.PoseScaleY, unit.transform.localScale.z);
             if (entry.Sprite == null) entry.Sprite = (SpriteSM)WorldUnitSprite.GetValue(unit);
             if (entry.Sprite == null) return;
-            if (entry.Sprite.lowerLeftPixel != state.CorpsePixel) entry.Sprite.SetLowerLeftPixel(state.CorpsePixel);
-            if (entry.Sprite.offset != state.CorpseOffset) entry.Sprite.SetOffset(state.CorpseOffset);
+            if (entry.Sprite.lowerLeftPixel != state.PosePixel) entry.Sprite.SetLowerLeftPixel(state.PosePixel);
+            if (entry.Sprite.offset != state.PoseOffset) entry.Sprite.SetOffset(state.PoseOffset);
+            var gun = (SpriteSM)WorldUnitGunSprite.GetValue(unit);
+            if (gun != null && gun.gameObject.activeSelf != state.PoseGunActive)
+                gun.gameObject.SetActive(state.PoseGunActive);
         }
 
         internal static void LateUpdateWorldReplicas()
@@ -1133,7 +1180,7 @@ namespace CustomMapMultiplayer
                 if (tvd != null) tvd.groundHeight = state.GroundHeight;
                 var tank = unit as Tank;
                 if (tank != null) tank.facingDirection = state.Facing;
-                ApplyWorldCorpsePose(entry, state);
+                ApplyWorldPose(entry, state);
             }
         }
 

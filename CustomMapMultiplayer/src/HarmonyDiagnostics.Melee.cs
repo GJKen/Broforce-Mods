@@ -19,6 +19,11 @@ namespace CustomMapMultiplayer
                 "WorldHitEffectsTranspiler", BindingFlags.NonPublic | BindingFlags.Static)), null);
             _harmony.Patch(AccessTools.Method(typeof(TestVanDammeAnim), "Death", null, null), null, null,
                 new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldHitEffectsTranspiler", null, null)), null);
+            _harmony.Patch(AccessTools.Method(typeof(TestVanDammeAnim), "CheckPlasmaDeath", null, null), null, null,
+                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldHitEffectsTranspiler", null, null)), null);
+            // Big mooks pass their adjusted offset through this shared implementation too.
+            PatchWorldMethod(AccessTools.DeclaredMethod(typeof(TestVanDammeAnim), "CreateElectricShockPuff", null, null),
+                "WorldUnitShockPrefix", "WorldUnitShockPostfix");
         }
 
         private static IEnumerable<CodeInstruction> WorldHitEffectsTranspiler(IEnumerable<CodeInstruction> instructions)
@@ -27,13 +32,15 @@ namespace CustomMapMultiplayer
             {
                 var method = instruction.operand as MethodInfo;
                 if (method != null && method.DeclaringType == typeof(EffectsController) &&
-                    (method.Name == "CreateMeleeStrikeEffect" || method.Name == "CreateBloodParticles" && method.GetParameters().Length == 9))
+                    (method.Name == "CreateMeleeStrikeEffect" || method.Name == "CreateWhiteFlashPop" ||
+                     method.Name == "CreateBloodParticles" && method.GetParameters().Length == 9))
                 {
                     var load = new CodeInstruction(OpCodes.Ldarg_0, null);
                     load.labels.AddRange(instruction.labels); instruction.labels.Clear();
                     load.blocks.AddRange(instruction.blocks); instruction.blocks.Clear();
                     instruction.operand = AccessTools.Method(typeof(HarmonyDiagnostics),
-                        method.Name == "CreateMeleeStrikeEffect" ? "WorldMeleeStrikeEffect" : "WorldBloodParticlesEffect", null, null);
+                        method.Name == "CreateMeleeStrikeEffect" ? "WorldMeleeStrikeEffect" :
+                        method.Name == "CreateWhiteFlashPop" ? "WorldWhiteFlashEffect" : "WorldBloodParticlesEffect", null, null);
                     yield return load;
                 }
                 yield return instruction;
@@ -54,6 +61,12 @@ namespace CustomMapMultiplayer
                 (entry.PresentedFlags & (WorldFlags.Dead | WorldFlags.Gibbed)) == 0)
                 EffectsController.CreateBloodParticles(color, x, y, count, radiusX, radiusY, force, vx, vy);
             SendWorldHitEffect(unit, 1, color, x, y, count, radiusX, radiusY, force, vx, vy);
+        }
+
+        private static void WorldWhiteFlashEffect(float x, float y, TestVanDammeAnim unit)
+        {
+            EffectsController.CreateWhiteFlashPop(x, y);
+            SendWorldHitEffect(unit, 2, BloodColor.None, x, y, 0, 0f, 0f, 0f, 0f, 0f);
         }
 
         private static void SendWorldHitEffect(TestVanDammeAnim unit, byte kind, BloodColor color,
@@ -94,6 +107,7 @@ namespace CustomMapMultiplayer
                 // No object lookup: a fatal hit must remain visible after the target has been removed.
                 if (kind == 0) EffectsController.CreateMeleeStrikeEffect(x, y, vx, vy);
                 else if (kind == 1) EffectsController.CreateBloodParticles(color, x, y, count, radiusX, radiusY, force, vx, vy);
+                else if (kind == 2) EffectsController.CreateWhiteFlashPop(x, y);
             }
         }
 
