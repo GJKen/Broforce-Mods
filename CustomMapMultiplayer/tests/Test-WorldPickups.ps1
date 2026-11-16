@@ -24,6 +24,7 @@ function Read-Declaration([string]$source, [string]$signature) {
 $declarations = @(
     Read-Declaration $worldSource 'private enum WorldFlags'
     Read-Declaration $worldSource 'private sealed class WorldSnapshot'
+    Read-Declaration $worldSource 'private static bool WorldCriticalChanged('
     Read-Declaration $worldSource 'private static bool IsWorldObject('
     Read-Declaration $worldSource 'private static bool IsWorldReplica('
     Read-Declaration $worldSource 'private static bool WorldMutationPrefix('
@@ -161,6 +162,7 @@ public class MookHellBigGuy:MookBigGuy { }
 public class MookHellArmouredBigGuy:MookHellBigGuy { public int shieldDamage,fireAmount,knockCount,Defends; public void PlayDefendSound() { Defends++; } public new void Damage(int d,DamageType t,float a,float b,int c,MonoBehaviour s,float x,float y) { } }
 public class MookRiotShield:Mook { public int shieldDamage,fireAmount; public float shieldTime=.2f; public bool hasShield=true; public Material unarmedMaterial=new Material(); public object shieldShrapnel; public new void Damage(int d,DamageType t,float a,float b,int c,MonoBehaviour s,float x,float y) { } public void DisarmShield(float vx) { CustomMapMultiplayer.HarmonyDiagnostics.ObserveShieldDisarm(this); } }
 public class Tank:Unit { public int Flashes; public void SetHurtMaterial() { Flashes++; } }
+public class MookGunplacement:Tank { private bool mookKilled; public BroforceObject driverSprite=new BroforceObject(); public bool CanFire() { return !mookKilled; } }
 public class Mech:Tank {
  public float tankSpeed=150,ultraTankSpeed=200,maxUpwardVelocity=120,ultraMaxUpwardVelocity=150;
  public int facingDirection=-1,turnFrame; public BroforceObject mechAnimation=new BroforceObject();
@@ -514,6 +516,23 @@ namespace CustomMapMultiplayer {
     WriteWorldState(stageWriter,bossState);stageWriter.Flush();stageStream.Position=0;
     using(var stageReader=new BinaryReader(stageStream)) { var stage=ReadWorldState(stageReader);
      Check(stage.BossDamaged && stage.ArmourDamage==61 && stage.FireDamage==36 && stage.ShieldTime==.08f && stage.Invulnerable,"armour and boss gates survive wire encoding");
+    }
+   }
+   var gunplacement=new MookGunplacement(); var occupiedSeat=new WorldSnapshot { Type="MookGunplacement" };
+   CaptureWorldSpecialHitState(gunplacement,occupiedSeat); ApplyWorldSpecialHitState(gunplacement,occupiedSeat);
+   Check(!occupiedSeat.GunnerEjected && gunplacement.driverSprite.gameObject.activeSelf && gunplacement.CanFire(),"occupied gun seat keeps its driver and fire eligibility");
+   WorldHitField(gunplacement,"mookKilled").SetValue(gunplacement,true);
+   var emptySeat=new WorldSnapshot { Type="MookGunplacement" }; CaptureWorldSpecialHitState(gunplacement,emptySeat);
+   Check(emptySeat.GunnerEjected && WorldCriticalChanged(occupiedSeat,emptySeat),"driver ejection alone requires reliable world state delivery");
+   using(var seatStream=new MemoryStream())using(var seatWriter=new BinaryWriter(seatStream)) {
+    WriteWorldState(seatWriter,emptySeat); WriteWorldState(seatWriter,occupiedSeat); seatWriter.Flush(); seatStream.Position=0;
+    using(var seatReader=new BinaryReader(seatStream)) {
+     var replica=new MookGunplacement(); var seat=ReadWorldState(seatReader);
+     ApplyWorldSpecialHitState(replica,seat); ApplyWorldSpecialHitState(replica,seat);
+     Check(!replica.driverSprite.gameObject.activeSelf && !replica.CanFire(),"repeated encoded ejection hides the phantom driver and disables fire");
+     Check(replica.health==3 && replica.DamageCalls==0,"seat replay never reapplies damage or ejects another soldier");
+     seat=ReadWorldState(seatReader); ApplyWorldSpecialHitState(replica,seat);
+     Check(!seat.GunnerEjected && replica.driverSprite.gameObject.activeSelf && replica.CanFire() && seatStream.Position==seatStream.Length,"occupied baseline restores the seat and preserves adjacent packet alignment");
     }
    }
    var goliath=new GoliathMech { health=360,maxHealth=360 };

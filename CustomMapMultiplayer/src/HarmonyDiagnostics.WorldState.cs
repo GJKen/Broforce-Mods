@@ -14,7 +14,7 @@ namespace CustomMapMultiplayer
     {
         private const float WorldSendInterval = 1f / 12f;
         private const float WorldSpearSyncInterval = 1f / 60f;
-        private const int WorldProtocol = 13;
+        private const int WorldProtocol = 15;
         private const BindingFlags WorldFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Dictionary<NID, WorldEntry> WorldEntries = new Dictionary<NID, WorldEntry>();
         private static readonly Dictionary<NID, WorldSnapshot> WorldPending = new Dictionary<NID, WorldSnapshot>();
@@ -72,7 +72,7 @@ namespace CustomMapMultiplayer
             internal int PickupType;
             internal int ArmourDamage, FireDamage, ArmourKnocks;
             internal float ShieldTime;
-            internal bool Invulnerable, BossDamaged;
+            internal bool Invulnerable, BossDamaged, GunnerEjected;
             internal float BurnTime, BurnExplosion;
             internal int BurnDamage;
             internal bool Oily;
@@ -563,6 +563,7 @@ namespace CustomMapMultiplayer
             return a == null || a.Owner != b.Owner || a.Flags != b.Flags || a.Life != b.Life ||
                 a.Health != b.Health || a.MaxHealth != b.MaxHealth || a.Facing != b.Facing ||
                 a.ArmourDamage != b.ArmourDamage || a.FireDamage != b.FireDamage || a.Invulnerable != b.Invulnerable || a.BossDamaged != b.BossDamaged ||
+                a.GunnerEjected != b.GunnerEjected ||
                 a.BurnDamage != b.BurnDamage || a.Oily != b.Oily || (a.BurnTime > 0f) != (b.BurnTime > 0f) ||
                 (a.BurnExplosion > 0f) != (b.BurnExplosion > 0f) ||
                 a.Mental != b.Mental || (a.BlindTime > 0f) != (b.BlindTime > 0f) || (a.ScaredTime > 0f) != (b.ScaredTime > 0f) ||
@@ -749,6 +750,7 @@ namespace CustomMapMultiplayer
             w.Write(s.LifeTime); w.Write(s.Row); w.Write(s.Column); w.Write(s.GroundHeight);
             w.Write(s.BlindTime); w.Write(s.ScaredTime); w.Write(s.Mental);
             w.Write(s.ArmourDamage); w.Write(s.FireDamage); w.Write(s.ArmourKnocks); w.Write(s.ShieldTime); w.Write(s.Invulnerable); w.Write(s.BossDamaged);
+            w.Write(s.GunnerEjected);
             w.Write(s.BurnTime); w.Write(s.BurnDamage); w.Write(s.Oily); w.Write(s.BurnExplosion);
             WriteWorldId(w, s.Parent); WriteWorldId(w, s.Pilot); WriteWorldId(w, s.ReviveSource);
             if ((s.Flags & WorldFlags.CorpsePose) != 0)
@@ -778,6 +780,7 @@ namespace CustomMapMultiplayer
             s.LifeTime = r.ReadSingle(); s.Row = r.ReadInt32(); s.Column = r.ReadInt32(); s.GroundHeight = r.ReadSingle();
             s.BlindTime = r.ReadSingle(); s.ScaredTime = r.ReadSingle(); s.Mental = r.ReadInt32();
             s.ArmourDamage = r.ReadInt32(); s.FireDamage = r.ReadInt32(); s.ArmourKnocks = r.ReadInt32(); s.ShieldTime = r.ReadSingle(); s.Invulnerable = r.ReadBoolean(); s.BossDamaged = r.ReadBoolean();
+            s.GunnerEjected = r.ReadBoolean();
             s.BurnTime = r.ReadSingle(); s.BurnDamage = r.ReadInt32(); s.Oily = r.ReadBoolean(); s.BurnExplosion = r.ReadSingle();
             s.Parent = ReadWorldId(r); s.Pilot = ReadWorldId(r); s.ReviveSource = ReadWorldId(r);
             if ((s.Flags & WorldFlags.CorpsePose) != 0)

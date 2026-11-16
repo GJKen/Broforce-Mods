@@ -46,6 +46,7 @@ namespace CustomMapMultiplayer
         {
             var unit = obj as Unit;
             state.Invulnerable = unit != null && unit.invulnerable;
+            if (obj is MookGunplacement) state.GunnerEjected = (bool)WorldHitField(obj, "mookKilled").GetValue(obj);
             var mech = obj as Mech;
             if (mech != null)
             {
@@ -74,6 +75,14 @@ namespace CustomMapMultiplayer
         {
             var unit = obj as Unit;
             if (unit != null) unit.invulnerable = state.Invulnerable;
+            var gunplacement = obj as MookGunplacement;
+            if (gunplacement != null)
+            {
+                // SpawnMook already network-spawns the ejected soldier on the owner.
+                // Replay only the seat state, including before a later Death replay.
+                WorldHitField(gunplacement, "mookKilled").SetValue(gunplacement, state.GunnerEjected);
+                gunplacement.driverSprite.gameObject.SetActive(!state.GunnerEjected);
+            }
             var piece = obj as BossPiece;
             if (piece != null) piece.immortal = state.Invulnerable;
             if (obj is BossBlockPieceSheathed) ((BossBlockPieceSheathed)obj).indestructible = state.Invulnerable;
