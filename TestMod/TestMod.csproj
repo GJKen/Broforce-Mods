@@ -52,6 +52,7 @@
     <Compile Include="src\TestModBehaviour.cs" />
     <Compile Include="src\TestModSettings.cs" />
     <Compile Include="src\GameSpeedController.cs" />
+    <Compile Include="src\GameSpeedNetwork.cs" />
     <Compile Include="src\FrameRateDisplay.cs" />
     <Compile Include="src\FrameRateController.cs" />
     <Compile Include="src\SettingsUI.cs" />

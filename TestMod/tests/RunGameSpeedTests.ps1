@@ -6,7 +6,9 @@ $outputPath = Join-Path $outputDir 'GameSpeedControllerTests.exe'
 $compiler = Join-Path $env:windir 'Microsoft.NET\Framework64\v3.5\csc.exe'
 & $compiler /nologo /target:exe "/out:$outputPath" `
     (Join-Path $PSScriptRoot 'GameSpeedControllerTests.cs') `
+    (Join-Path $PSScriptRoot 'GameSpeedNetworkTests.cs') `
     (Join-Path $projectRoot 'src\GameSpeedController.cs') `
+    (Join-Path $projectRoot 'src\GameSpeedNetwork.cs') `
     (Join-Path $projectRoot 'src\TestModSettings.cs')
 if ($LASTEXITCODE -ne 0) { throw "Test compilation failed: $LASTEXITCODE" }
 & $outputPath

@@ -254,21 +254,33 @@ internal static class GameSpeedControllerTests
         CheckOriginalTiming();
         CheckHoldToStep();
         Console.WriteLine("PASS: " + _checks + " game-speed checks");
+        GameSpeedNetworkTests.Run();
     }
 }
 
 namespace TestMod
 {
-    internal static class Plugin
+    public static partial class Plugin
     {
         internal static TestModSettings Settings;
         internal static GameSpeedController Controller;
         internal static bool CapturingHotkey;
         internal static bool IsGameFrameFrozen { get { return Controller.IsFrozen; } }
         internal static bool IsGameSpeedEnabled { get { return Settings.EnableGameSpeed; } }
-        internal static void SetGamePaused(bool paused) { Controller.SetPaused(paused); }
+        private static GameSpeedController _speedController { get { return Controller; } }
+        internal static bool IsGamePaused { get { return Controller.IsPaused; } }
+        private static object ModEntry = null;
+        private static void SaveSettings(object entry) { }
+        internal static void SetGamePaused(bool paused)
+        {
+            if (!SendGameSpeedCommand(SpeedCommand.Pause, paused ? 1f : 0f)) Controller.SetPaused(paused);
+        }
         internal static int StepRequests;
-        internal static bool StepOneFrame() { StepRequests++; return Controller.RequestFrameStep(); }
+        internal static bool RequestGameSpeedStep()
+        {
+            return CanStepGameFrame && (SendGameSpeedCommand(SpeedCommand.Step, 0f) || Controller.RequestFrameStep());
+        }
+        internal static bool StepOneFrame() { StepRequests++; return RequestGameSpeedStep(); }
     }
 }
 
@@ -286,6 +298,7 @@ namespace UnityEngine
         internal static int captureFramerate;
     }
     internal static class Application { internal static bool isFocused = true; }
+    internal static class Mathf { internal static float Max(float a, float b) { return Math.Max(a, b); } }
     internal static class Input
     {
         internal static KeyCode Pressed;
@@ -312,4 +325,4 @@ namespace HarmonyLib
 internal class TestVanDammeAnim : UnityEngine.MonoBehaviour { }
 internal class TimeController : UnityEngine.MonoBehaviour { }
 internal class PauseController : UnityEngine.MonoBehaviour { internal static PauseStatus pauseStatus; }
-internal enum PauseStatus { UnPaused, Paused }
+internal enum PauseStatus { UnPaused, Paused, MenuPause }

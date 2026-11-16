@@ -145,6 +145,7 @@ namespace TestMod
         public static void SetGameSpeedEnabled(bool enabled)
         {
             if (Settings == null) return;
+            if (SendGameSpeedCommand(SpeedCommand.Enable, enabled ? 1f : 0f)) return;
             Settings.EnableGameSpeed = enabled;
             if (_speedController != null) _speedController.ApplySettings();
             SaveSettings(ModEntry);
@@ -155,6 +156,7 @@ namespace TestMod
             if (float.IsNaN(speed) || float.IsInfinity(speed) || speed < 0f || speed > 4f)
                 throw new ArgumentOutOfRangeException("speed", "Use a speed between 0 and 4.");
             if (Settings == null) return;
+            if (SendGameSpeedCommand(SpeedCommand.Speed, speed)) return;
             Settings.EnableGameSpeed = true;
             if (speed > 0f) Settings.GameSpeed = Mathf.Max(0.01f, speed);
             if (_speedController != null) _speedController.SetPaused(speed == 0f);
@@ -164,6 +166,7 @@ namespace TestMod
         public static void SetGamePaused(bool paused)
         {
             if (Settings == null || _speedController == null) return;
+            if (SendGameSpeedCommand(SpeedCommand.Pause, paused ? 1f : 0f)) return;
             Settings.EnableGameSpeed = true;
             _speedController.SetPaused(paused);
             SaveSettings(ModEntry);
@@ -171,13 +174,19 @@ namespace TestMod
 
         public static bool StepOneFrame()
         {
-            if (_speedController == null || PauseController.pauseStatus != PauseStatus.UnPaused)
+            var requested = RequestGameSpeedStep();
+            if (requested) SaveSettings(ModEntry);
+            return requested;
+        }
+
+        internal static bool RequestGameSpeedStep()
+        {
+            if (_speedController == null || !CanStepGameFrame)
                 return false;
+            if (SendGameSpeedCommand(SpeedCommand.Step, 0f)) return true;
             Settings.EnableGameSpeed = true;
             _speedController.ApplySettings();
-            var requested = _speedController.RequestFrameStep();
-            SaveSettings(ModEntry);
-            return requested;
+            return _speedController.RequestFrameStep();
         }
 
         internal static UnityModManager.ModEntry ModEntry { get; private set; }
@@ -301,6 +310,8 @@ namespace TestMod
         private static void Stop()
         {
             _bindingTarget = 0;
+            if (_speedController != null) SendGameSpeedCommand(SpeedCommand.Enable, 0f);
+            ResetGameSpeedNetwork();
             if (_frameRateController != null)
             {
                 _frameRateController.Release();

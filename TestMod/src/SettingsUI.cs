@@ -89,8 +89,7 @@ namespace TestMod
             var speed = GUILayout.HorizontalSlider(Settings.GameSpeed, 0.01f, 4f);
             if (Mathf.Abs(speed - Settings.GameSpeed) > 0.001f)
             {
-                Settings.GameSpeed = speed;
-                if (_speedController != null) _speedController.ApplySettings();
+                SetPlaybackSpeed(speed);
             }
             GUILayout.Space(5f);
             GUILayout.BeginHorizontal();
@@ -121,7 +120,7 @@ namespace TestMod
             if (GUILayout.Button(IsGamePaused ? (chinese ? "恢复播放" : "Resume") :
                 (chinese ? "暂停当前画面" : "Pause"), _uiStyles.SelectedButton, GUILayout.ExpandWidth(true)))
                 SetGamePaused(!IsGamePaused);
-            GUI.enabled = guiEnabled && _speedController != null && PauseController.pauseStatus == PauseStatus.UnPaused;
+            GUI.enabled = guiEnabled && _speedController != null && CanStepGameFrame;
             if (GUILayout.Button(chinese ? "下一帧" : "Next frame", _uiStyles.Button, GUILayout.ExpandWidth(true))) StepOneFrame();
             GUI.enabled = guiEnabled && _speedController != null;
             if (GUILayout.Button(chinese ? "恢复正常速度" : "Normal speed", _uiStyles.Button, GUILayout.ExpandWidth(true)))
@@ -130,7 +129,7 @@ namespace TestMod
             GUI.enabled = guiEnabled;
             GUILayout.Label(chinese ? "每次推进 1/60 秒，之后保持暂停。动画贴图可能需要推进多次才切换。" :
                 "Advance 1/60 second, then stay paused. A sprite animation frame may span several steps.", _uiStyles.Help);
-            if (PauseController.pauseStatus != PauseStatus.UnPaused)
+            if (!CanStepGameFrame)
                 GUILayout.Label(chinese ? "请先关闭游戏原生暂停菜单，再执行下一帧。" :
                     "Close the game's pause menu before stepping.", _uiStyles.Help);
             if (_speedController == null)
@@ -169,8 +168,8 @@ namespace TestMod
                 _uiStyles.Help);
             GUILayout.EndVertical();
             GUILayout.Space(8f);
-            GUILayout.Label(chinese ? "速度控制仅作用于当前游戏端。关闭控制会恢复接管前的时间设置。" :
-                "Speed control applies to this instance. Turning it off restores the previous timing settings.", _uiStyles.Help);
+            GUILayout.Label(chinese ? "联机所有玩家需启用新版 TestMod；任意一端操作会同步慢放、暂停和步进。关闭控制会同步恢复。" :
+                "All peers need the current TestMod enabled. Either peer can control shared speed, pause and stepping. Disabling control releases all peers.", _uiStyles.Help);
         }
 
         private static void DrawEnemySettings(bool chinese)

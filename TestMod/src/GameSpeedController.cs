@@ -15,7 +15,7 @@ namespace TestMod
         private float _originalTimeScale;
         private float _originalFixedDeltaTime;
         private int _originalCaptureFramerate;
-        private bool _stepRequested;
+        private int _pendingSteps;
         private bool _stepInFlight;
         private bool _frameStepHeld;
         private bool _repeatStepRequested;
@@ -46,10 +46,15 @@ namespace TestMod
 
         internal void SetPaused(bool paused)
         {
+            SetPaused(paused, false);
+        }
+
+        internal void SetPaused(bool paused, bool preserveHeldKey)
+        {
             IsPaused = paused;
-            _stepRequested = false;
+            _pendingSteps = 0;
             _stepInFlight = false;
-            ResetFrameStepRepeat();
+            if (!paused || !preserveHeldKey) ResetFrameStepRepeat();
             if (_controlsTime)
             {
                 RestoreStepTiming();
@@ -60,7 +65,7 @@ namespace TestMod
 
         internal bool RequestFrameStep()
         {
-            if (PauseController.pauseStatus != PauseStatus.UnPaused)
+            if (!Plugin.CanStepGameFrame)
             {
                 return false;
             }
@@ -70,12 +75,18 @@ namespace TestMod
                 SetPaused(true);
             }
 
-            _stepRequested = true;
+            _pendingSteps = System.Math.Max(_pendingSteps, 1);
             return true;
+        }
+
+        internal void QueueNetworkFrameStep()
+        {
+            _pendingSteps++;
         }
 
         private void Update()
         {
+            Plugin.UpdateGameSpeedNetwork();
             if (Plugin.CapturingHotkey || !Application.isFocused ||
                 PauseController.pauseStatus != PauseStatus.UnPaused)
             {
@@ -93,7 +104,7 @@ namespace TestMod
                 _frameStepHeld = Plugin.StepOneFrame() && settings.HoldToStep;
                 _nextRepeatAt = Time.realtimeSinceStartup + FrameStepHoldDelay;
             }
-            else if (!_frameStepHeld || !settings.HoldToStep || !IsPaused ||
+            else if (!_frameStepHeld || !settings.HoldToStep ||
                 settings.FrameStepKey == KeyCode.None || !Input.GetKey(settings.FrameStepKey))
             {
                 ResetFrameStepRepeat();
@@ -119,6 +130,12 @@ namespace TestMod
         // Closing the step here lets every game Update and LateUpdate finish exactly once.
         private void LateUpdate()
         {
+            if (_repeatStepRequested)
+            {
+                _repeatStepRequested = false;
+                Plugin.RequestGameSpeedStep();
+            }
+
             if (!_controlsTime)
             {
                 return;
@@ -131,11 +148,9 @@ namespace TestMod
                 RestoreStepTiming();
             }
 
-            if (IsPaused && (_stepRequested || _repeatStepRequested) &&
-                PauseController.pauseStatus == PauseStatus.UnPaused)
+            if (IsPaused && _pendingSteps > 0 && Plugin.CanStepGameFrame)
             {
-                _stepRequested = false;
-                _repeatStepRequested = false;
+                _pendingSteps--;
                 _stepInFlight = true;
                 Time.captureFramerate = StepFrameRate;
                 Time.fixedDeltaTime = 1f / StepFrameRate;
@@ -145,6 +160,8 @@ namespace TestMod
             {
                 Time.timeScale = IsPaused ? 0f : Plugin.Settings.GameSpeed;
             }
+
+            if (IsFrozen) Plugin.UpdateFrozenNetworkObjects();
         }
 
         private void RestoreStepTiming()
@@ -156,7 +173,7 @@ namespace TestMod
         internal void ReleaseTime()
         {
             IsPaused = false;
-            _stepRequested = false;
+            _pendingSteps = 0;
             _stepInFlight = false;
             ResetFrameStepRepeat();
             if (_controlsTime)
@@ -193,12 +210,22 @@ namespace TestMod
                     if (!method.IsAbstract && !method.ContainsGenericParameters &&
                         method.ReturnType == typeof(void) && method.GetParameters().Length == 0 &&
                         (method.Name == "Update" || method.Name == "LateUpdate" || method.Name == "FixedUpdate") &&
-                        type != typeof(TimeController) && type != typeof(PauseController))
+                        type != typeof(TimeController) && type != typeof(PauseController) &&
+                        !IsNetworkService(type))
                     {
                         yield return method;
                     }
                 }
             }
+        }
+
+        internal static bool IsNetworkService(Type type)
+        {
+            // Steam callbacks, transport, RPC dispatch and state exchange must survive a freeze.
+            return type == typeof(Connect) || type == typeof(RPCController) ||
+                type == typeof(RPCBatcher) || type == typeof(PingController) ||
+                type == typeof(SyncController) || type == typeof(NetworkTimeSync) ||
+                type.FullName == "SteamManager";
         }
 
         private static bool Prefix()
