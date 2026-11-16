@@ -14,6 +14,7 @@ This directory contains issue records, conclusions, boundaries, and acceptance e
 
 | Document | Status | Reading notes |
 | --- | --- | --- |
+| [Invisible captive after cage destruction](ISSUES-2026-11-17-人质箱破坏后人质隐形.md) | Fixed and deployed to both peers; targeted runtime test passed | 127 regression checks; a joining-player native network damage call preserved the captive and rescue bubble through prediction and confirmed destruction. |
 | [Fixed gun emplacement driver ejection divergence](ISSUES-2026-11-17-固定机枪座驾驶员离座分歧.md) | Fixed and deployed to both peers; targeted runtime test passed | 123 regression checks; native melee damage ejects one soldier and synchronizes the empty driver sprite and fire eligibility. |
 | [Spear 60 Hz sync integration and duplicate terminal effects](ISSUES-2026-11-15-长矛60Hz同步整合与结束特效.md) | Targeted two-sided retest passed; user confirmed normal behavior on 2026-11-16 | Deployed build `2cec8374…`; Predabro normal/charged and Aquabro endpoints, single terminal effects, and one live hit/damage check passed. High-latency and long-session coverage remain open. |
 | [Repeated Steam host queries](ISSUES-2026-11-11-Steam房主身份重复查询.md) | User confirmed stable high host FPS and normal joining-player FPS; fix integrated into 0.5.1 | Reuses the native result within a frame and invalidates around Steam callbacks; enemy bounds are unchanged. |

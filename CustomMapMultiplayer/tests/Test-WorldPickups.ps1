@@ -80,7 +80,7 @@ namespace UnityEngine {
  public class Component:MonoBehaviour { public GameObject gameObject; }
  public struct Color { public Color(float r,float g,float b,float a) { } }
  public class Material { public void SetColor(string n,Color c) { } }
- public class Renderer { public bool enabled=true; public Transform transform=new Transform(null); public Material sharedMaterial=new Material(); public Material material { get { return sharedMaterial; } } }
+ public class Renderer { public bool enabled=true; public Transform transform=new Transform(null); public Material sharedMaterial=new Material(); public Material material { get { return sharedMaterial; } } public T GetComponentInParent<T>() where T:class { for(var t=transform;t!=null;t=t.parent) { var c=t.GetComponent<T>(); if(c!=null)return c; } return null; } }
  public class Collider { public bool enabled=true; public GameObject gameObject=new GameObject(); }
  public struct Vector2 { public float x,y; public Vector2(float a,float b) { x=a; y=b; } public static Vector2 Lerp(Vector2 a,Vector2 b,float t) { return new Vector2(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t); } }
  public struct Vector3 { public float x,y,z; public Vector3(float a,float b,float c) { x=a; y=b; z=c; } }
@@ -136,7 +136,7 @@ public enum PickupType { Ammo, Airstrike, RemotecontrolCar }
 public class DamageObject { public DamageObject(int d,DamageType t,float vx,float vy,float x,float y,MonoBehaviour a) { } }
 public class BroforceObject:Component {
  public NID Nid; public PID Owner; public bool IsMine; public Transform transform;
- public float xI,yI; public BroforceObject() { gameObject=new GameObject(); gameObject.owner=this; transform=new Transform(this); }
+ public float xI,yI; public BroforceObject() { gameObject=new GameObject(); gameObject.owner=this; transform=new Transform(this); Renderers[0].transform=transform; }
  public float X,Y; public int health=3,maxHealth=3; public bool destroyed;
  public Renderer[] Renderers=new[] {new Renderer()};
  public bool enabled=true;
@@ -590,6 +590,24 @@ namespace CustomMapMultiplayer {
    broken=BeginWorldHitPresentation(box,DamageType.Explosion,0,200,true); PresentWorldHit(box,broken,30,DamageType.Explosion,0,200,2);
    FinishWorldHitPresentation(boxEntry,new WorldSnapshot { Flags=WorldFlags.Destroyed });
    Check(!WorldBlockPresentationEffectPrefix(box,typeof(CrateBlock).GetMethod("MakeEffects")) && box.Rewards==1 && _worldSuppressCrateDebris==0,"confirmed collapse releases rewards once and omits predicted debris");
+   var cage=new Block { Nid=new NID(new SID(20),PID.TargetServer,93,4) };
+   var hostage=new TestVanDammeAnim { Nid=new NID(new SID(20),PID.TargetServer,93,8),invulnerable=true };
+   hostage.transform.parent=cage.transform;
+   var bubble=new Renderer { transform=new Transform(null) { parent=hostage.transform } };
+   var hiddenGun=new Renderer { enabled=false,transform=new Transform(null) { parent=hostage.transform } };
+   var cageBar=new Renderer { transform=new Transform(null) { parent=cage.transform } };
+   cage.Renderers=new[] { cage.Renderers[0],cageBar,hostage.Renderers[0],bubble,hiddenGun };
+   int cageHit=BeginWorldHitPresentation(cage,DamageType.Explosion,0,200,true);
+   PresentWorldHit(cage,cageHit,30,DamageType.Explosion,0,200,2);
+   var cageEntry=WorldEntries[cage.Nid];
+   Check(!cage.Renderers[0].enabled && !cageBar.enabled && cageEntry.Presentation.Hidden.Length==2,"cage prediction hides the shell and bars only");
+   Check(hostage.Renderers[0].enabled && bubble.enabled && !hiddenGun.enabled,"registered captive and rescue bubble retain visibility during cage prediction");
+   hostage.transform.parent=null; FinishWorldHitPresentation(cageEntry,new WorldSnapshot { Flags=WorldFlags.Destroyed });
+   Check(hostage.Renderers[0].enabled && bubble.enabled && !hiddenGun.enabled && !cageBar.enabled,"confirmed cage destruction preserves the detached captive and its original hidden gun");
+   cage.Renderers[0].enabled=true; cageBar.enabled=true; hostage.transform.parent=cage.transform;
+   cageHit=BeginWorldHitPresentation(cage,DamageType.Explosion,0,200,true); PresentWorldHit(cage,cageHit,30,DamageType.Explosion,0,200,2);
+   FinishWorldHitPresentation(cageEntry,new WorldSnapshot { Health=3 });
+   Check(cage.Renderers[0].enabled && cageBar.enabled && hostage.Renderers[0].enabled && bubble.enabled && !hiddenGun.enabled,"rejected cage prediction restores only its own renderers");
    Console.WriteLine("PASS: "+Checks+" world pickup, codec and owner-hit regression checks");
   }
   __PRODUCTION_DECLARATIONS__

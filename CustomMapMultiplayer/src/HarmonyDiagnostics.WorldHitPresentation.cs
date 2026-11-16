@@ -173,6 +173,10 @@ namespace CustomMapMultiplayer
             var renderers = new List<Renderer>();
             foreach (var renderer in entry.Object.GetComponentsInChildren<Renderer>(true))
             {
+                // A cage's registered captive survives destruction and is detached on release.
+                // Its body and rescue bubble belong to that child, not the predicted broken block.
+                var owner = renderer.GetComponentInParent<BroforceObject>();
+                if (owner != null && owner != entry.Object && owner.Nid != NID.NoID) continue;
                 // The broken background survives native terrain collapse. Hiding it (or
                 // waiting for confirmation to create it) briefly exposes the blue scenery.
                 if (background != null && renderer.transform.IsChildOf(background.transform)) continue;
