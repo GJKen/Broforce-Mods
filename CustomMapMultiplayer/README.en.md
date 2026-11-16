@@ -10,12 +10,14 @@ When Workshop map injection or FRP Direct is used, every player must install the
 
 The current version is experimental `0.5.1` and is not yet a stable release. Predabro normal/charged spears and Aquabro tridents reuse the projectile prefab and use this Mod's dedicated 60 Hz state stream and remote smoothing without depending on `BroforceBugFix`. The endpoint and terminal-effects repair passed targeted two-sided retesting, and the user confirmed normal behavior on 2026-11-16. See the [spear synchronization record](issues/ISSUES-2026-11-15-长矛60Hz同步整合与结束特效.md) for implementation and acceptance boundaries.
 
-The Release build passed compilation and the 112 existing regression checks; the 10 targeted spear checks also passed. The 483,328-byte CMM DLL has been deployed to both test machines, and the running build was confirmed on both peers. Targeted two-sided spear flight, endpoint, and impact checks passed; high-latency and long-session coverage remain open.
+The current repository release package uses world-state protocol 13, build `e6d50e9a9869b6c51bd83c3b89999a12c258aa6f2604b9e7c0001222373279c3`, with a 487,424-byte DLL. Protocol 13 adds burn duration, burn damage, oil status, and barrel detonation timers; all peers must use the same build. The table below describes the repository DLL and ZIP. Deployment and runtime acceptance apply to the specific builds and test scopes documented in the issue records.
+
+The earlier protocol 12 spear build passed compilation, the 112 existing regression checks, and the 10 targeted spear checks. That build was deployed and confirmed running on both test machines. Targeted two-sided spear flight, endpoint, and impact checks passed; high-latency and long-session coverage remain open.
 
 | Item | Status |
 | --- | --- |
-| Current distributed build | `buildHash=2cec8374a6d56d3075187cca1d27cce3b4a5ff38f60eb74fb1908b5ea54c227d` |
-| DLL SHA-256 | `AAD9717469B351C81CEF99910598E2F11377B21A67D425619505A8F41C3A197A` |
+| Current repository release build | `buildHash=e6d50e9a9869b6c51bd83c3b89999a12c258aa6f2604b9e7c0001222373279c3` |
+| DLL SHA-256 | `A0237264AA08BF28ECD1C4CCB1F97DF6C27E512B4C6ECC7F4379D5B35C99FE08` |
 | DLL assembly version | `0.5.1.0` |
 | Steam multiplayer | Default path; verified with the official lobby entering the same Workshop map and the colored latency list |
 | FRP Direct | Disabled by default; three-player basic multiplayer verified, with code support for a host plus up to three remote players |

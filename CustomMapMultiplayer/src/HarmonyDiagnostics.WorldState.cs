@@ -14,7 +14,7 @@ namespace CustomMapMultiplayer
     {
         private const float WorldSendInterval = 1f / 12f;
         private const float WorldSpearSyncInterval = 1f / 60f;
-        private const int WorldProtocol = 12;
+        private const int WorldProtocol = 13;
         private const BindingFlags WorldFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Dictionary<NID, WorldEntry> WorldEntries = new Dictionary<NID, WorldEntry>();
         private static readonly Dictionary<NID, WorldSnapshot> WorldPending = new Dictionary<NID, WorldSnapshot>();
@@ -73,6 +73,9 @@ namespace CustomMapMultiplayer
             internal int ArmourDamage, FireDamage, ArmourKnocks;
             internal float ShieldTime;
             internal bool Invulnerable, BossDamaged;
+            internal float BurnTime, BurnExplosion;
+            internal int BurnDamage;
+            internal bool Oily;
         }
 
         private struct WorldProjectileSample
@@ -160,8 +163,15 @@ namespace CustomMapMultiplayer
                         // Mook and some doodads override OnDestroy without calling the base implementation.
                         PatchWorldMethod(method, "WorldDestroyPrefix", null);
                     else if (name == "Damage" || name == "DamageInternal" || name == "DamageOptional" ||
-                        name == "Death" || name == "QuietDeath" || name == "Gib" || name == "Burn")
+                        name == "Death" || name == "QuietDeath" || name == "Gib" || name == "Burn" ||
+                        name == "BurnInternal" || name == "ForceBurn" || name == "SetAlight_Local")
                         PatchWorldMethod(method, "WorldMutationPrefix", "WorldMutationPostfix");
+                    else if (name == "RunBurnLogic")
+                        PatchWorldDamageContext(method, "WorldBurnLogicPrefix");
+                    else if (name == "RunExploding" && typeof(BarrelBlock).IsAssignableFrom(type))
+                        PatchWorldDamageContext(method, "WorldBarrelExplodingPrefix");
+                    else if (name == "BurnOthers" || name == "StopBurning" || name == "BurnSurroundingOil")
+                        PatchWorldMethod(method, "WorldBurnEffectPrefix", null);
                     else if (name == "Revive")
                         PatchWorldMethod(method, null, "WorldMutationPostfix");
                     else if (name == "Collapse" || name == "CollapseForced" || name == "ActuallyCollapse" ||
@@ -268,7 +278,9 @@ namespace CustomMapMultiplayer
         {
             if (_worldApplying != 0)
                 return __originalMethod.Name != "Damage" && __originalMethod.Name != "DamageInternal" &&
-                    __originalMethod.Name != "DamageOptional" && __originalMethod.Name != "Burn";
+                    __originalMethod.Name != "DamageOptional" && __originalMethod.Name != "Burn" &&
+                    __originalMethod.Name != "BurnInternal" && __originalMethod.Name != "ForceBurn" &&
+                    __originalMethod.Name != "SetAlight_Local";
             if (!IsWorldSession() || _worldEpoch == 0 || !IsWorldObject(__instance)) return true;
             // Bosses already broadcast native phase/lifecycle RPCs. Accept those
             // only from their owner; damage itself still settles only there.
@@ -318,7 +330,11 @@ namespace CustomMapMultiplayer
             if (__originalMethod.Name == "DestroyBlockInternal" && block != null && block.destroyed && IsWorldReplica(block))
                 RefreshWorldBlockEdges(block);
             if (_worldApplying == 0 && IsWorldSession() && IsWorldObject(__instance))
+            {
+                // SetAlight_Local and Burn do not call the native DoEnabling.
+                if (block != null && block.burnTime > 0f) block.enabled = true;
                 RegisterWorldObject(__instance).Dirty = true;
+            }
         }
 
         private static void RefreshWorldBlockEdges(Block block)
@@ -536,6 +552,7 @@ namespace CustomMapMultiplayer
             var pickup = obj as Pickupable;
             if (pickup != null) CaptureWorldPickupState(pickup, state);
             CaptureWorldSpecialHitState(obj, state);
+            CaptureWorldBurnState(obj, state);
             if (entry.Last != null && (entry.Last.Flags & WorldFlags.Dead) != 0 &&
                 (state.Flags & WorldFlags.Dead) == 0) state.Life = ++entry.Life;
             return state;
@@ -546,6 +563,8 @@ namespace CustomMapMultiplayer
             return a == null || a.Owner != b.Owner || a.Flags != b.Flags || a.Life != b.Life ||
                 a.Health != b.Health || a.MaxHealth != b.MaxHealth || a.Facing != b.Facing ||
                 a.ArmourDamage != b.ArmourDamage || a.FireDamage != b.FireDamage || a.Invulnerable != b.Invulnerable || a.BossDamaged != b.BossDamaged ||
+                a.BurnDamage != b.BurnDamage || a.Oily != b.Oily || (a.BurnTime > 0f) != (b.BurnTime > 0f) ||
+                (a.BurnExplosion > 0f) != (b.BurnExplosion > 0f) ||
                 a.Mental != b.Mental || (a.BlindTime > 0f) != (b.BlindTime > 0f) || (a.ScaredTime > 0f) != (b.ScaredTime > 0f) ||
                 a.Parent != b.Parent || a.Pilot != b.Pilot || a.ReviveSource != b.ReviveSource || a.PickupType != b.PickupType;
         }
@@ -557,6 +576,7 @@ namespace CustomMapMultiplayer
                 a.Input != b.Input || a.Turn != b.Turn || a.Unfold != b.Unfold ||
                 a.Row != b.Row || a.Column != b.Column || Mathf.Abs(a.Rotation - b.Rotation) > 0.1f ||
                 a.GroundHeight != b.GroundHeight || a.BlindTime != b.BlindTime || a.ScaredTime != b.ScaredTime ||
+                a.BurnTime != b.BurnTime || a.BurnExplosion != b.BurnExplosion ||
                 a.CorpseBlastX != b.CorpseBlastX || a.CorpseBlastY != b.CorpseBlastY ||
                 a.CorpseScaleY != b.CorpseScaleY || a.CorpsePixel != b.CorpsePixel || a.CorpseOffset != b.CorpseOffset;
         }
@@ -729,6 +749,7 @@ namespace CustomMapMultiplayer
             w.Write(s.LifeTime); w.Write(s.Row); w.Write(s.Column); w.Write(s.GroundHeight);
             w.Write(s.BlindTime); w.Write(s.ScaredTime); w.Write(s.Mental);
             w.Write(s.ArmourDamage); w.Write(s.FireDamage); w.Write(s.ArmourKnocks); w.Write(s.ShieldTime); w.Write(s.Invulnerable); w.Write(s.BossDamaged);
+            w.Write(s.BurnTime); w.Write(s.BurnDamage); w.Write(s.Oily); w.Write(s.BurnExplosion);
             WriteWorldId(w, s.Parent); WriteWorldId(w, s.Pilot); WriteWorldId(w, s.ReviveSource);
             if ((s.Flags & WorldFlags.CorpsePose) != 0)
             {
@@ -757,6 +778,7 @@ namespace CustomMapMultiplayer
             s.LifeTime = r.ReadSingle(); s.Row = r.ReadInt32(); s.Column = r.ReadInt32(); s.GroundHeight = r.ReadSingle();
             s.BlindTime = r.ReadSingle(); s.ScaredTime = r.ReadSingle(); s.Mental = r.ReadInt32();
             s.ArmourDamage = r.ReadInt32(); s.FireDamage = r.ReadInt32(); s.ArmourKnocks = r.ReadInt32(); s.ShieldTime = r.ReadSingle(); s.Invulnerable = r.ReadBoolean(); s.BossDamaged = r.ReadBoolean();
+            s.BurnTime = r.ReadSingle(); s.BurnDamage = r.ReadInt32(); s.Oily = r.ReadBoolean(); s.BurnExplosion = r.ReadSingle();
             s.Parent = ReadWorldId(r); s.Pilot = ReadWorldId(r); s.ReviveSource = ReadWorldId(r);
             if ((s.Flags & WorldFlags.CorpsePose) != 0)
             {
@@ -937,6 +959,7 @@ namespace CustomMapMultiplayer
             // move the captive or seed interpolation from uninitialized coordinates.
             if (IsCaptiveWorldVillager(obj)) return false;
             ApplyWorldSpecialHitState(obj, state);
+            ApplyWorldBurnState(obj, state);
             if (IsWorldBossPart(obj))
             {
                 // Animated boss parts retain their native hierarchy and motion sync.

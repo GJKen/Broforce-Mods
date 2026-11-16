@@ -90,6 +90,7 @@
     <Compile Include="src\HarmonyDiagnostics.LevelOutcome.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorkshopLevelEnd.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldState.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldFire.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldPickups.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldProjectiles.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldHitPresentation.cs" />
