@@ -1231,7 +1231,7 @@ namespace AquabroMod
                 sharkNetworkTimer -= Mathf.Max(0f, t);
                 if (sharkNetworkTimer <= 0f)
                 {
-                    sharkNetworkTimer = 0.08f;
+                    sharkNetworkTimer = 1f / 30f;
                     BroadcastSharkState();
                 }
             }

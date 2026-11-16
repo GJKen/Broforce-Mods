@@ -42,10 +42,10 @@ namespace AquabroMod
         private Material skillHudMaterial;
         private List<Material> skillHudMaterials;
         private float sharkNetworkTimer;
-        private bool sharkNetworkLeft, sharkNetworkRight;
+        private int sharkSequence;
         private bool pendingSharkState, pendingSharkBreach;
-        private float pendingSharkX, pendingSharkY, pendingSharkFacing;
-        private bool pendingSharkLeft, pendingSharkRight;
+        private Vector3 pendingSharkPosition, pendingSharkBreachPosition;
+        private Vector2 pendingSharkClock;
         public int SelectedSkill { get { return SkillSelections[Mathf.Clamp(playerNum, 0, 3)]; } }
         private bool ControllingShark { get { return activeShark != null && activeShark.SharkControlled; } }
         private bool SharkSkillActive { get { return ControllingShark || (usingSpecial && castingSkill == 1); } }
@@ -78,14 +78,11 @@ namespace AquabroMod
             bool wasControlling = ControllingShark;
             base.CheckInput();
             if (!wasControlling && !ControllingShark) return;
-            if (ControllingShark)
+            if (ControllingShark && IsMine)
             {
                 sharkDropInput = down;
                 activeShark.SetSharkInput(left, right);
-                sharkNetworkLeft = left;
-                sharkNetworkRight = right;
             }
-            else sharkNetworkLeft = sharkNetworkRight = false;
             // Keep special/wasSpecial intact so holding the launch key cannot trigger a breach.
             left = right = up = down = buttonJump = fire = highFive = buttonGesture = false;
         }
@@ -216,7 +213,7 @@ namespace AquabroMod
         private void BroadcastSkillCast(int skill, float x, float y, float facing, int tidalId)
         {
             if (!IsMine || Connect.IsOffline) return;
-            Networking.Networking.RPC<int, float, float, float, int>(PID.TargetOthers, skill == 2, false,
+            Networking.Networking.RPC<int, float, float, float, int>(PID.TargetOthers, skill == 1 || skill == 2, false,
                 new RpcSignature<int, float, float, float, int>(ReceiveSkillCast), skill, x, y, facing, tidalId);
         }
 
@@ -237,16 +234,17 @@ namespace AquabroMod
             {
                 if (activeShark != null) return;
                 activeShark = new AquabroSkillVisual(this, 1, x, y, facing, SharkControlDuration(), 0f, 1f);
+                activeShark.SharkNetworkId = tidalId;
                 skillVisuals.Add(activeShark);
                 if (pendingSharkState)
                 {
-                    activeShark.ApplyNetworkState(pendingSharkX, pendingSharkY, pendingSharkFacing,
-                        pendingSharkLeft, pendingSharkRight);
+                    if ((int)pendingSharkClock.y == tidalId)
+                        activeShark.ApplyNetworkState(pendingSharkPosition, pendingSharkClock.x);
                     pendingSharkState = false;
                 }
                 if (pendingSharkBreach)
                 {
-                    activeShark.BreachShark();
+                    activeShark.BreachSharkAt(pendingSharkBreachPosition);
                     pendingSharkBreach = false;
                 }
             }
@@ -304,33 +302,35 @@ namespace AquabroMod
 
         private void BroadcastSharkState()
         {
-            if (!IsMine || Connect.IsOffline || activeShark == null) return;
-            int flags = (sharkNetworkLeft ? 1 : 0) | (sharkNetworkRight ? 2 : 0);
+            if (!IsMine || Connect.IsOffline || activeShark == null || !activeShark.SharkControlled) return;
             Vector3 state = new Vector3(activeShark.NetworkX, activeShark.NetworkY, activeShark.NetworkFacing);
-            Networking.Networking.UnreliableRPC<Vector3, int>(PID.TargetOthers, false, false,
-                new RpcSignature<Vector3, int>(ReceiveSharkState), state, flags);
+            Networking.Networking.UnreliableRPC<Vector3, Vector2>(PID.TargetOthers, true, false,
+                new RpcSignature<Vector3, Vector2>(ReceiveSharkState), state,
+                new Vector2(activeShark.NetworkAge, activeShark.SharkNetworkId));
         }
 
         [AllowedRPC]
-        private void ReceiveSharkState(Vector3 state, int flags)
+        private void ReceiveSharkState(Vector3 state, Vector2 clock)
         {
             if (IsMine) return;
-            bool left = (flags & 1) != 0, right = (flags & 2) != 0;
             if (activeShark == null)
             {
+                if (pendingSharkState && (clock.y < pendingSharkClock.y ||
+                    (clock.y == pendingSharkClock.y && clock.x <= pendingSharkClock.x))) return;
                 pendingSharkState = true;
-                pendingSharkX = state.x; pendingSharkY = state.y; pendingSharkFacing = state.z;
-                pendingSharkLeft = left; pendingSharkRight = right;
+                pendingSharkPosition = state;
+                pendingSharkClock = clock;
                 return;
             }
-            activeShark.ApplyNetworkState(state.x, state.y, state.z, left, right);
+            if (activeShark.SharkNetworkId == (int)clock.y)
+                activeShark.ApplyNetworkState(state, clock.x);
         }
 
-        private void BroadcastSharkBreach()
+        internal void BroadcastSharkBreach()
         {
             if (!IsMine || Connect.IsOffline || activeShark == null) return;
             Vector3 state = new Vector3(activeShark.NetworkX, activeShark.NetworkY, activeShark.NetworkFacing);
-            Networking.Networking.RPC<Vector3>(PID.TargetOthers, false, false,
+            Networking.Networking.RPC<Vector3>(PID.TargetOthers, true, false,
                 new RpcSignature<Vector3>(ReceiveSharkBreach), state);
         }
 
@@ -338,9 +338,12 @@ namespace AquabroMod
         private void ReceiveSharkBreach(Vector3 state)
         {
             if (IsMine) return;
-            ReceiveSharkState(state, 0);
-            if (activeShark != null) activeShark.BreachShark();
-            else pendingSharkBreach = true;
+            if (activeShark != null) activeShark.BreachSharkAt(state);
+            else
+            {
+                pendingSharkBreach = true;
+                pendingSharkBreachPosition = state;
+            }
         }
 
         protected override void PressSpecial()
@@ -350,7 +353,6 @@ namespace AquabroMod
                 if (IsMine && health > 0 && !IsIncapacitated())
                 {
                     activeShark.BreachShark();
-                    BroadcastSharkBreach();
                 }
                 return;
             }
@@ -392,8 +394,9 @@ namespace AquabroMod
                     float sharkY;
                     if (!FindSharkFloor(X, Y, false, out sharkY)) sharkY = Y;
                     activeShark = new AquabroSkillVisual(this, 1, X, sharkY, facing, SharkControlDuration(), 0f, 1f);
+                    activeShark.SharkNetworkId = ++sharkSequence;
                     skillVisuals.Add(activeShark);
-                    BroadcastSkillCast(1, X, sharkY, facing, 0);
+                    BroadcastSkillCast(1, X, sharkY, facing, activeShark.SharkNetworkId);
                     usingSpecial = usingPockettedSpecial = false;
                     pressSpecialFacingDirection = 0;
                     // UseSpecial can run before this tick's movement calculation.
@@ -1463,6 +1466,7 @@ namespace AquabroMod
         private bool resolved;
         private bool tidalBlocked;
         internal int TidalNetworkId;
+        internal int SharkNetworkId;
         internal int MaelstromNetworkId;
         private float maelstromNetworkTimer, maelstromNetworkAge = -1f;
 
@@ -1500,6 +1504,9 @@ namespace AquabroMod
         private readonly WaveDamageState waveDamage = new WaveDamageState();
         private static readonly int[] Counts = {16,28,32,28};
         private float sharkBreachElapsed = -1f, sharkInput, sharkVelocityX, sharkVelocityY;
+        private Vector3 sharkNetworkPosition, sharkNetworkVelocity;
+        private float sharkNetworkAge = -1f, sharkPredictionTime;
+        private float sharkRenderY;
         private float sharkLandingElapsed = -1f;
         private Collider sharkElevatorSupport;
         private Vector3 sharkElevatorPosition;
@@ -1508,14 +1515,35 @@ namespace AquabroMod
         internal float NetworkX { get { return x; } }
         internal float NetworkY { get { return y; } }
         internal float NetworkFacing { get { return facing; } }
+        internal float NetworkAge { get { return elapsed; } }
         internal void SetSharkInput(bool left, bool right)
         { sharkInput = (right ? 1f : 0f) - (left ? 1f : 0f); }
-        internal void ApplyNetworkState(float newX, float newY, float newFacing, bool left, bool right)
+        internal void ApplyNetworkState(Vector3 state, float age)
         {
-            x = newX;
-            y = newY;
-            facing = newFacing < 0f ? -1f : 1f;
-            SetSharkInput(left, right);
+            if (!SharkControlled || age <= sharkNetworkAge) return;
+            float interval = age - Mathf.Max(0f, sharkNetworkAge);
+            if (interval > 0f)
+                sharkNetworkVelocity = new Vector3((state.x - sharkNetworkPosition.x) / interval, 0f, 0f);
+            sharkNetworkPosition = state;
+            sharkNetworkAge = age;
+            sharkPredictionTime = 0f;
+            facing = state.z < 0f ? -1f : 1f;
+        }
+        private void TickRemoteShark(float delta)
+        {
+            if (sharkNetworkAge < 0f) return;
+            // Bridge jitter/one missed update without replaying remote input or terrain.
+            // Bound prediction so a lost stream cannot move the shark indefinitely.
+            sharkPredictionTime = Mathf.Min(.1f, sharkPredictionTime + delta);
+            float blend = 1f - (float)System.Math.Exp(-delta / .05f);
+            x += (sharkNetworkPosition.x + sharkNetworkVelocity.x * sharkPredictionTime - x) * blend;
+            y = sharkNetworkPosition.y;
+        }
+        internal void BreachSharkAt(Vector3 state)
+        {
+            if (!SharkControlled) return;
+            x = state.x; y = state.y; facing = state.z < 0f ? -1f : 1f;
+            BreachShark();
         }
         internal void BreachShark()
         {
@@ -1528,6 +1556,7 @@ namespace AquabroMod
             sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt-body.png");
             sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
             owner.ReleaseSharkControl(this);
+            owner.BroadcastSharkBreach();
         }
 
         public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay, float scale)
@@ -1544,6 +1573,8 @@ namespace AquabroMod
             blood = kind == 3 ? springDamage.Blood : new WaterBloodState();
             castDelay = delay;
             this.owner = owner; this.kind = kind; this.x = x; this.y = y;
+            sharkRenderY = y;
+            sharkNetworkPosition = new Vector3(x, y, facing);
             originX = x;
             maelstromRouteStartX = x;
             if (kind == 1) RememberSharkElevator();
@@ -1793,23 +1824,28 @@ namespace AquabroMod
                 if (SharkControlled)
                 {
                     flightDelta = 0f;
-                    float travelTime = Mathf.Max(0f, Mathf.Min(elapsed, lifetime) - Mathf.Max(0f, previousElapsed));
-                    if (sharkInput != 0f) facing = sharkInput;
-                    // Follow the actual supporting collider before finding the floor:
-                    // an ascending elevator can already be above the old ray origin.
-                    if (sharkElevatorSupport != null && sharkElevatorSupport.enabled &&
-                        sharkElevatorSupport.gameObject.activeInHierarchy)
+                    if (!owner.IsMine && !Connect.IsOffline) TickRemoteShark(delta);
+                    else
                     {
-                        Vector3 movement = sharkElevatorSupport.transform.position - sharkElevatorPosition;
-                        x += movement.x;
-                        y += movement.y;
-                    }
-                    owner.MoveShark(ref x, ref y, sharkInput, travelTime);
-                    RememberSharkElevator();
-                    if (elapsed >= lifetime)
-                    {
-                        BreachShark();
-                        flightDelta = elapsed - lifetime;
+                        float travelTime = Mathf.Max(0f, Mathf.Min(elapsed, lifetime) - Mathf.Max(0f, previousElapsed));
+                        if (sharkInput != 0f) facing = sharkInput;
+                        // Follow the actual supporting collider before finding the floor:
+                        // an ascending elevator can already be above the old ray origin.
+                        if (sharkElevatorSupport != null && sharkElevatorSupport.enabled &&
+                            sharkElevatorSupport.gameObject.activeInHierarchy)
+                        {
+                            Vector3 movement = sharkElevatorSupport.transform.position - sharkElevatorPosition;
+                            x += movement.x;
+                            y += movement.y;
+                            sharkRenderY += movement.y;
+                        }
+                        owner.MoveShark(ref x, ref y, sharkInput, travelTime);
+                        RememberSharkElevator();
+                        if (elapsed >= lifetime)
+                        {
+                            BreachShark();
+                            flightDelta = elapsed - lifetime;
+                        }
                     }
                 }
                 if (!SharkControlled && !TickSharkBreach(flightDelta)) return false;
@@ -1944,7 +1980,12 @@ namespace AquabroMod
                     SortOfFollow.Shake(0.25f,new Vector3(x,y,0f));
                 }
             }
-            obj.transform.position=new Vector3(x,y+48f*scale,VisualDepth);
+            // Keep floor queries authoritative while both peers render the same
+            // short descent. The camera follows this transform too.
+            if (SharkControlled)
+                sharkRenderY += (y - sharkRenderY) * (1f - (float)System.Math.Exp(-delta / .05f));
+            float renderY = SharkControlled ? sharkRenderY : y;
+            obj.transform.position=new Vector3(x,renderY+48f*scale,VisualDepth);
             // Parent scale may flip while the hero moves; freeze travel facing.
             obj.transform.localScale=new Vector3(facing/(owner.transform.localScale.x<0f?-1f:1f),1f,1f);
             bool sharkFlight = kind == 1 && sharkBreachElapsed >= 0f && sharkLandingElapsed < 0f;

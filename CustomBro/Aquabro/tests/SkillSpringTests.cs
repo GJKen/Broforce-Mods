@@ -24,6 +24,7 @@ public static class SkillSpringTests
             if(args.Length==1 && args[0]=="--skill-hud") {CheckSkillHud();return;}
             if(args.Length==1 && args[0]=="--skill-network") {CheckSkillHud();CheckSkillNetwork();return;}
             if(args.Length==1 && args[0]=="--shark-flight") {SkillSharkTests.RunFlight();return;}
+            if(args.Length==1 && args[0]=="--shark-network") {SkillSharkTests.RunNetwork();return;}
             if(args.Length==1 && args[0]=="--maelstrom-network") {SkillMaelstromTests.RunNetwork();return;}
             if(args.Length==2 && args[0]=="--wave-network")
             {
@@ -46,6 +47,7 @@ public static class SkillSpringTests
             SkillOcclusionTests.Run();
             CheckSkillHud();
             CheckSkillNetwork();
+            SkillSharkTests.RunNetwork();
             CheckWaveNetwork();
         }
         catch (Exception error) { Console.WriteLine("FAIL: " + error); Environment.Exit(1); }
@@ -1835,12 +1837,13 @@ namespace Networking
         public static object[] CastArguments;
         public static readonly List<object[]> TidalStates=new List<object[]>();
         public static readonly List<object[]> MaelstromStates=new List<object[]>();
-        public static bool CastImmediate,MaelstromImmediate;
+        public static bool CastImmediate,MaelstromImmediate,SharkImmediate,BreachImmediate;
+        public static object[] SharkState;
         public static void RPC<T1>(PID target,bool immediate,bool ignoreSessionID,
             RpcSignature<T1> callback,T1 first)
         {
             if(callback.Method.Name=="ReceiveSharkBreach")
-            { BreachCalls++;BreachTarget=target;BreachCallback=callback;BreachState=(Vector3)(object)first;BreachFlags=4;return; }
+            { BreachCalls++;BreachImmediate=immediate;BreachTarget=target;BreachCallback=callback;BreachState=(Vector3)(object)first;BreachFlags=4;return; }
             SelectionCalls++;SelectionTarget=target;SelectionCallback=callback;
             SelectionValue=(int)(object)first;
         }
@@ -1859,7 +1862,8 @@ namespace Networking
         public static void RPC<T1,T2,T3>(PID target,bool reliable,bool runLocally,
             RpcSignature<T1,T2,T3> callback,T1 first,T2 second,T3 third)
         { TidalStates.Add(new object[]{first,second,third}); }
-        public static void UnreliableRPC<T1,T2>(PID target,bool reliable,bool runLocally,
-            RpcSignature<T1,T2> callback,T1 first,T2 second) {}
+        public static void UnreliableRPC<T1,T2>(PID target,bool immediate,bool runLocally,
+            RpcSignature<T1,T2> callback,T1 first,T2 second)
+        { SharkImmediate=immediate;SharkState=new object[]{first,second}; }
     }
 }

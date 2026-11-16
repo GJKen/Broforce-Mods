@@ -33,6 +33,138 @@ internal static class SkillSharkTests
         Map.Targets.Add(target); return target;
     }
 
+    private static void CheckDropTransition()
+    {
+        Networking.Connect.IsOffline=false;
+        foreach(int fps in new int[]{15,30,60,120})
+        foreach(float drop in new float[]{16f,96f,1024f,1000000f})
+        {
+            Reset();Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkFloorY=0f;
+            Aquabro owner=new Aquabro(),observer=new Aquabro();observer.IsMine=false;
+            AquabroSkillVisual local=new AquabroSkillVisual(owner,1,0,drop,1,8,0,1);
+            AquabroSkillVisual remote=new AquabroSkillVisual(observer,1,0,drop,1,8,0,1);
+            float previous=drop;
+            for(int tick=1;tick<=fps;tick++)
+            {
+                remote.ApplyNetworkState(new Vector3(0,0,1),(float)tick/fps);
+                local.Tick(1f/fps);remote.Tick(1f/fps);
+                float shown=local.CameraTarget.position.y-48f;
+                float copy=remote.CameraTarget.position.y-48f;
+                Check(local.NetworkY==0 && remote.NetworkY==0,"Drop changed authoritative floor contact");
+                Check(shown>=0 && shown<=previous && copy>=0 && copy<=drop,
+                    "Drop snapped, reversed or overshot the floor");
+                Check(Math.Abs(shown-copy)<.01f+drop*.00001f,"Owner and observer use different descent transitions");
+                if(tick==1) Check(shown>0 && shown<drop,"Owner drop has no transition");
+                float paused=local.CameraTarget.position.y;
+                local.Tick(0f);remote.Tick(0f);
+                Check(local.CameraTarget.position.y==paused && remote.CameraTarget.position.y-48f==copy,
+                    "Pause advanced descent presentation");
+                previous=shown;
+            }
+            Check(previous<.01f,"Drop transition did not settle at the floor");
+            local.Dispose();remote.Dispose();
+        }
+        Physics.SharkTerrainEnabled=false;Reset();
+        Console.WriteLine("PASS shark descent: owner/observer same transition; 15/30/60/120 FPS; 16/96/1024/1000000px drops; immediate floor contact; monotonic/no overshoot; pause; convergence");
+    }
+
+    internal static void RunNetwork()
+    {
+        CheckDropTransition();
+        Networking.Connect.IsOffline=false;
+        Physics.SharkTerrainEnabled=true;Physics.SharkFloor=false;
+        foreach(int fps in new int[]{30,60,120})
+        foreach(float facing in new float[]{-1f,1f})
+        {
+            Reset();Aquabro observer=new Aquabro();observer.IsMine=false;
+            Call(observer,"ReceiveSkillCast",1,0f,0f,facing,0);
+            AquabroSkillVisual effect=Active(observer);
+            float lastAge=0f;
+            for(int tick=1;tick<=fps*2;tick++)
+            {
+                float now=(float)tick/fps;
+                int sample=(int)Math.Floor((now-.08f)*30f);
+                float age=sample/30f;
+                if(age>lastAge && sample%7!=0)
+                {
+                    float before=effect.NetworkX;
+                    Call(observer,"ReceiveSharkState",new Vector3(age*90f*facing,age*20f,facing),new Vector2(age,0));
+                    Check(effect.NetworkX==before,"State receipt snapped the remote shark");
+                    Call(observer,"ReceiveSharkState",new Vector3(-999f,999f,-facing),new Vector2(age-.1f,0));
+                    lastAge=age;
+                }
+                // Interpolated hero input and conflicting terrain must not steer the replica.
+                Steer(observer,facing>0f,facing<0f);
+                float previous=effect.NetworkX;
+                Check(effect.Tick(1f/fps),"Remote submerged shark expired");
+                if(now>.4f)
+                {
+                    float step=(effect.NetworkX-previous)*facing;
+                    Check(step>0f && step<150f/fps,"Remote motion stopped, reversed or jumped: fps="+fps+" step="+step);
+                    Check(Math.Abs(effect.NetworkX-facing*90f*(now-.08f))<12f,
+                        "Smoothing accumulated excessive lag");
+                    Check(effect.NetworkFacing==facing && effect.NetworkY>0f,
+                        "Remote input/terrain overrode the authoritative route");
+                }
+            }
+            float paused=effect.NetworkX;effect.Tick(0f);
+            Check(effect.NetworkX==paused,"Paused remote shark moved");
+            effect.Tick(.6f);float bounded=effect.NetworkX;
+            effect.Tick(.6f);
+            Check(Math.Abs(effect.NetworkX-bounded)<.001f &&
+                Math.Abs(effect.NetworkX-facing*lastAge*90f)<=9.01f,
+                "Lost state stream extrapolated indefinitely");
+            Call(observer,"ReceiveSharkState",new Vector3(lastAge*90f*facing,lastAge*20f,facing),new Vector2(lastAge+.1f,0));
+            effect.Tick(.5f);
+            Check(Math.Abs(effect.NetworkX-facing*lastAge*90f)<.01f,"Stopped shark kept drifting");
+            for(int i=1;i<=15;i++)
+            {
+                float age=lastAge+.1f+i/30f;
+                Call(observer,"ReceiveSharkState",new Vector3((lastAge*90f-i*3f)*facing,20f,-facing),new Vector2(age,0));
+                effect.Tick(1f/30f);
+            }
+            Check(effect.NetworkFacing==-facing && (effect.NetworkX-facing*lastAge*90f)*facing<-35f,
+                "Authoritative reversal did not reach the remote shark");
+            Call(observer,"ReceiveSharkBreach",new Vector3(77f,33f,-facing));
+            Check(!effect.SharkControlled && effect.NetworkX==77f && effect.NetworkY==33f,
+                "Breach did not use the owner's exact position");
+            Call(observer,"ReceiveSharkState",new Vector3(-999f,999f,facing),new Vector2(100f,0));
+            Call(observer,"ReceiveSharkBreach",new Vector3(-999f,999f,facing));
+            Check(effect.NetworkX==77f && effect.NetworkY==33f,"Late state/duplicate breach reset the flying shark");
+            Call(observer,"ClearSkillPreview");
+        }
+        Aquabro pending=new Aquabro();pending.IsMine=false;
+        Call(pending,"ReceiveSharkState",new Vector3(20f,0f,1f),new Vector2(.2f,0));
+        Call(pending,"ReceiveSharkBreach",new Vector3(77f,33f,-1f));
+        Call(pending,"ReceiveSharkState",new Vector3(-999f,999f,1f),new Vector2(.1f,0));
+        Call(pending,"ReceiveSkillCast",1,0f,0f,1f,0);
+        Check(!Active(pending).SharkControlled && Position(pending)==77f,
+            "Breach received before cast lost its authoritative position");
+        Call(pending,"ClearSkillPreview");
+        Call(pending,"ReceiveSharkState",new Vector3(-999f,999f,1f),new Vector2(10f,0));
+        Call(pending,"ReceiveSkillCast",1,0f,0f,1f,1);
+        Call(pending,"ReceiveSharkState",new Vector3(-999f,999f,1f),new Vector2(11f,0));
+        Call(pending,"ReceiveSharkState",new Vector3(9f,0f,1f),new Vector2(.1f,1));
+        Active(pending).Tick(.1f);
+        Check(Position(pending)>0f && Position(pending)<20f,"Previous cast state contaminated the next shark");
+        Call(pending,"ClearSkillPreview");
+        Physics.SharkFloor=true;Physics.SharkFloorY=0f;
+        Aquabro owner=new Aquabro();
+        ((int[])typeof(Aquabro).GetField("SkillSelections",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null))[owner.playerNum]=1;
+        Launch(owner);Call(owner,"BroadcastSharkState");
+        Check(Networking.Networking.SharkImmediate && Networking.Networking.SharkState[1] is Vector2 &&
+            ((Vector2)Networking.Networking.SharkState[1]).y==Active(owner).SharkNetworkId,
+            "Shark state is delayed on the native interpolation timeline or lacks cast identity");
+        Networking.Networking.BreachCalls=0;
+        float lifetime=(float)typeof(AquabroSkillVisual).GetField("lifetime",Hidden).GetValue(Active(owner));
+        Call(owner,"TickSkillPreview",lifetime);
+        Check(Networking.Networking.BreachCalls==1 && Networking.Networking.BreachImmediate,
+            "Timeout did not send one immediate reliable breach");
+        Call(owner,"ClearSkillPreview");
+        Physics.SharkTerrainEnabled=false;Reset();
+        Console.WriteLine("PASS shark network: 30/60/120 FPS; both facings; delayed/dropped/stale states; continuous motion; terrain/input independence; pause; bounded prediction; stop/reverse; exact/early/duplicate breach; reliable timeout");
+    }
+
     internal static void Run(Bitmap composite, string atlasPath)
     {
         Bitmap atlas = new Bitmap(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(atlasPath), "skill-shark-hunt-body.png"));
@@ -569,16 +701,16 @@ internal static class SkillSharkTests
             Call(owner,"TickSkillPreview",0f);
             Check(Active(owner).CameraTarget.position.y==height+48,"Paused down input moved shark");
             Call(owner,"TickSkillPreview",1f/fps);
-            Check(Active(owner).CameraTarget.position.y==48,"Down alone did not drop to solid ground");
+            Check(Active(owner).NetworkY==0,"Down alone did not drop to solid ground");
             owner.down=false;Steer(owner,false,false);
             Physics.SharkFloorY=-96;Call(owner,"TickSkillPreview",1f/fps);
-            Check(Active(owner).CameraTarget.position.y==-48,"Idle shark did not refresh changed ground support");
+            Check(Active(owner).NetworkY==-96,"Idle shark did not refresh changed ground support");
             Call(owner,"ClearSkillPreview");
         }
         // Walking off the ladder still follows ordinary descending terrain.
         owner.X=0;owner.Y=312;Physics.SharkFloorY=0;Launch(owner);
         Steer(owner,false,true);Call(owner,"TickSkillPreview",.3f);
-        Check(Active(owner).CameraTarget.position.y==48,"Ordinary descent past ladder edge blocked");
+        Check(Active(owner).NetworkY==0,"Ordinary descent past ladder edge blocked");
         Call(owner,"ClearSkillPreview");
         // No destination below: down cannot drop the shark into the void.
         Physics.SharkFloor=false;Launch(owner);owner.down=true;Steer(owner,false,false);
@@ -587,11 +719,11 @@ internal static class SkillSharkTests
         owner.down=false;Steer(owner,false,false);Call(owner,"ClearSkillPreview");
         Physics.SharkFloor=true;Physics.SharkFloorY=248;Launch(owner);
         owner.down=true;Steer(owner,false,true);Call(owner,"TickSkillPreview",.1f);
-        Check(Math.Abs(Position(owner)-9)<.01f && Active(owner).CameraTarget.position.y==296,
+        Check(Math.Abs(Position(owner)-9)<.01f && Active(owner).NetworkY==248,
             "Down plus horizontal input did not drop onto solid floor");
         // A held down key cannot pass through the solid destination floor.
         owner.down=true;Steer(owner,false,false);Call(owner,"TickSkillPreview",.1f);
-        Check(Active(owner).CameraTarget.position.y==296,"Held down passed through solid ground");
+        Check(Active(owner).NetworkY==248,"Held down passed through solid ground");
         Call(owner,"ClearSkillPreview");
         owner.down=false;owner.X=0;Launch(owner);
         Call(owner,"TickSkillPreview",.1f);
@@ -654,7 +786,7 @@ internal static class SkillSharkTests
         roof.isTrigger=true;float tx=0,ty=456;owner.MoveShark(ref tx,ref ty,0,.1f);
         Check(ty==296,"Trigger became solid shark support");roof.isTrigger=false;
         roof.enabled=false;Call(owner,"TickSkillPreview",.1f);
-        Check(Active(owner).CameraTarget.position.y==344,"Disabled boss roof left shark suspended");
+        Check(Active(owner).NetworkY==296,"Disabled boss roof left shark suspended");
         Call(owner,"ClearSkillPreview");roof.enabled=true;roof.ParentComponent=new BarrelBlock();
         tx=0;ty=456;owner.MoveShark(ref tx,ref ty,0,.1f);
         Check(ty==296,"LargeObjects prop became shark support");
@@ -737,16 +869,16 @@ internal static class SkillSharkTests
                 "Steering while elevator moves lost relative movement/support");
             // Steering off the roof detaches; later platform motion must not carry it.
             Steer(owner,false,true);Call(owner,"TickSkillPreview",.5f);
-            Check(Active(owner).CameraTarget.position.y==48,"Swimming off elevator did not find lower ground");
+            Check(Active(owner).NetworkY==0,"Swimming off elevator did not find lower ground");
             float detachedX=Position(owner);Steer(owner,false,false);ShiftElevator(roof,20,40);
             Call(owner,"TickSkillPreview",dt);
-            Check(Math.Abs(Position(owner)-detachedX)<.01f && Active(owner).CameraTarget.position.y==48,
+            Check(Math.Abs(Position(owner)-detachedX)<.01f && Active(owner).NetworkY==0,
                 "Detached shark still follows elevator");
             Call(owner,"ClearSkillPreview");
             // New casts reacquire current support; disabled roofs release it even while idle.
             owner.X=roof.bounds.center.x;owner.Y=roof.bounds.max.y;Launch(owner);Steer(owner,false,false);
             roof.enabled=false;Call(owner,"TickSkillPreview",dt);
-            Check(Active(owner).CameraTarget.position.y==48,"Disabled elevator left shark suspended");
+            Check(Active(owner).NetworkY==0,"Disabled elevator left shark suspended");
             Call(owner,"ClearSkillPreview");roof.enabled=true;
             owner.X=roof.bounds.center.x;owner.Y=roof.bounds.max.y;Launch(owner);Steer(owner,false,false);
             Call(owner,"PressSpecial");float breachY=Active(owner).CameraTarget.position.y;
