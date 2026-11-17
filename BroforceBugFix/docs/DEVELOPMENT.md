@@ -15,6 +15,7 @@
 - `src/DoodadCrateReentryFix.cs`：`DoodadCrate.ActuallyCollapse` 单实例同步重入保护。
 - `src/LobbyJoinStreamFix.cs`：主菜单加入新房间时，清理上次未完成地图加载遗留的暂停 RPC 流。
 - `src/FaceHuggerDetachFix.cs`：修复原版蛇/抱脸虫脱离空目标的异常，保留原版脱离和弹开逻辑；不承担联机状态同步。
+- `src/AlienEggCleanupFix.cs`：处理卵和 AlienEggListener 在 Map 集合清空后的移除登记，保留卵的基类销毁与 Listener 登记标志清理。
 - `BuildAndDeploy.ps1`：使用 .NET Framework 3.5 编译器构建，并更新本机、内网测试端和项目安装包。
 - `issues/`：保存问题记录、结论、修复边界和复测入口；运行证据统一放在 `docs/evidence/`。
 
@@ -29,6 +30,8 @@ GJKen.BroforceBugFix.DoodadCrateReentry
 蛇脱离修复使用独立 ID `GJKen.BroforceBugFix.FaceHuggerDetach`，设置字段为 `EnableFaceHuggerDetachFix`，默认开启。仅将原版 `DisconnectFaceHugger` 的 `Unit.IsFlexing` 调用替换为空目标返回 false 的判断，其余指令保留。离线与双端受控复测和未确认的引用丢失触发条件见[独立问题记录](../issues/ISSUES-2026-11-14-蛇脱离空目标导致反复出血.md)。
 
 ## 开关模型
+
+异形卵修复使用独立 ID `GJKen.BroforceBugFix.AlienEggCleanup` 和默认开启的 `EnableAlienEggCleanupFix`。Prefix 作用于 `Map.RemoveAlienEggExplosive`；`0.4.1` 在同 ID 下增补 `Map.RemoveDisturbedWildLife`，仅对 AlienEggListener 在集合为 null 时跳过移除。不修改或跳过卵/Listener 的 OnDestroy 或 WildLife.RemoveFromMap，不重建集合，不捕获其它异常。受控空集合 A/B 与自然重载必须分别报告，详见[问题记录](../issues/ISSUES-2026-11-18-AlienEgg换关清理空引用.md)。
 
 每个修复的生效条件统一为：
 

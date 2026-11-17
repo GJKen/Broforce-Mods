@@ -48,6 +48,7 @@
     <Compile Include="src\Plugin.cs" />
     <Compile Include="src\BugFixSettings.cs" />
     <Compile Include="src\FaceHuggerDetachFix.cs" />
+    <Compile Include="src\AlienEggCleanupFix.cs" />
     <Compile Include="src\DoodadCrateReentryFix.cs" />
     <Compile Include="src\LobbyJoinStreamFix.cs" />
   </ItemGroup>

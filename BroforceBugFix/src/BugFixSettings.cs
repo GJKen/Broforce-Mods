@@ -8,5 +8,6 @@ namespace BroforceBugFix
         public bool EnableDoodadCrateReentryFix = true;
         public bool EnableLobbyJoinStreamFix = true;
         public bool EnableFaceHuggerDetachFix = true;
+        public bool EnableAlienEggCleanupFix = true;
     }
 }

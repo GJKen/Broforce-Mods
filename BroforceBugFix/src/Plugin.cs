@@ -91,6 +91,7 @@ namespace BroforceBugFix
             var previousDoodadCrate = Settings.EnableDoodadCrateReentryFix;
             var previousLobbyJoinStream = Settings.EnableLobbyJoinStreamFix;
             var previousFaceHuggerDetach = Settings.EnableFaceHuggerDetachFix;
+            var previousAlienEggCleanup = Settings.EnableAlienEggCleanupFix;
 
             Settings.EnableAllFixes = GUILayout.Toggle(
                 Settings.EnableAllFixes,
@@ -106,6 +107,9 @@ namespace BroforceBugFix
             Settings.EnableFaceHuggerDetachFix = GUILayout.Toggle(
                 Settings.EnableFaceHuggerDetachFix,
                 "Fix snake/facehugger detach errors and repeated bleeding");
+            Settings.EnableAlienEggCleanupFix = GUILayout.Toggle(
+                Settings.EnableAlienEggCleanupFix,
+                "Fix alien egg cleanup after the map is unloaded");
 
             var doodadCrateActive = _modEnabled &&
                                     Settings.EnableAllFixes &&
@@ -117,7 +121,8 @@ namespace BroforceBugFix
             if (previousMaster != Settings.EnableAllFixes ||
                 previousDoodadCrate != Settings.EnableDoodadCrateReentryFix ||
                 previousLobbyJoinStream != Settings.EnableLobbyJoinStreamFix ||
-                previousFaceHuggerDetach != Settings.EnableFaceHuggerDetachFix)
+                previousFaceHuggerDetach != Settings.EnableFaceHuggerDetachFix ||
+                previousAlienEggCleanup != Settings.EnableAlienEggCleanupFix)
             {
                 try
                 {
@@ -164,6 +169,12 @@ namespace BroforceBugFix
                 FaceHuggerDetachFix.Apply();
             else
                 FaceHuggerDetachFix.Remove();
+
+            if (_modEnabled && settings != null &&
+                settings.EnableAllFixes && settings.EnableAlienEggCleanupFix)
+                AlienEggCleanupFix.Apply();
+            else
+                AlienEggCleanupFix.Remove();
         }
 
         private static void RemoveAllFixes()
@@ -171,6 +182,7 @@ namespace BroforceBugFix
             DoodadCrateReentryFix.Remove();
             LobbyJoinStreamFix.Remove();
             FaceHuggerDetachFix.Remove();
+            AlienEggCleanupFix.Remove();
         }
 
         private static void SaveSettings(UnityModManager.ModEntry modEntry)

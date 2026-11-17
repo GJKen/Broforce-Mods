@@ -6,21 +6,24 @@
 
 ## 当前修复
 
-当前版本为 `0.3.0`，包含三个修复：
+当前版本为 `0.4.1`，包含四个修复：
 
 - 阻止同一个 `DoodadCrate` 在尚未完成 `ActuallyCollapse` 时递归进入该方法，修复相邻爆炸弹药箱互相触发后无限递归、爆炸特效暴增、严重掉帧及 `StackOverflowException`。
 - 从主菜单加入新房间时，清除上次未完成地图加载遗留的暂停 RPC 流和旧消息，避免加入官方房后卡在主菜单、身份消息无法执行。此修复不依赖 CustomMapMultiplayer。
 - 修复蛇/抱脸虫脱离空目标时的原版空引用，避免中断敌兵清理后逐帧重复死亡与出血。离线 A/B 和 FRP 双端受控验证通过；最初目标引用丢失的触发原因仍未确认，详见[问题记录](issues/ISSUES-2026-11-14-蛇脱离空目标导致反复出血.md)。
+- 修复换关时异形卵在 Map 集合清空后移除登记的空引用，保留原版基类销毁清理；`0.4.1` 补齐同批 AlienEggListener 的空集合移除，同时保留其登记标志清理。`0.4.0` 的残留异常历史及后续验证分别记录在[问题记录](issues/ISSUES-2026-11-18-AlienEgg换关清理空引用.md)。
 
 | 项目 | 当前值 |
 | --- | --- |
-| 版本 | `0.3.0` |
+| 版本 | `0.4.1` |
 | 静态构建 | 已通过 |
-| 游戏内复测 | 加入房间修复已通过官方 Steam 双端复测；蛇脱离修复通过离线 A/B 及 FRP 双端受控检查；箱体修复仍待验收 |
+| 游戏内复测 | 加入房间、蛇脱离修复沿用原验收；卵及 Listener 清理通过定向受控检查、离线及 Steam 双端自然重载；箱体修复仍待验收 |
 
 第一次坍塌仍执行完整的原版逻辑，包括爆炸、周围伤害、正常连锁反应、掉落物和网络 RPC。补丁只跳过同一实例尚未退出时发生的嵌套重入。
 
 ## 修复开关
+
+异形卵修复覆盖卵的 `Map.alienEggs` 和 AlienEggListener 的 `Map.disturbedWildLife` 空引用移除，保留卵的基类销毁及 Listener 的登记标志清理；非空集合仍执行原版行为。Listener 门禁仅匹配 AlienEggListener，不改变其它野生物路径。换关日志、验证与生命周期归因边界见[问题记录](issues/ISSUES-2026-11-18-AlienEgg换关清理空引用.md)。
 
 UMM 的 Mod 启用状态是最外层开关。插件面板内还有两级持久化设置：
 
@@ -28,6 +31,7 @@ UMM 的 Mod 启用状态是最外层开关。插件面板内还有两级持久�
 - `Prevent recursive explosive-ammo crate collapse`：爆炸弹药箱递归修复的独立开关。
 - `Clear a stalled previous room's network stream when joining`：加入新房间时清理残留暂停消息流的独立开关。
 - `Fix snake/facehugger detach errors and repeated bleeding`：蛇/抱脸虫脱离空目标修复的独立开关。
+- `Fix alien egg cleanup after the map is unloaded`：异形卵换关清理修复的独立开关。
 
 插件内开关首次安装时均默认开启。UMM、主开关及对应独立开关全部开启时，该项修复才会生效。设置变化会立即应用，不要求重启游戏。
 
@@ -39,7 +43,7 @@ UMM 的 Mod 启用状态是最外层开关。插件面板内还有两级持久�
 <UMM>\Mods\GJKen-BroforceBugFix\
 ```
 
-重启游戏，在 UMM 中确认 `Broforce Bug Fix 0.3.0` 已启用。加入房间修复只需要安装在出现残留暂停的加入端；箱体销毁修复在联机时建议所有参与端安装相同版本。
+重启游戏，在 UMM 中确认 `Broforce Bug Fix 0.4.1` 已启用。加入房间修复只需要安装在出现残留暂停的加入端；箱体和异形卵销毁修复在联机时建议所有参与端安装相同版本。
 
 ## 构建
 
