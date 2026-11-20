@@ -72,21 +72,16 @@ namespace CustomMapMultiplayer
 
                 var prefix = string.IsNullOrEmpty(prefixName)
                     ? null
-                    : new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                        prefixName,
-                        BindingFlags.NonPublic | BindingFlags.Static));
+                    : new HarmonyMethod(GetPatchMethod(prefixName));
                 // BroMaker's local-only custom-hero scan otherwise consumes the
                 // item first and skips this networked replacement entirely.
                 if (prefix != null && methodName == "UsePickupables")
                     prefix.before = new[] { "BroMakerLib" };
                 var postfix = string.IsNullOrEmpty(postfixName)
                     ? null
-                    : new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                        postfixName,
-                        BindingFlags.NonPublic | BindingFlags.Static));
+                    : new HarmonyMethod(GetPatchMethod(postfixName));
                 var transpiler = methodName == "Collect"
-                    ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                        "WorkshopPickupAmmoTranspiler", BindingFlags.NonPublic | BindingFlags.Static))
+                    ? new HarmonyMethod(GetPatchMethod("WorkshopPickupAmmoTranspiler"))
                     : null;
                 _harmony.Patch(target, prefix, postfix, transpiler, null);
                 DiagnosticLog.Info(
@@ -160,17 +155,18 @@ namespace CustomMapMultiplayer
 
         private static IEnumerable<CodeInstruction> WorkshopPickupAmmoTranspiler(IEnumerable<CodeInstruction> instructions)
         {
+            var result = new List<CodeInstruction>();
             foreach (var instruction in instructions)
             {
                 var method = instruction.operand as MethodInfo;
                 if (method != null && method.DeclaringType == typeof(TestVanDammeAnim) && method.Name == "IsAmmoFull")
                 {
                     instruction.opcode = OpCodes.Call;
-                    instruction.operand = typeof(HarmonyDiagnostics).GetMethod(
-                        "IsWorkshopPickupAmmoFull", BindingFlags.NonPublic | BindingFlags.Static);
+                    instruction.operand = GetPatchMethod("IsWorkshopPickupAmmoFull");
                 }
-                yield return instruction;
+                result.Add(instruction);
             }
+            return result;
         }
 
         private static bool IsWorkshopPickupAmmoFull(TestVanDammeAnim hero)

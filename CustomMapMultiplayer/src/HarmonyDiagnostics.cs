@@ -200,15 +200,8 @@ namespace CustomMapMultiplayer
         private static readonly Dictionary<Renderer, bool> MainMenuRendererStates =
             new Dictionary<Renderer, bool>();
 
-        public static void Start()
+        private static void ResetWorkshopSessionFlags()
         {
-            if (_harmony != null)
-            {
-                return;
-            }
-
-            PerformanceTelemetry.Reset();
-            _harmony = new Harmony(HarmonyId);
             _injectedForSession = false;
             _workshopCompletionHandledForSession = false;
             ClearWorkshopLevelNumberOverride();
@@ -220,6 +213,10 @@ namespace CustomMapMultiplayer
             _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
             ClearWorkshopOnlineLobbyReturnState();
             _restoreMainMenuAfterLobbyReturnPending = false;
+        }
+
+        private static void ClearWorkshopSpawnTracking()
+        {
             _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
             _workshopSpawnRebroadcastPending = false;
             _workshopSpawnRebroadcastUseCurrentPositions = false;
@@ -230,50 +227,41 @@ namespace CustomMapMultiplayer
             ClearLateJoinState();
             ClearWorkshopIdentityState();
             ClearLifecycleState();
+        }
+
+        public static void Start()
+        {
+            if (_harmony != null)
+            {
+                return;
+            }
+
+            PerformanceTelemetry.Reset();
+            _harmony = new Harmony(HarmonyId);
+            ResetWorkshopSessionFlags();
+            ClearWorkshopSpawnTracking();
             SubscribeWorkshopCompletion();
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "TracePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var prefixMethod = GetPatchMethod("TracePrefix");
             var prefix = new HarmonyMethod(prefixMethod);
-            var joinLobbyPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "JoinLobbyPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var joinLobbyPostfixMethod = GetPatchMethod("JoinLobbyPostfix");
             var joinLobbyPostfix = new HarmonyMethod(joinLobbyPostfixMethod);
-            var joinedLobbyPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "JoinedLobbyPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var joinedLobbyPostfixMethod = GetPatchMethod("JoinedLobbyPostfix");
             var joinedLobbyPostfix = new HarmonyMethod(joinedLobbyPostfixMethod);
-            var lobbyCreatedPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "LobbyCreatedPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var lobbyCreatedPostfixMethod = GetPatchMethod("LobbyCreatedPostfix");
             var lobbyCreatedPostfix = new HarmonyMethod(lobbyCreatedPostfixMethod);
-            var playerHasJoinedMatchPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "PlayerHasJoinedMatchPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var playerHasJoinedMatchPostfixMethod = GetPatchMethod("PlayerHasJoinedMatchPostfix");
             var playerHasJoinedMatchPostfix = new HarmonyMethod(playerHasJoinedMatchPostfixMethod);
-            var requestJoinGameTranspilerMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "RequestJoinGameTranspiler",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var requestJoinGameTranspilerMethod = GetPatchMethod("RequestJoinGameTranspiler");
             var requestJoinGameTranspiler = new HarmonyMethod(requestJoinGameTranspilerMethod);
-            var requestJoinGamePostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "RequestJoinGamePostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var requestJoinGamePostfixMethod = GetPatchMethod("RequestJoinGamePostfix");
             var requestJoinGamePostfix = new HarmonyMethod(requestJoinGamePostfixMethod);
-            var playerStartPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "PlayerStartPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var playerStartPostfixMethod = GetPatchMethod("PlayerStartPostfix");
             var playerStartPostfix = new HarmonyMethod(playerStartPostfixMethod);
-            var spawnJoinedPlayersPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "SpawnJoinedPlayersPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var spawnJoinedPlayersPostfixMethod = GetPatchMethod("SpawnJoinedPlayersPostfix");
             var spawnJoinedPlayersPostfix = new HarmonyMethod(spawnJoinedPlayersPostfixMethod);
-            var assignCharacterPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "AssignCharacterPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var assignCharacterPostfixMethod = GetPatchMethod("AssignCharacterPostfix");
             var assignCharacterPostfix = new HarmonyMethod(assignCharacterPostfixMethod);
-            var setPlayerCharacterPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "SetPlayerCharacterPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var setPlayerCharacterPostfixMethod = GetPatchMethod("SetPlayerCharacterPostfix");
             var setPlayerCharacterPostfix = new HarmonyMethod(setPlayerCharacterPostfixMethod);
             var patchedCount = 0;
 
@@ -402,28 +390,9 @@ namespace CustomMapMultiplayer
                 DisableChatIme();
                 ClearSteamHostQueryCache();
                 _harmony = null;
-                _injectedForSession = false;
-                _workshopCompletionHandledForSession = false;
-                ClearWorkshopLevelNumberOverride();
-                _joinLobbyInProgress = false;
-                _sessionIsHost = false;
-                _networkSessionActive = false;
-                _nativeMainMenuExitPending = false;
-                _nativeMainMenuLoadStarted = false;
-                _joinLobbyCleanupIgnoreUntilUtc = DateTime.MinValue;
-                ClearWorkshopOnlineLobbyReturnState();
-                _restoreMainMenuAfterLobbyReturnPending = false;
+                ResetWorkshopSessionFlags();
                 MainMenuRendererStates.Clear();
-                _workshopSpawnRebroadcastAtUtc = DateTime.MinValue;
-                _workshopSpawnRebroadcastPending = false;
-                _workshopSpawnRebroadcastUseCurrentPositions = false;
-                _lastLocalWorkshopControllerId = -1;
-                ClearDuplicateWorkshopLoadSuppression();
-                ClearWorkshopLoadRequest();
-                ClearWorkshopLocalJoinRequests();
-                ClearLateJoinState();
-                ClearWorkshopIdentityState();
-                ClearLifecycleState();
+                ClearWorkshopSpawnTracking();
                 lock (Sync)
                 {
                     TraceCache.Clear();
@@ -468,8 +437,7 @@ namespace CustomMapMultiplayer
                  target.TypeName == "CustomMapMultiplayer.FrpDirectLayer") &&
                 target.MethodName == "LeaveMatch")
             {
-                return new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                    "LeaveMatchPostfix", BindingFlags.NonPublic | BindingFlags.Static));
+                return new HarmonyMethod(GetPatchMethod("LeaveMatchPostfix"));
             }
             if (target.TypeName == "Player" && target.MethodName == "Start")
             {

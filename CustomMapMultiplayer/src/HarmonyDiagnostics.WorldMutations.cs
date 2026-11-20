@@ -52,7 +52,7 @@ namespace CustomMapMultiplayer
             // the replica's pending player-damaging countdown into Explode(5).
             parameters = new object[] { _worldEpoch, block.Nid, parameters[0], parameters[1], parameters[2] };
             targetObject = null;
-            methodInfo = typeof(HarmonyDiagnostics).GetMethod("ReceiveWorldMineCollapseRPC", BindingFlags.Static | BindingFlags.NonPublic);
+            methodInfo = GetPatchMethod("ReceiveWorldMineCollapseRPC");
         }
 
         [AllowedRPC]

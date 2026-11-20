@@ -9,15 +9,8 @@ namespace CustomMapMultiplayer
 {
     internal static partial class HarmonyDiagnostics
     {
-        private sealed class WorldGrenadeSpawn
-        {
-            internal NID Id, Actor;
-            internal string Prefab, Type;
-            internal int Owner, Player, Seed;
-            internal float X, Y, VX, VY, Life;
-        }
-        private static readonly Dictionary<NID, WorldGrenadeSpawn> WorldGrenadeSpawns = new Dictionary<NID, WorldGrenadeSpawn>();
-        private static readonly Dictionary<NID, WorldGrenadeSpawn> WorldPendingGrenades = new Dictionary<NID, WorldGrenadeSpawn>();
+        private static readonly Dictionary<NID, WorldSpawn> WorldGrenadeSpawns = new Dictionary<NID, WorldSpawn>();
+        private static readonly Dictionary<NID, WorldSpawn> WorldPendingGrenades = new Dictionary<NID, WorldSpawn>();
         private static readonly Dictionary<string, Grenade> WorldGrenadePrefabs = new Dictionary<string, Grenade>();
         private static int _worldGrenadeReplicaUpdate;
         private static int _worldNetworkGrenadeSpawnDepth;
@@ -61,7 +54,7 @@ namespace CustomMapMultiplayer
                 UnityEngine.Object.Destroy(__result.gameObject);
                 return false;
             }
-            var spawn = new WorldGrenadeSpawn { Id = Registry.AllocatePlayerUniqueID(), Actor = actor.Nid,
+            var spawn = new WorldSpawn { Id = Registry.AllocatePlayerUniqueID(), Actor = actor.Nid,
                 Owner = actor.Owner.AsInt, Player = playerNum, Seed = seed, Prefab = grenadePrefab.name,
                 Type = grenadePrefab.GetType().FullName, X = x, Y = y, VX = xI, VY = yI, Life = grenadePrefab.life };
             WorldGrenadeSpawns.Add(spawn.Id, spawn);
@@ -70,7 +63,7 @@ namespace CustomMapMultiplayer
             return false;
         }
 
-        private static Grenade CreateWorldGrenade(WorldGrenadeSpawn spawn, Grenade prefab, BroforceObject actor)
+        private static Grenade CreateWorldGrenade(WorldSpawn spawn, Grenade prefab, BroforceObject actor)
         {
             var grenade = UnityEngine.Object.Instantiate<Grenade>(prefab);
             var id = spawn.Id;
@@ -85,38 +78,26 @@ namespace CustomMapMultiplayer
             return grenade;
         }
 
-        private static void SendWorldGrenadeSpawn(WorldGrenadeSpawn spawn, PID target)
+        private static void SendWorldGrenadeSpawn(WorldSpawn spawn, PID target)
         {
-            using (var stream = new MemoryStream())
-            using (var writer = new BinaryWriter(stream))
-            {
-                WriteWorldId(writer, spawn.Id); WriteWorldId(writer, spawn.Actor);
-                writer.Write(spawn.Prefab); writer.Write(spawn.Type); writer.Write((byte)spawn.Owner);
-                writer.Write(spawn.Player); writer.Write(spawn.Seed); writer.Write(spawn.X); writer.Write(spawn.Y);
-                writer.Write(spawn.VX); writer.Write(spawn.VY); writer.Write(spawn.Life);
-                global::Networking.Networking.RPC<long, byte[]>(target, new RpcSignature<long, byte[]>(ReceiveWorldGrenadeSpawnRPC),
-                    _worldEpoch, stream.ToArray(), true);
-            }
+            SendWorldSpawn(spawn, spawn.Life, target, new RpcSignature<long, byte[]>(ReceiveWorldGrenadeSpawnRPC));
         }
 
         [AllowedRPC]
         private static void ReceiveWorldGrenadeSpawnRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            WorldGrenadeSpawn spawn;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            WorldSpawn spawn;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
-                spawn = new WorldGrenadeSpawn { Id = ReadWorldId(reader), Actor = ReadWorldId(reader),
-                    Prefab = reader.ReadString(), Type = reader.ReadString(), Owner = reader.ReadByte(),
-                    Player = reader.ReadInt32(), Seed = reader.ReadInt32(), X = reader.ReadSingle(), Y = reader.ReadSingle(),
-                    VX = reader.ReadSingle(), VY = reader.ReadSingle(), Life = reader.ReadSingle() };
-            var sender = RPCController.CurrentRPC.messageInfo.Sender;
-            if (spawn.Id.Sid != Connect.SessionID ||
-                (spawn.Owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != spawn.Owner)) return;
+            {
+                spawn = ReadWorldSpawn(reader); spawn.Life = reader.ReadSingle();
+            }
+            if (!IsWorldRpcObject(spawn.Id, spawn.Owner)) return;
             if (!TryCreateWorldGrenade(spawn) && WorldPendingGrenades.Count < 256) WorldPendingGrenades[spawn.Id] = spawn;
         }
 
-        private static bool TryCreateWorldGrenade(WorldGrenadeSpawn spawn)
+        private static bool TryCreateWorldGrenade(WorldSpawn spawn)
         {
             if (WorldGrenadeSpawns.ContainsKey(spawn.Id) || Registry.IsKeyInUse(spawn.Id) || WorldRemovedObjects.Contains(spawn.Id.BaseID)) return true;
             var actor = Registry.GetObject(spawn.Actor) as BroforceObject;

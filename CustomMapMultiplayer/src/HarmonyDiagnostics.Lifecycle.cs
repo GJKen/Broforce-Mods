@@ -292,6 +292,37 @@ namespace CustomMapMultiplayer
             }
         }
 
+        private static void ResetWorkshopGameModeController()
+        {
+            var gameModeControllerType = AccessTools.TypeByName("GameModeController");
+            var gameModeControllerField = gameModeControllerType == null
+                ? null
+                : gameModeControllerType.GetField(
+                    "instance",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var gameModeController = gameModeControllerField == null
+                ? null
+                : gameModeControllerField.GetValue(null);
+            if (gameModeController != null)
+            {
+                SetFieldOrProperty(gameModeController, "switchingLevel", false);
+                SetFieldOrProperty(gameModeController, "waitingForAllPlayersToReady", false);
+                SetFieldOrProperty(gameModeController, "levelFinished", false);
+                SetFieldOrProperty(gameModeController, "nextScene", LevelSelectionController.MainMenuScene);
+            }
+        }
+
+        private static void ResetWorkshopLevelSelection()
+        {
+            var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
+            SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
+            SetStaticFieldOrProperty(levelSelectionType, "loadCustomCampaign", false);
+            SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
+            SetStaticFieldOrProperty(levelSelectionType, "shownHelicopterIntro", false);
+            SetStaticFieldOrProperty(levelSelectionType, "currentWorkshopLevel", null);
+            SetStaticFieldOrProperty(levelSelectionType, "campaignToLoad", null);
+        }
+
         private static void ClearInjectedWorkshopRuntimeState(
             string trigger,
             bool endNetworkSession,
@@ -341,22 +372,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var gameModeControllerType = AccessTools.TypeByName("GameModeController");
-            var gameModeControllerField = gameModeControllerType == null
-                ? null
-                : gameModeControllerType.GetField(
-                    "instance",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-            var gameModeController = gameModeControllerField == null
-                ? null
-                : gameModeControllerField.GetValue(null);
-            if (gameModeController != null)
-            {
-                SetFieldOrProperty(gameModeController, "switchingLevel", false);
-                SetFieldOrProperty(gameModeController, "waitingForAllPlayersToReady", false);
-                SetFieldOrProperty(gameModeController, "levelFinished", false);
-                SetFieldOrProperty(gameModeController, "nextScene", LevelSelectionController.MainMenuScene);
-            }
+            ResetWorkshopGameModeController();
 
             var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
             if (state != null)
@@ -369,13 +385,7 @@ namespace CustomMapMultiplayer
                 SetFieldOrProperty(state, "sceneToLoad", LevelSelectionController.MainMenuScene);
             }
 
-            var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
-            SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
-            SetStaticFieldOrProperty(levelSelectionType, "loadCustomCampaign", false);
-            SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
-            SetStaticFieldOrProperty(levelSelectionType, "shownHelicopterIntro", false);
-            SetStaticFieldOrProperty(levelSelectionType, "currentWorkshopLevel", null);
-            SetStaticFieldOrProperty(levelSelectionType, "campaignToLoad", null);
+            ResetWorkshopLevelSelection();
             ClearCurrentCampaignForWorkshopLoad();
             global::Networking.Networking.PauseStream = false;
             ResetStalePauseStateForWorkshopSession(trigger, true);
@@ -494,22 +504,7 @@ namespace CustomMapMultiplayer
                 ClearLateJoinState();
                 ClearLifecycleState();
 
-                var gameModeControllerType = AccessTools.TypeByName("GameModeController");
-                var gameModeControllerField = gameModeControllerType == null
-                    ? null
-                    : gameModeControllerType.GetField(
-                        "instance",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                var gameModeController = gameModeControllerField == null
-                    ? null
-                    : gameModeControllerField.GetValue(null);
-                if (gameModeController != null)
-                {
-                    SetFieldOrProperty(gameModeController, "switchingLevel", false);
-                    SetFieldOrProperty(gameModeController, "waitingForAllPlayersToReady", false);
-                    SetFieldOrProperty(gameModeController, "levelFinished", false);
-                    SetFieldOrProperty(gameModeController, "nextScene", LevelSelectionController.MainMenuScene);
-                }
+                ResetWorkshopGameModeController();
 
                 var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
                 if (state != null)
@@ -999,12 +994,7 @@ namespace CustomMapMultiplayer
                     true);
 
                 var gameStateType = AccessTools.TypeByName("GameState");
-                var instanceProperty = gameStateType == null
-                    ? null
-                    : gameStateType.GetProperty(
-                        "Instance",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                var state = instanceProperty == null ? null : instanceProperty.GetValue(null, null);
+                var state = GetGameStateInstance(gameStateType);
                 if (state != null)
                 {
                     SetFieldOrProperty(state, "loadCustomCampaign", true);
@@ -1315,12 +1305,7 @@ namespace CustomMapMultiplayer
                 }
 
                 var gameStateType = AccessTools.TypeByName("GameState");
-                var instanceProperty = gameStateType == null
-                    ? null
-                    : gameStateType.GetProperty(
-                        "Instance",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                var state = instanceProperty == null ? null : instanceProperty.GetValue(null, null);
+                var state = GetGameStateInstance(gameStateType);
 
                 if (state == null)
                 {
@@ -1459,13 +1444,7 @@ namespace CustomMapMultiplayer
                 {
                     ClearCurrentCampaignForWorkshopLoad();
 
-                    var levelSelectionType = AccessTools.TypeByName("LevelSelectionController");
-                    SetStaticFieldOrProperty(levelSelectionType, "loadPublishedCampaign", false);
-                    SetStaticFieldOrProperty(levelSelectionType, "loadCustomCampaign", false);
-                    SetStaticFieldOrProperty(levelSelectionType, "isOnlineCampaign", false);
-                    SetStaticFieldOrProperty(levelSelectionType, "shownHelicopterIntro", false);
-                    SetStaticFieldOrProperty(levelSelectionType, "currentWorkshopLevel", null);
-                    SetStaticFieldOrProperty(levelSelectionType, "campaignToLoad", null);
+                    ResetWorkshopLevelSelection();
 
                     var state = GetGameStateInstance(AccessTools.TypeByName("GameState"));
                     if (state != null)

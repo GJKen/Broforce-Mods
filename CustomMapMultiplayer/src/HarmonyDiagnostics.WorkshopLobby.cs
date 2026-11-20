@@ -255,7 +255,7 @@ namespace CustomMapMultiplayer
                 }
 
                 var matchmakingType = AccessTools.TypeByName("Steamworks.SteamMatchmaking");
-                var requestLobbyData = FindSteamMatchmakingMethod(matchmakingType, "RequestLobbyData", 1);
+                var requestLobbyData = FindStaticMethod(matchmakingType, "RequestLobbyData", 1);
                 if (requestLobbyData == null)
                 {
                     if (!_lateJoinLobbyRefreshWarningLogged)
@@ -326,7 +326,7 @@ namespace CustomMapMultiplayer
                 }
 
                 var matchmakingType = AccessTools.TypeByName("Steamworks.SteamMatchmaking");
-                var getLobbyData = FindSteamMatchmakingMethod(matchmakingType, "GetLobbyData", 2);
+                var getLobbyData = FindStaticMethod(matchmakingType, "GetLobbyData", 2);
                 if (getLobbyData == null)
                 {
                     return string.Empty;
@@ -372,7 +372,7 @@ namespace CustomMapMultiplayer
                 }
 
                 var matchmakingType = AccessTools.TypeByName("Steamworks.SteamMatchmaking");
-                var setLobbyData = FindSteamMatchmakingMethod(matchmakingType, "SetLobbyData", 3);
+                var setLobbyData = FindStaticMethod(matchmakingType, "SetLobbyData", 3);
                 if (setLobbyData == null)
                 {
                     DiagnosticLog.Warning("Workshop lobby data could not find SteamMatchmaking.SetLobbyData.");
@@ -747,12 +747,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var method = typeof(Menu).GetMethod(
-                methodName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
+            var method = GetInstanceMethod(typeof(Menu), methodName);
             if (method == null)
             {
                 DiagnosticLog.Warning("MainMenu layout method not found: Menu." + methodName + ".");

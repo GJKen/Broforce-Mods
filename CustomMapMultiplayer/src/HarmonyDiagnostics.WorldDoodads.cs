@@ -83,8 +83,7 @@ namespace CustomMapMultiplayer
             foreach (var name in new[] { "MakeEffectsDamaged", "DamageEffects" })
             {
                 var method = AccessTools.Method(name == "DamageEffects" ? typeof(Doodad) : typeof(DoodadDestroyable), name, null, null);
-                _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldDoodadEffectPrefix", null, null)),
-                    new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldDoodadEffectPostfix", null, null)), null, null);
+                PatchWorldMethod(method, "WorldDoodadEffectPrefix", "WorldDoodadEffectPostfix");
             }
         }
 
@@ -95,7 +94,7 @@ namespace CustomMapMultiplayer
         {
             if (_worldApplying != 0 || _worldEpoch == 0 || !IsWorldSession() || !IsWorldObject(__instance) || !__instance.IsMine) return;
             var entry = RegisterWorldObject(__instance);
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var w = new BinaryWriter(stream))
             {
                 WriteWorldId(w, __instance.Nid); w.Write((byte)__instance.Owner.AsInt); w.Write(entry.Life);
@@ -113,13 +112,12 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldDoodadEffectRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var r = new BinaryReader(stream))
             {
                 var id = ReadWorldId(r); var owner = r.ReadByte(); var life = r.ReadInt32(); var revision = r.ReadInt32();
-                var sender = RPCController.CurrentRPC.messageInfo.Sender;
-                if (id.Sid != Connect.SessionID || (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner)) return;
+                if (!IsWorldRpcObject(id, owner)) return;
                 var optional = r.ReadBoolean(); var x = r.ReadSingle(); var y = r.ReadSingle();
                 var vx = r.ReadSingle(); var vy = r.ReadSingle(); var hasRandom = r.ReadBoolean();
                 UnityEngine.Random.State random = default(UnityEngine.Random.State);

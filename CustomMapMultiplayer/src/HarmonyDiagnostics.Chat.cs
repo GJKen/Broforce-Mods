@@ -82,12 +82,8 @@ namespace CustomMapMultiplayer
 
         private static void PatchChatPauseBoundary()
         {
-            var keyboardUpdate = typeof(KeyboardInput).GetMethod(
-                "Update", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null, Type.EmptyTypes, null);
-            var pauseToggle = typeof(PauseController).GetMethod(
-                "TogglePause", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null, Type.EmptyTypes, null);
+            var keyboardUpdate = GetInstanceMethod(typeof(KeyboardInput), "Update");
+            var pauseToggle = GetInstanceMethod(typeof(PauseController), "TogglePause");
             var submitMessage = typeof(MessageController).GetMethod(
                 "SubmitMessage", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                 null, new[] { typeof(PID), typeof(int) }, null);
@@ -111,18 +107,12 @@ namespace CustomMapMultiplayer
                     typeof(bool).MakeByRefType()
                 },
                 null);
-            var keyboardPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "KeyboardInputChatBoundaryPrefix", BindingFlags.NonPublic | BindingFlags.Static);
-            var keyboardPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "KeyboardInputChatRepeatPostfix", BindingFlags.NonPublic | BindingFlags.Static);
-            var playerInputPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "PlayerChatInputBlockPrefix", BindingFlags.NonPublic | BindingFlags.Static);
-            var insertLetterPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "MessageControllerChatImeInsertLetterPrefix", BindingFlags.NonPublic | BindingFlags.Static);
-            var pausePostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "PauseControllerChatBoundaryPostfix", BindingFlags.NonPublic | BindingFlags.Static);
-            var submitPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "MessageControllerChatInputRepeatCleanupPostfix", BindingFlags.NonPublic | BindingFlags.Static);
+            var keyboardPrefix = GetPatchMethod("KeyboardInputChatBoundaryPrefix");
+            var keyboardPostfix = GetPatchMethod("KeyboardInputChatRepeatPostfix");
+            var playerInputPrefix = GetPatchMethod("PlayerChatInputBlockPrefix");
+            var insertLetterPrefix = GetPatchMethod("MessageControllerChatImeInsertLetterPrefix");
+            var pausePostfix = GetPatchMethod("PauseControllerChatBoundaryPostfix");
+            var submitPostfix = GetPatchMethod("MessageControllerChatInputRepeatCleanupPostfix");
             if (keyboardUpdate == null || pauseToggle == null || submitMessage == null || insertLetter == null ||
                 playerGetInput == null || keyboardPrefix == null || keyboardPostfix == null ||
                 playerInputPrefix == null || insertLetterPrefix == null || pausePostfix == null ||
@@ -170,21 +160,10 @@ namespace CustomMapMultiplayer
 
         private static void PatchChatMessageLengthLimit()
         {
-            var updateText = typeof(MessageController).GetMethod(
-                "UpdateText",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            var transpiler = typeof(HarmonyDiagnostics).GetMethod(
-                "MessageControllerUpdateTextTranspiler",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var viewportPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "MessageControllerUpdateTextViewportPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var flowPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "MessageControllerUpdateTextChatVerticalTracePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var updateText = GetInstanceMethod(typeof(MessageController), "UpdateText");
+            var transpiler = GetPatchMethod("MessageControllerUpdateTextTranspiler");
+            var viewportPostfix = GetPatchMethod("MessageControllerUpdateTextViewportPostfix");
+            var flowPrefix = GetPatchMethod("MessageControllerUpdateTextChatVerticalTracePrefix");
             if (updateText == null || transpiler == null || viewportPostfix == null ||
                 flowPrefix == null)
             {
@@ -280,45 +259,20 @@ namespace CustomMapMultiplayer
 
         private static void PatchChatMessageViewport()
         {
-            var update = typeof(ChatTextBox).GetMethod(
-                "Update",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
+            var update = GetInstanceMethod(typeof(ChatTextBox), "Update");
             var submitMessage = typeof(ChatTextBox).GetMethod(
                 "SubmitMessage",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                 null,
                 new[] { typeof(string), typeof(PID), typeof(int), typeof(int) },
                 null);
-            var postfix = typeof(HarmonyDiagnostics).GetMethod(
-                "ChatTextBoxUpdatePostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var submitPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "ChatTextBoxSubmitMessagePostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var messageUpdate = typeof(MessageController).GetMethod(
-                "Update",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            var messageUpdatePrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "MessageControllerChatVerticalTracePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var caretLateUpdate = typeof(Caret).GetMethod(
-                "LateUpdate",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            var caretLateUpdatePostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "CaretChatVerticalTracePostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var populateMeshPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "ChatTextOnPopulateMeshPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var postfix = GetPatchMethod("ChatTextBoxUpdatePostfix");
+            var submitPostfix = GetPatchMethod("ChatTextBoxSubmitMessagePostfix");
+            var messageUpdate = GetInstanceMethod(typeof(MessageController), "Update");
+            var messageUpdatePrefix = GetPatchMethod("MessageControllerChatVerticalTracePrefix");
+            var caretLateUpdate = GetInstanceMethod(typeof(Caret), "LateUpdate");
+            var caretLateUpdatePostfix = GetPatchMethod("CaretChatVerticalTracePostfix");
+            var populateMeshPrefix = GetPatchMethod("ChatTextOnPopulateMeshPrefix");
             if (update == null || submitMessage == null || postfix == null ||
                 submitPostfix == null || messageUpdate == null ||
                 messageUpdatePrefix == null || caretLateUpdate == null ||
@@ -841,46 +795,46 @@ namespace CustomMapMultiplayer
             }
 
             var builder = new StringBuilder();
-            builder.Append("CHAT_VERTICAL_STATE frame=");
-            builder.Append(Time.frameCount);
-            builder.Append("; key=");
-            builder.Append(_chatVerticalTraceKey);
-            builder.Append("; message=");
-            builder.Append(FormatChatTraceText(message));
-            builder.Append("; messageCaret=");
-            builder.Append(MessageController.caretPos);
-            builder.Append("; caretMessage=");
-            builder.Append(FormatChatTraceText(
-                (string)_chatCaretMessageField.GetValue(_chatViewportActiveCaret)));
-            builder.Append("; caretPosition=");
-            builder.Append(_chatViewportActiveCaret.position);
-            builder.Append("; caretText=");
-            builder.Append(FormatChatTraceText(
-                (string)_chatCaretTextProperty.GetValue(chatText, null)));
-            builder.Append("; caretCaretText=");
-            builder.Append(FormatChatTraceText(
+            builder.Append("CHAT_VERTICAL_STATE frame=")
+                .Append(Time.frameCount)
+                .Append("; key=")
+                .Append(_chatVerticalTraceKey)
+                .Append("; message=")
+                .Append(FormatChatTraceText(message))
+                .Append("; messageCaret=")
+                .Append(MessageController.caretPos)
+                .Append("; caretMessage=")
+                .Append(FormatChatTraceText(
+                (string)_chatCaretMessageField.GetValue(_chatViewportActiveCaret)))
+                .Append("; caretPosition=")
+                .Append(_chatViewportActiveCaret.position)
+                .Append("; caretText=")
+                .Append(FormatChatTraceText(
+                (string)_chatCaretTextProperty.GetValue(chatText, null)))
+                .Append("; caretCaretText=")
+                .Append(FormatChatTraceText(
                 caretText == null
                     ? string.Empty
-                    : (string)_chatCaretTextProperty.GetValue(caretText, null)));
-            builder.Append("; viewportFirstLine=");
-            builder.Append(_chatViewportFirstLine);
-            builder.Append("; viewportSource=");
-            builder.Append(viewportStart);
-            builder.Append("-");
-            builder.Append(viewportEnd);
-            builder.Append("; ");
-            builder.Append(FormatChatGenerator(
+                    : (string)_chatCaretTextProperty.GetValue(caretText, null)))
+                .Append("; viewportFirstLine=")
+                .Append(_chatViewportFirstLine)
+                .Append("; viewportSource=")
+                .Append(viewportStart)
+                .Append("-")
+                .Append(viewportEnd)
+                .Append("; ")
+                .Append(FormatChatGenerator(
                 "ownTextGenerator",
-                _chatMessageTextGenerator));
-            builder.Append("; ");
-            builder.Append(FormatChatGenerator(
+                _chatMessageTextGenerator))
+                .Append("; ")
+                .Append(FormatChatGenerator(
                 "mainCachedTextGenerator",
-                GetChatCachedTextGenerator(chatText)));
-            builder.Append("; ");
-            builder.Append(FormatChatGenerator(
+                GetChatCachedTextGenerator(chatText)))
+                .Append("; ")
+                .Append(FormatChatGenerator(
                 "caretCachedTextGenerator",
-                GetChatCachedTextGenerator(caretText)));
-            builder.Append(".");
+                GetChatCachedTextGenerator(caretText)))
+                .Append(".");
             DiagnosticLog.InfoFileOnly(builder.ToString());
             _chatVerticalTraceActive = false;
         }
@@ -903,14 +857,14 @@ namespace CustomMapMultiplayer
             }
 
             var builder = new StringBuilder();
-            builder.Append(name);
-            builder.Append("{lineCount=");
-            builder.Append(generator.lineCount);
-            builder.Append(";characterCountVisible=");
-            builder.Append(generator.characterCountVisible);
-            builder.Append(";rectExtents=");
-            builder.Append(FormatChatRect(generator.rectExtents));
-            builder.Append(";lines=");
+            builder.Append(name)
+                .Append("{lineCount=")
+                .Append(generator.lineCount)
+                .Append(";characterCountVisible=")
+                .Append(generator.characterCountVisible)
+                .Append(";rectExtents=")
+                .Append(FormatChatRect(generator.rectExtents))
+                .Append(";lines=");
             var lines = generator.lines;
             for (var index = 0; lines != null && index < lines.Count; index++)
             {
@@ -920,18 +874,18 @@ namespace CustomMapMultiplayer
                 }
 
                 var line = lines[index];
-                builder.Append("[");
-                builder.Append("startCharIdx=");
-                builder.Append(line.startCharIdx);
-                builder.Append(";height=");
-                builder.Append(line.height);
-                builder.Append(";top=");
-                builder.Append(line.topY);
-                builder.Append(";characterCountVisible=");
-                builder.Append(generator.characterCountVisible);
-                builder.Append(";rectExtents=");
-                builder.Append(FormatChatRect(generator.rectExtents));
-                builder.Append("]");
+                builder.Append("[")
+                    .Append("startCharIdx=")
+                    .Append(line.startCharIdx)
+                    .Append(";height=")
+                    .Append(line.height)
+                    .Append(";top=")
+                    .Append(line.topY)
+                    .Append(";characterCountVisible=")
+                    .Append(generator.characterCountVisible)
+                    .Append(";rectExtents=")
+                    .Append(FormatChatRect(generator.rectExtents))
+                    .Append("]");
             }
 
             builder.Append("}");

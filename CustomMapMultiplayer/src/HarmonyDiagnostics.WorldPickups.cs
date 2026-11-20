@@ -11,13 +11,15 @@ namespace CustomMapMultiplayer
 
         private static IEnumerable<CodeInstruction> WorldPickupVisibilityTranspiler(IEnumerable<CodeInstruction> instructions)
         {
+            var result = new List<CodeInstruction>();
             foreach (var instruction in instructions)
             {
                 var method = instruction.operand as MethodInfo;
                 if (method != null && method.DeclaringType == typeof(SortOfFollow) && method.Name == "IsItSortOfVisible")
-                    instruction.operand = typeof(HarmonyDiagnostics).GetMethod("IsWorldPickupVisible", BindingFlags.Static | BindingFlags.NonPublic);
-                yield return instruction;
+                    instruction.operand = GetPatchMethod("IsWorldPickupVisible");
+                result.Add(instruction);
             }
+            return result;
         }
 
         private static bool IsWorldPickupVisible(float x, float y, float rangeX, float rangeY)

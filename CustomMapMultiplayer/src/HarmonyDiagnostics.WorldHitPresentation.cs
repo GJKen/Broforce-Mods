@@ -27,7 +27,6 @@ namespace CustomMapMultiplayer
         private static readonly MethodInfo WorldDeathAnimation = AccessTools.Method(typeof(TestVanDammeAnim), "AnimateDeath", null, null);
         private static readonly MethodInfo WorldDeathSound = AccessTools.Method(typeof(TestVanDammeAnim), "PlayDeathSound", null, null);
         private static readonly MethodInfo WorldBlockDeathSound = AccessTools.Method(typeof(Block), "PlayDeathSound", null, null);
-        private static readonly FieldInfo WorldFrozenTime = AccessTools.Field(typeof(TestVanDammeAnim), "frozenTime");
         private static readonly FieldInfo WorldBlockBackground = AccessTools.Field(typeof(Block), "backgroundMesh");
         private static readonly Dictionary<Type, bool> WorldPlainDamageTypes = new Dictionary<Type, bool>();
         private static readonly Dictionary<int, byte> WorldPresentedHitEffects = new Dictionary<int, byte>();
@@ -77,12 +76,6 @@ namespace CustomMapMultiplayer
             return plain;
         }
 
-        private static void PresentWorldHit(BroforceObject target, int request, int damage,
-            DamageType type, float vx, float vy, byte kind)
-        {
-            PresentWorldHitDirected(target, request, damage, type, vx, vy, (int)Mathf.Sign(vx), kind);
-        }
-
         private static void PresentWorldHitDirected(BroforceObject target, int request, int damage,
             DamageType type, float vx, float vy, int direction, byte kind)
         {
@@ -112,7 +105,7 @@ namespace CustomMapMultiplayer
                     byte effects;
                     WorldPresentedHitEffects.TryGetValue(request, out effects);
                     WorldPresentedHitEffects[request] = (byte)(effects | 2);
-                    if (unit.canGib && (presentation.Health < (int)WorldGibThreshold.GetValue(unit) || (float)WorldFrozenTime.GetValue(unit) > 0f) && !unit.WillReviveAlready)
+                    if (unit.canGib && (presentation.Health < (int)WorldGibThreshold.GetValue(unit) || (float)WorldFrozen.GetValue(unit) > 0f) && !unit.WillReviveAlready)
                     {
                         // The base visual method omits grenades/explosions in Gib overrides.
                         WorldBaseGibEffects(unit, type, unit.xI + vx + unit.xIBlast, unit.yI + vy + unit.yIBlast);

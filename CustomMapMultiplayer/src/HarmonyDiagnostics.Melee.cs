@@ -15,8 +15,7 @@ namespace CustomMapMultiplayer
             var damage = AccessTools.Method(typeof(TestVanDammeAnim), "Damage", new[] {
                 typeof(int), typeof(DamageType), typeof(float), typeof(float), typeof(int),
                 typeof(UnityEngine.MonoBehaviour), typeof(float), typeof(float) }, null);
-            _harmony.Patch(damage, null, null, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                "WorldHitEffectsTranspiler", BindingFlags.NonPublic | BindingFlags.Static)), null);
+            _harmony.Patch(damage, null, null, new HarmonyMethod(GetPatchMethod("WorldHitEffectsTranspiler")), null);
             _harmony.Patch(AccessTools.Method(typeof(TestVanDammeAnim), "Death", null, null), null, null,
                 new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldHitEffectsTranspiler", null, null)), null);
             _harmony.Patch(AccessTools.Method(typeof(TestVanDammeAnim), "CheckPlasmaDeath", null, null), null, null,
@@ -29,6 +28,7 @@ namespace CustomMapMultiplayer
 
         private static IEnumerable<CodeInstruction> WorldHitEffectsTranspiler(IEnumerable<CodeInstruction> instructions)
         {
+            var result = new List<CodeInstruction>();
             foreach (var instruction in instructions)
             {
                 var method = instruction.operand as MethodInfo;
@@ -46,10 +46,11 @@ namespace CustomMapMultiplayer
                         method.Name == "CreateBloodGushEffect" ? "WorldBloodGushEffect" :
                         method.Name == "CreateBackgroundBloodSpray" ? "WorldBackgroundBloodEffect" : "WorldBloodParticlesEffect", null, null);
                     instruction.opcode = OpCodes.Call;
-                    yield return load;
+                    result.Add(load);
                 }
-                yield return instruction;
+                result.Add(instruction);
             }
+            return result;
         }
 
         private static void WorldMeleeStrikeEffect(float x, float y, float vx, float vy, TestVanDammeAnim unit)
@@ -93,7 +94,7 @@ namespace CustomMapMultiplayer
         {
             if (_worldApplying != 0 || _worldEpoch == 0 || !IsWorldSession() || !IsWorldObject(unit) || !unit.IsMine) return;
             // Capture the actual visual call. Blocked hits and early returns produce no invented blood.
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 writer.Write((byte)unit.Owner.AsInt); writer.Write(kind); writer.Write((int)color);
@@ -109,7 +110,7 @@ namespace CustomMapMultiplayer
         private static void ReceiveWorldHitEffectRPC(long epoch, byte[] bytes)
         {
             if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
                 var owner = reader.ReadByte();
@@ -142,9 +143,7 @@ namespace CustomMapMultiplayer
                     null,
                     new[] { typeof(bool) },
                     null);
-                var transpiler = typeof(HarmonyDiagnostics).GetMethod(
-                    "PressHighFiveMeleeTranspiler",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var transpiler = GetPatchMethod("PressHighFiveMeleeTranspiler");
                 if (pressHighFiveMelee == null || transpiler == null)
                 {
                     DiagnosticLog.Warning(
@@ -178,9 +177,7 @@ namespace CustomMapMultiplayer
                 null,
                 new[] { typeof(int), typeof(float), typeof(float), typeof(float), typeof(float) },
                 null);
-            var replacement = typeof(HarmonyDiagnostics).GetMethod(
-                "IsAnotherPlayerNearbyForHighFive",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var replacement = GetPatchMethod("IsAnotherPlayerNearbyForHighFive");
             if (playerNearby == null || replacement == null)
             {
                 DiagnosticLog.Warning(

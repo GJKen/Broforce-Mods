@@ -10,6 +10,7 @@ $presentationSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $p
 $collectSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorkshopPickup.cs')
 $doodadSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldDoodads.cs')
 $registrationSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldRegistration.cs')
+$reflectionSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.Reflection.cs')
 $statusSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldPersistentStatus.cs')
 $effectSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldPersistentEffects.cs')
 
@@ -28,6 +29,10 @@ function Read-Declaration([string]$source, [string]$signature) {
 }
 
 $declarations = @(
+    Read-Declaration $reflectionSource 'private static MethodInfo GetPatchMethod('
+    Read-Declaration $worldSource 'private static bool AcceptWorldRpc('
+    Read-Declaration $worldSource 'private static bool IsWorldRpcOwner('
+    Read-Declaration $worldSource 'private static bool IsWorldRpcObject('
     Read-Declaration $worldSource 'private enum WorldFlags'
     Read-Declaration $worldSource 'private sealed class WorldSnapshot'
     Read-Declaration $worldSource 'private static bool WorldCriticalChanged('
@@ -69,7 +74,6 @@ $declarations = @(
     Read-Declaration $worldSource 'private static void WorldMovementFinalizer('
     Read-Declaration $presentationSource 'private sealed class WorldHitPresentation'
     Read-Declaration $presentationSource 'private static bool HasPlainWorldDamage('
-    Read-Declaration $presentationSource 'private static void PresentWorldHit('
     Read-Declaration $presentationSource 'private static void PresentWorldHitDirected('
     Read-Declaration $presentationSource 'private static void HideWorldHitRenderers('
     Read-Declaration $presentationSource 'private static void ShowWorldPredictedCorpse('
@@ -248,6 +252,7 @@ public class Block:BroforceObject {
 public class DirtBlock:Block { public void ShowBrokenBackground() { backgroundMesh=new BlockPiece(); } }
 public class Projectile:BroforceObject { public int Hits,NewPlayer; public float Delay; public void Damage(int d,DamageType t,float vx,float vy,float delay,int player) { Hits++;Delay=delay;NewPlayer=player; } }
 public class Grenade:BroforceObject { }
+public class RemoteControlExplosiveCar:Grenade { }
 public class Mine:BroforceObject {
  public bool exploded,detonated;public int Starts,ImmediateExplosions; public Action ExplosionAction;
  public void Detonate(bool immediate) { if(!detonated){detonated=true;Starts++;}if(immediate&&!exploded){ImmediateExplosions++;exploded=true;} }
@@ -320,7 +325,7 @@ namespace CustomMapMultiplayer {
   private static Dictionary<int,byte> WorldPresentedHitEffects=new Dictionary<int,byte>();
   private static Dictionary<Type,bool> WorldPlainDamageTypes=new Dictionary<Type,bool>();
   private static FieldInfo WorldGibThreshold=typeof(Threshold).GetField("Value");
-  private static FieldInfo WorldFrozenTime=typeof(Threshold).GetField("Frozen");
+  private static FieldInfo WorldFrozen=typeof(Threshold).GetField("Frozen");
   private static FieldInfo WorldBlockBackground=typeof(Block).GetField("backgroundMesh");
   private class Threshold { public static int Value=-10; public static float Frozen=0; }
   private static MethodInfo WorldDeathSound=typeof(TestVanDammeAnim).GetMethod("Sound"),WorldBlockDeathSound=typeof(Block).GetMethod("Sound"),WorldCrateMakeEffects=typeof(CrateBlock).GetMethod("MakeEffects");
@@ -540,28 +545,28 @@ namespace CustomMapMultiplayer {
    Time.unscaledTime=11; WorldPickupUpdatePrefix(p); Check(p.X==100 && p.Y==50,"pickup interpolation stops at the latest authoritative sample");
    var corpse=new MookTrooper { Nid=new NID(new SID(20),PID.TargetServer,80,3) };
    int fatal=BeginWorldHitPresentation(corpse,DamageType.Explosion,100,200,true);
-   PresentWorldHit(corpse,fatal,3,DamageType.Explosion,100,200,0);
+   PresentWorldHitDirected(corpse,fatal,3,DamageType.Explosion,100,200,1,0);
    Check(Corpses==1 && corpse.health==3 && corpse.actionState==ActionState.Idle && corpse.DamageCalls==0,"death presentation must be immediate without changing gameplay health or running Death");
    Check((Entry.Presentation.Flags&WorldFlags.Dead)!=0 && _worldApplying==0,"corpse presentation tracks terminal feedback and unwinds isolation");
    FinishWorldHitPresentation(Entry,new WorldSnapshot { Health=3 });
    Check(Entry.Presentation==null && Entry.PresentedFlags==0,"denied lethal prediction restores live presentation");
    fatal=BeginWorldHitPresentation(corpse,DamageType.Explosion,100,200,true);
-   PresentWorldHit(corpse,fatal,14,DamageType.Explosion,100,200,0);
+   PresentWorldHitDirected(corpse,fatal,14,DamageType.Explosion,100,200,1,0);
    Check(Gibs==1 && !corpse.Renderers[0].enabled && corpse.health==3,"gibs hide original visual without destroying registered target");
-   PresentWorldHit(corpse,fatal,14,DamageType.Explosion,100,200,0);
+   PresentWorldHitDirected(corpse,fatal,14,DamageType.Explosion,100,200,1,0);
    Check(Gibs==1,"repeated pending hits do not replay gibs");
    FinishWorldHitPresentation(Entry,new WorldSnapshot { Flags=WorldFlags.Removed|WorldFlags.Gibbed });
    Check((Entry.PresentedFlags&WorldFlags.Gibbed)!=0 && !corpse.Renderers[0].enabled,"confirmed gibs retain deduplication until removal");
    var correction=new MookTrooper { Nid=new NID(new SID(20),PID.TargetServer,84,3) };
    int corrected=BeginWorldHitPresentation(correction,DamageType.Explosion,100,200,true);
-   PresentWorldHit(correction,corrected,14,DamageType.Explosion,100,200,0);
+   PresentWorldHitDirected(correction,corrected,14,DamageType.Explosion,100,200,1,0);
    Check(WaitForWorldGibConfirmation(Entry,new WorldSnapshot { Flags=WorldFlags.Dead }),"older corpse state waits for the newer predicted gib acknowledgement");
    Check(!WaitForWorldGibConfirmation(Entry,new WorldSnapshot { Flags=WorldFlags.Dead|WorldFlags.Gibbed|WorldFlags.Removed }),"matching gib removal can finish immediately without replaying gibs");
    FinishWorldHitPresentation(Entry,new WorldSnapshot { Flags=WorldFlags.Dead });
    Check(correction.Renderers[0].enabled && (Entry.PresentedFlags&WorldFlags.Gibbed)==0,"owner corpse correction restores renderer without suppressing a future real gib");
    var deadBody=new MookTrooper { Nid=new NID(new SID(20),PID.TargetServer,83,3),health=0,actionState=ActionState.Dead };
    int corpseHit=BeginWorldHitPresentation(deadBody,DamageType.Explosion,100,200,true);
-   PresentWorldHit(deadBody,corpseHit,14,DamageType.Explosion,100,200,0);
+   PresentWorldHitDirected(deadBody,corpseHit,14,DamageType.Explosion,100,200,1,0);
    Check(corpseHit!=0 && Gibs==3 && deadBody.health==0 && !deadBody.destroyed,"hitting an existing corpse presents gibs without local destruction");
    Check(!WorldMovementPrefix(deadBody,out movement) && !movement,"pending corpse movement cannot trigger another local gib or explosion");
    var armoured=new MookArmouredGuy { Nid=new NID(new SID(20),PID.TargetServer,85,3) };
@@ -594,19 +599,19 @@ namespace CustomMapMultiplayer {
    Check(ConfirmedDisarms==1,"repeated confirmation cannot disarm again");
    var closed=new BossBlockPieceSheathed { Nid=new NID(new SID(20),PID.TargetServer,87,3) };
    int bossHit=BeginWorldHitPresentation(closed,DamageType.Explosion,0,0,false);
-   PresentWorldHit(closed,bossHit,14,DamageType.Explosion,0,0,2);
+   PresentWorldHitDirected(closed,bossHit,14,DamageType.Explosion,0,0,1,2);
    Check(closed.hurtTime==0 && closed.health==3,"closed boss part cannot show damage");
-   closed.indestructible=false; PresentWorldHit(closed,bossHit,14,DamageType.Explosion,0,0,2);
+   closed.indestructible=false; PresentWorldHitDirected(closed,bossHit,14,DamageType.Explosion,0,0,1,2);
    Check(closed.hurtTime==.05f && closed.health==3 && !closed.IsDead,"open boss part flashes without predicting death or stage");
    closed.hurtTime=0; closed.ignoreDamageWhileOtherPieceAlive=new BossBlockPiece();
-   PresentWorldHit(closed,bossHit,14,DamageType.Explosion,0,0,2);
+   PresentWorldHitDirected(closed,bossHit,14,DamageType.Explosion,0,0,1,2);
    Check(closed.hurtTime==0,"living armour piece closes the weak point");
    var battery=new BossBlockWeapon { Nid=new NID(new SID(20),PID.TargetServer,89,3),enabled=false,indestructible=true };
    bossHit=BeginWorldHitPresentation(battery,DamageType.Explosion,0,0,false);
-   PresentWorldHit(battery,bossHit,14,DamageType.Explosion,0,0,2);
+   PresentWorldHitDirected(battery,bossHit,14,DamageType.Explosion,0,0,1,2);
    Check(!battery.enabled && battery.hurtTime==0 && battery.GetComponent<Renderer>().sharedMaterial!=battery.hurtMaterial,"sheathed weapon does not flash or enable");
    battery.indestructible=false;
-   PresentWorldHit(battery,bossHit,14,DamageType.Explosion,0,0,2);
+   PresentWorldHitDirected(battery,bossHit,14,DamageType.Explosion,0,0,1,2);
    Check(battery.enabled && battery.hurtTime==.05f && battery.GetComponent<Renderer>().sharedMaterial==battery.hurtMaterial && battery.health==3,"disabled boss weapon resumes native flash expiry without applying damage");
    var bossPiece=new BossPiece(); var bossState=new WorldSnapshot { BossDamaged=true };
    ApplyWorldSpecialHitState(bossPiece,bossState);
@@ -668,7 +673,7 @@ namespace CustomMapMultiplayer {
    Check(mechWeapon.DamageCalls==0 && mechWeapon.health==3,"repeated weapon terminal confirmation does not settle damage");
    Check(BeginWorldHitPresentation(tank,DamageType.Explosion,0,0,false)==0,"invulnerable non-TVD boss has no prediction");
    tank.invulnerable=false; bossHit=BeginWorldHitPresentation(tank,DamageType.Explosion,0,0,false);
-   PresentWorldHit(tank,bossHit,14,DamageType.Explosion,0,0,0);
+   PresentWorldHitDirected(tank,bossHit,14,DamageType.Explosion,0,0,1,0);
    Check(tank.Flashes==1 && tank.health==3 && tank.DamageCalls==0,"native boss flash never executes Damage");
    var relay=new DamageRelay { unit=tank,immunity=DamageType.Melee,forceDamageType=DamageType.Bullet };
    var contactObject=new GameObject { relay=relay }; DamageType routedType;
@@ -681,14 +686,14 @@ namespace CustomMapMultiplayer {
    var box=new CrateBlock { Nid=new NID(new SID(20),PID.TargetServer,81,3), X=800,Y=144,containsPresent=true };
    var loot=new Pickupable { Nid=new NID(new SID(20),PID.TargetServer,82,3) }; box.Hold(loot);
    int broken=BeginWorldHitPresentation(box,DamageType.Explosion,0,200,true);
-   PresentWorldHit(box,broken,30,DamageType.Explosion,0,200,2);
+   PresentWorldHitDirected(box,broken,30,DamageType.Explosion,0,200,1,2);
    var boxEntry=WorldEntries[box.Nid];
    Check(EffectsController.Debris==3 && !box.Renderers[0].enabled && !box.destroyed && box.health==3,"crate debris and disappearance precede confirmation without collapsing gameplay state");
    Check(loot.Launches==1 && box.Rewards==0 && loot.gameObject.activeSelf && !box.HasPickup,"prediction reveals only the existing registered drop");
    Check(WorldPickupUpdatePrefix(loot) && loot.pickupDelay>=1,"predicted drop moves every frame while collection awaits owner");
    FinishWorldHitPresentation(boxEntry,new WorldSnapshot { Health=3 });
    Check(box.Renderers[0].enabled && box.HasPickup && !loot.gameObject.activeSelf && WorldEntries[loot.Nid].Presentation==null,"rejected crate prediction restores renderer and hidden drop");
-   broken=BeginWorldHitPresentation(box,DamageType.Explosion,0,200,true); PresentWorldHit(box,broken,30,DamageType.Explosion,0,200,2);
+   broken=BeginWorldHitPresentation(box,DamageType.Explosion,0,200,true); PresentWorldHitDirected(box,broken,30,DamageType.Explosion,0,200,1,2);
    FinishWorldHitPresentation(boxEntry,new WorldSnapshot { Flags=WorldFlags.Destroyed });
    Check(!WorldBlockPresentationEffectPrefix(box,typeof(CrateBlock).GetMethod("MakeEffects")) && box.Rewards==1 && _worldSuppressCrateDebris==0,"confirmed collapse releases rewards once and omits predicted debris");
    var cage=new Block { Nid=new NID(new SID(20),PID.TargetServer,93,4) };
@@ -699,14 +704,14 @@ namespace CustomMapMultiplayer {
    var cageBar=new Renderer { transform=new Transform(null) { parent=cage.transform } };
    cage.Renderers=new[] { cage.Renderers[0],cageBar,hostage.Renderers[0],bubble,hiddenGun };
    int cageHit=BeginWorldHitPresentation(cage,DamageType.Explosion,0,200,true);
-   PresentWorldHit(cage,cageHit,30,DamageType.Explosion,0,200,2);
+   PresentWorldHitDirected(cage,cageHit,30,DamageType.Explosion,0,200,1,2);
    var cageEntry=WorldEntries[cage.Nid];
    Check(!cage.Renderers[0].enabled && !cageBar.enabled && cageEntry.Presentation.Hidden.Length==2,"cage prediction hides the shell and bars only");
    Check(hostage.Renderers[0].enabled && bubble.enabled && !hiddenGun.enabled,"registered captive and rescue bubble retain visibility during cage prediction");
    hostage.transform.parent=null; FinishWorldHitPresentation(cageEntry,new WorldSnapshot { Flags=WorldFlags.Destroyed });
    Check(hostage.Renderers[0].enabled && bubble.enabled && !hiddenGun.enabled && !cageBar.enabled,"confirmed cage destruction preserves the detached captive and its original hidden gun");
    cage.Renderers[0].enabled=true; cageBar.enabled=true; hostage.transform.parent=cage.transform;
-   cageHit=BeginWorldHitPresentation(cage,DamageType.Explosion,0,200,true); PresentWorldHit(cage,cageHit,30,DamageType.Explosion,0,200,2);
+   cageHit=BeginWorldHitPresentation(cage,DamageType.Explosion,0,200,true); PresentWorldHitDirected(cage,cageHit,30,DamageType.Explosion,0,200,1,2);
    FinishWorldHitPresentation(cageEntry,new WorldSnapshot { Health=3 });
    Check(cage.Renderers[0].enabled && cageBar.enabled && hostage.Renderers[0].enabled && bubble.enabled && !hiddenGun.enabled,"rejected cage prediction restores only its own renderers");
    RunMutationChecks();

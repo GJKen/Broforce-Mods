@@ -15,15 +15,8 @@ namespace CustomMapMultiplayer
             var actionType = AccessTools.TypeByName("LevelEventAction");
             var actionMethod = actionType == null
                 ? null
-                : actionType.GetMethod(
-                    "Start",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    Type.EmptyTypes,
-                    null);
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "LevelEventActionStartPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+                : GetInstanceMethod(actionType, "Start");
+            var prefixMethod = GetPatchMethod("LevelEventActionStartPrefix");
             if (actionMethod == null || prefixMethod == null)
             {
                 DiagnosticLog.Warning(
@@ -54,15 +47,8 @@ namespace CustomMapMultiplayer
 
         private static void PatchWorkshopOutcomeReentryGuard()
         {
-            var method = typeof(GameModeController).GetMethod(
-                "DetermineLevelOutcome",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "DetermineLevelOutcomePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var method = GetInstanceMethod(typeof(GameModeController), "DetermineLevelOutcome");
+            var prefixMethod = GetPatchMethod("DetermineLevelOutcomePrefix");
             if (method == null || prefixMethod == null)
             {
                 DiagnosticLog.Warning(

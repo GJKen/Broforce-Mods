@@ -39,15 +39,11 @@ namespace CustomMapMultiplayer
                 : _onlinePlayerNameTextField.FieldType.GetProperty(
                     "supportRichText",
                     BindingFlags.Public | BindingFlags.Instance);
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "OnlinePlayerListItemNamePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var prefixMethod = GetPatchMethod("OnlinePlayerListItemNamePrefix");
             var steamNamesMethod = typeof(SteamLayer).GetMethod(
                 "GetAllOnlinePlayerNames",
                 BindingFlags.NonPublic | BindingFlags.Instance);
-            var steamNamesPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "SteamOnlinePlayerNamesPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var steamNamesPrefix = GetPatchMethod("SteamOnlinePlayerNamesPrefix");
             if (setter == null || _onlinePlayerNameTextField == null ||
                 _onlinePlayerRichTextProperty == null || prefixMethod == null ||
                 steamNamesMethod == null || steamNamesPrefix == null)
@@ -235,21 +231,12 @@ namespace CustomMapMultiplayer
 
         private static void PatchOnlineAfkPrevention()
         {
-            var updateMethod = typeof(Player).GetMethod(
-                "Update",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
+            var updateMethod = GetInstanceMethod(typeof(Player), "Update");
             var idleTimerField = typeof(Player).GetField(
                 "idleTimer",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "PlayerUpdateAfkPreventionPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "PlayerUpdateAfkDiagnosticsPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var prefixMethod = GetPatchMethod("PlayerUpdateAfkPreventionPrefix");
+            var postfixMethod = GetPatchMethod("PlayerUpdateAfkDiagnosticsPostfix");
             if (updateMethod == null || idleTimerField == null ||
                 prefixMethod == null || postfixMethod == null)
             {
@@ -274,12 +261,8 @@ namespace CustomMapMultiplayer
                     null,
                     new[] { typeof(int) },
                     null);
-                var dropoutPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "AfkDropoutRpcPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var dropoutPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                    "AfkDropoutRpcPostfix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var dropoutPrefix = GetPatchMethod("AfkDropoutRpcPrefix");
+                var dropoutPostfix = GetPatchMethod("AfkDropoutRpcPostfix");
                 if (dropoutRpc == null || dropoutPrefix == null || dropoutPostfix == null)
                 {
                     DiagnosticLog.Warning(
@@ -410,12 +393,8 @@ namespace CustomMapMultiplayer
                 AccessTools.TypeByName("GameModeController"),
                 "LevelFinished");
             var controllerRegistrationGuard = FindRequestJoinGameControllerGuard();
-            var bypassGetter = typeof(HarmonyDiagnostics).GetMethod(
-                "ShouldAllowRequestJoinGame",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var controllerGuardBypass = typeof(HarmonyDiagnostics).GetMethod(
-                "ShouldAllowRequestJoinGameController",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var bypassGetter = GetPatchMethod("ShouldAllowRequestJoinGame");
+            var controllerGuardBypass = GetPatchMethod("ShouldAllowRequestJoinGameController");
             if (levelFinishedGetter == null || bypassGetter == null ||
                 controllerRegistrationGuard == null || controllerGuardBypass == null)
             {
@@ -506,9 +485,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "SwitchLevelTranspiler",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var transpilerMethod = GetPatchMethod("SwitchLevelTranspiler");
             try
             {
                 _harmony.Patch(method, null, null, new HarmonyMethod(transpilerMethod), null);
@@ -537,9 +514,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "EnterMissionTranspiler",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var transpilerMethod = GetPatchMethod("EnterMissionTranspiler");
             try
             {
                 _harmony.Patch(method, null, null, new HarmonyMethod(transpilerMethod), null);
@@ -569,9 +544,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "GameStateLoadLevelPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var prefixMethod = GetPatchMethod("GameStateLoadLevelPrefix");
             try
             {
                 _harmony.Patch(method, new HarmonyMethod(prefixMethod), null, null, null);
@@ -734,9 +707,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var prefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "RecieveHeroTypeFromMasterPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var prefixMethod = GetPatchMethod("RecieveHeroTypeFromMasterPrefix");
             try
             {
                 _harmony.Patch(method, new HarmonyMethod(prefixMethod), null, null, null);
@@ -760,9 +731,7 @@ namespace CustomMapMultiplayer
             {
                 try
                 {
-                    var prefix = typeof(HarmonyDiagnostics).GetMethod(
-                        "PreserveWorkshopHeroTypePrefix",
-                        BindingFlags.NonPublic | BindingFlags.Static);
+                    var prefix = GetPatchMethod("PreserveWorkshopHeroTypePrefix");
                     _harmony.Patch(requestMethod, new HarmonyMethod(prefix), null, null, null);
                     DiagnosticLog.Info("Workshop dropout hero-type preservation enabled for the master request path.");
                 }
@@ -786,12 +755,8 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var spawnPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "PreserveWorkshopHeroTypePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var swapBrosSpawnPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "ApplySwapBrosAlwaysChosenSelectionPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var spawnPrefix = GetPatchMethod("PreserveWorkshopHeroTypePrefix");
+            var swapBrosSpawnPrefix = GetPatchMethod("ApplySwapBrosAlwaysChosenSelectionPrefix");
             var swapBrosSpawnHarmonyMethod = new HarmonyMethod(swapBrosSpawnPrefix);
             swapBrosSpawnHarmonyMethod.priority = Priority.Last;
             swapBrosSpawnHarmonyMethod.after = new[] { "Swap Bros Mod" };
@@ -923,9 +888,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "OnlineJoinPromptTranspiler",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var transpilerMethod = GetPatchMethod("OnlineJoinPromptTranspiler");
             try
             {
                 _harmony.Patch(method, null, null, new HarmonyMethod(transpilerMethod), null);
@@ -940,9 +903,9 @@ namespace CustomMapMultiplayer
         private static IEnumerable<CodeInstruction> OnlineJoinPromptTranspiler(
             IEnumerable<CodeInstruction> instructions)
         {
+            var result = new List<CodeInstruction>();
             var primaryController = typeof(Utility.Platforms.Platform).GetMethod("GetPrimaryUserController");
-            var joinController = typeof(HarmonyDiagnostics).GetMethod(
-                "GetOnlineJoinPromptController", BindingFlags.NonPublic | BindingFlags.Static);
+            var joinController = GetPatchMethod("GetOnlineJoinPromptController");
             foreach (var instruction in instructions)
             {
                 if (instruction.Calls(primaryController))
@@ -950,8 +913,9 @@ namespace CustomMapMultiplayer
                     instruction.opcode = OpCodes.Call;
                     instruction.operand = joinController;
                 }
-                yield return instruction;
+                result.Add(instruction);
             }
+            return result;
         }
 
         private static void PatchMainMenuInitializationPostfix()
@@ -959,21 +923,14 @@ namespace CustomMapMultiplayer
             var type = AccessTools.TypeByName("MainMenu");
             var method = type == null
                 ? null
-                : type.GetMethod(
-                    "InitializeMenu",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    Type.EmptyTypes,
-                    null);
+                : GetInstanceMethod(type, "InitializeMenu");
             if (method == null)
             {
                 DiagnosticLog.Warning("Workshop lobby return target not found: MainMenu.InitializeMenu.");
                 return;
             }
 
-            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "MainMenuInitializeMenuPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var postfixMethod = GetPatchMethod("MainMenuInitializeMenuPostfix");
             try
             {
                 _harmony.Patch(method, null, new HarmonyMethod(postfixMethod), null, null);
@@ -1021,9 +978,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var transpilerMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "MainMenuInitializationDelayTranspiler",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var transpilerMethod = GetPatchMethod("MainMenuInitializationDelayTranspiler");
             try
             {
                 _harmony.Patch(moveNext, null, null, new HarmonyMethod(transpilerMethod), null);
@@ -1041,9 +996,7 @@ namespace CustomMapMultiplayer
             IEnumerable<CodeInstruction> instructions)
         {
             var result = new List<CodeInstruction>(instructions);
-            var getter = typeof(HarmonyDiagnostics).GetMethod(
-                "GetMainMenuInitializationDelay",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var getter = GetPatchMethod("GetMainMenuInitializationDelay");
             var replaced = false;
 
             for (var index = 0; index < result.Count; index++)
@@ -1079,21 +1032,14 @@ namespace CustomMapMultiplayer
             var lobbyType = AccessTools.TypeByName("Lobby");
             var method = lobbyType == null
                 ? null
-                : lobbyType.GetMethod(
-                    "GoBackToMainMenu",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    Type.EmptyTypes,
-                    null);
+                : GetInstanceMethod(lobbyType, "GoBackToMainMenu");
             if (method == null)
             {
                 DiagnosticLog.Warning("MainMenu return layout target not found: Lobby.GoBackToMainMenu.");
                 return;
             }
 
-            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "LobbyGoBackToMainMenuPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var postfixMethod = GetPatchMethod("LobbyGoBackToMainMenuPrefix");
             try
             {
                 _harmony.Patch(method, new HarmonyMethod(postfixMethod), null, null, null);
@@ -1141,9 +1087,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "MainMenuShowRoutineMoveNextPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var postfixMethod = GetPatchMethod("MainMenuShowRoutineMoveNextPostfix");
             try
             {
                 _harmony.Patch(moveNext, null, new HarmonyMethod(postfixMethod), null, null);
@@ -1169,9 +1113,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var postfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "MainMenuMenuActiveSetterPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var postfixMethod = GetPatchMethod("MainMenuMenuActiveSetterPostfix");
             try
             {
                 _harmony.Patch(setter, null, new HarmonyMethod(postfixMethod), null, null);

@@ -202,27 +202,27 @@ namespace CustomMapMultiplayer
                 ? 0f
                 : (float)(_frameTotalMilliseconds / _frameCount);
             var builder = new StringBuilder(1200);
-            builder.Append("PERF_SUMMARY reason=");
-            builder.Append(reason);
-            builder.Append("; buildHash=");
-            builder.Append(BuildMetadata.BuildHash);
-            builder.Append("; sessionId=");
-            builder.Append(SanitizeToken(DiagnosticLog.SessionId));
-            builder.Append("; role=");
-            builder.Append(SanitizeToken(HarmonyDiagnostics.GetTelemetryNetworkRole()));
-            builder.Append("; scene=");
-            builder.Append(SanitizeToken(SceneManager.GetActiveScene().name));
-            builder.Append("; frameCount=");
-            builder.Append(_frameCount);
-            builder.Append("; frameAvgMs=");
-            builder.Append(frameAverage.ToString("0.###", CultureInfo.InvariantCulture));
-            builder.Append("; frameP50Ms=");
-            builder.Append(GetFramePercentile(0.50).ToString("0.###", CultureInfo.InvariantCulture));
-            builder.Append("; frameP95Ms=");
-            builder.Append(GetFramePercentile(0.95).ToString("0.###", CultureInfo.InvariantCulture));
-            builder.Append("; frameP99Ms=");
-            builder.Append(GetFramePercentile(0.99).ToString("0.###", CultureInfo.InvariantCulture));
-            builder.Append("; frameHist=");
+            builder.Append("PERF_SUMMARY reason=")
+                .Append(reason)
+                .Append("; buildHash=")
+                .Append(BuildMetadata.BuildHash)
+                .Append("; sessionId=")
+                .Append(SanitizeToken(DiagnosticLog.SessionId))
+                .Append("; role=")
+                .Append(SanitizeToken(HarmonyDiagnostics.GetTelemetryNetworkRole()))
+                .Append("; scene=")
+                .Append(SanitizeToken(SceneManager.GetActiveScene().name))
+                .Append("; frameCount=")
+                .Append(_frameCount)
+                .Append("; frameAvgMs=")
+                .Append(frameAverage.ToString("0.###", CultureInfo.InvariantCulture))
+                .Append("; frameP50Ms=")
+                .Append(GetFramePercentile(0.50).ToString("0.###", CultureInfo.InvariantCulture))
+                .Append("; frameP95Ms=")
+                .Append(GetFramePercentile(0.95).ToString("0.###", CultureInfo.InvariantCulture))
+                .Append("; frameP99Ms=")
+                .Append(GetFramePercentile(0.99).ToString("0.###", CultureInfo.InvariantCulture))
+                .Append("; frameHist=");
             AppendFrameHistogram(builder);
 
             AppendMetric(builder, PerformanceMetric.AcidAuthority, "acidAuthority");
@@ -276,10 +276,10 @@ namespace CustomMapMultiplayer
 
         private static void AppendField(StringBuilder builder, string name, string value)
         {
-            builder.Append("; ");
-            builder.Append(name);
-            builder.Append('=');
-            builder.Append(value);
+            builder.Append("; ")
+                .Append(name)
+                .Append('=')
+                .Append(value);
         }
 
         private static void AppendFrameHistogram(StringBuilder builder)
@@ -297,9 +297,9 @@ namespace CustomMapMultiplayer
                     builder.Append(',');
                 }
 
-                builder.Append(index);
-                builder.Append(':');
-                builder.Append(FrameHistogram[index]);
+                builder.Append(index)
+                    .Append(':')
+                    .Append(FrameHistogram[index]);
                 wroteBin = true;
             }
         }

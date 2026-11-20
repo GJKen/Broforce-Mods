@@ -37,6 +37,17 @@ namespace CustomMapMultiplayer
             internal string Error;
         }
 
+        private static MethodInfo GetPatchMethod(string name)
+        {
+            return typeof(HarmonyDiagnostics).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
+        }
+
+        internal static MethodInfo GetInstanceMethod(Type type, string name)
+        {
+            return type.GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null, Type.EmptyTypes, null);
+        }
+
         private static Type GetConnectTypeCached()
         {
             if (_connectTypeCache == null)
@@ -134,25 +145,6 @@ namespace CustomMapMultiplayer
             return property == null || !property.CanRead
                 ? null
                 : property.GetValue(instance, null);
-        }
-
-        private static MethodInfo FindSteamMatchmakingMethod(Type type, string name, int parameterCount)
-        {
-            if (type == null)
-            {
-                return null;
-            }
-
-            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-            foreach (var method in methods)
-            {
-                if (method.Name == name && method.GetParameters().Length == parameterCount)
-                {
-                    return method;
-                }
-            }
-
-            return null;
         }
 
         private static RoomInfo GetCurrentRoom()
@@ -408,29 +400,7 @@ namespace CustomMapMultiplayer
 
         private static int GetIntFieldOrProperty(object instance, string name)
         {
-            if (instance == null)
-            {
-                return 0;
-            }
-
-            var type = instance.GetType();
-            var field = type.GetField(
-                name,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            if (field != null)
-            {
-                return Convert.ToInt32(field.GetValue(instance));
-            }
-
-            var property = type.GetProperty(
-                name,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            if (property != null && property.CanRead)
-            {
-                return Convert.ToInt32(property.GetValue(instance, null));
-            }
-
-            return 0;
+            return Convert.ToInt32(GetFieldOrPropertyValue(instance, name));
         }
 
         private static bool GetBoolFieldOrProperty(object instance, string name)

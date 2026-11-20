@@ -620,14 +620,14 @@ namespace CustomMapMultiplayer
                     builder.Append(",");
                 }
 
-                builder.Append(index);
-                builder.Append("{playing=");
-                builder.Append(playersPlaying[index]);
-                builder.Append(";player=");
-                builder.Append(HeroController.players[index] == null ? "null" : "present");
-                builder.Append(";controller=");
-                builder.Append(HeroController.playerControllerIDs[index]);
-                builder.Append("}");
+                builder.Append(index)
+                    .Append("{playing=")
+                    .Append(playersPlaying[index])
+                    .Append(";player=")
+                    .Append(HeroController.players[index] == null ? "null" : "present")
+                    .Append(";controller=")
+                    .Append(HeroController.playerControllerIDs[index])
+                    .Append("}");
             }
 
             return builder.ToString();

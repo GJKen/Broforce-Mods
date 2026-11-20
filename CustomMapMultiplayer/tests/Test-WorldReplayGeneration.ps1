@@ -3,6 +3,10 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 [xml]$props = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'LocalBroforcePath.props')
 $harmonyPath = Join-Path $props.Project.PropertyGroup.UnityModManagerPath '0Harmony.dll'
+$worldSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldState.cs')
+$reflectionSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.Reflection.cs')
+$patchHelpers = ([regex]::Matches(($worldSource + [Environment]::NewLine + $reflectionSource), '(?ms)^        private static (?:void PatchWorldMethod\(|HarmonyMethod WorldPatch\(|MethodInfo GetPatchMethod\().*?^        }') |
+    ForEach-Object { $_.Value }) -join [Environment]::NewLine
 $fixture = @'
 using System;
 using System.Reflection;
@@ -39,7 +43,7 @@ namespace CustomMapMultiplayer {
   private const BindingFlags WorldFields=BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public;
   private static Harmony _harmony=new Harmony("cmm.replay-generation.regression");
   private static class DiagnosticLog { public static void Info(string text) { } }
-  private static void PatchWorldMethod(MethodBase method,string prefix,string postfix) { _harmony.Patch(method,new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(prefix,BindingFlags.NonPublic|BindingFlags.Static)),null,null,null); }
+__PATCH_HELPERS__
   private static int Checks;
   private static void Check(bool ok,string text) { Checks++;if(!ok)throw new Exception(text); }
   public static void Main() {
@@ -64,6 +68,7 @@ namespace CustomMapMultiplayer {
  }
 }
 '@
+$fixture = $fixture.Replace('__PATCH_HELPERS__', $patchHelpers)
 $temporaryPath = Join-Path $PSScriptRoot ('world-replay-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temporaryPath | Out-Null
 try {

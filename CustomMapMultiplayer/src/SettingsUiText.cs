@@ -48,7 +48,6 @@ namespace CustomMapMultiplayer
         internal string WorkshopStatusRefreshingDetail;
         internal string WorkshopStatusEmptyKicker;
         internal string WorkshopStatusEmpty;
-        internal string WorkshopStatusEmptyDetail;
         internal string WorkshopStatusUnavailableKicker;
         internal string WorkshopStatusUnavailable;
         internal string WorkshopStatusUnavailableDetail;
@@ -73,7 +72,6 @@ namespace CustomMapMultiplayer
         internal string WorkshopMapManualSelection;
         internal string WorkshopMapNoSelection;
         internal string WorkshopMapEnterId;
-        internal string WorkshopMapEmpty;
         internal string WorkshopMapTitleLoading;
         internal string WorkshopMapTitleUnavailable;
         internal string WorkshopManualIdHelpReady;
@@ -164,7 +162,6 @@ namespace CustomMapMultiplayer
             WorkshopStatusRefreshingDetail = "Workshop titles can be filled in after Steam details finish loading.",
             WorkshopStatusEmptyKicker = "No subscribed Workshop items",
             WorkshopStatusEmpty = "{subscribed} subscribed items returned.",
-            WorkshopStatusEmptyDetail = "",
             WorkshopStatusUnavailableKicker = "Workshop data unavailable",
             WorkshopStatusUnavailable = "The local Workshop list could not be read.",
             WorkshopStatusUnavailableDetail = "Manual Workshop ID input remains available.",
@@ -189,7 +186,6 @@ namespace CustomMapMultiplayer
             WorkshopMapManualSelection = "Manual Workshop ID",
             WorkshopMapNoSelection = "Workshop ID is empty",
             WorkshopMapEnterId = "",
-            WorkshopMapEmpty = "No subscribed Workshop items. Enter a Workshop ID manually above.",
             WorkshopMapTitleLoading = "Loading Workshop title",
             WorkshopMapTitleUnavailable = "Workshop title unavailable",
             WorkshopManualIdHelpReady = "Enter a numeric ID directly, or choose a subscribed map.",
@@ -289,7 +285,6 @@ namespace CustomMapMultiplayer
             WorkshopStatusRefreshingDetail = "Steam 详情加载完成后可以补充 Workshop 标题。",
             WorkshopStatusEmptyKicker = "没有已订阅 Workshop 项目",
             WorkshopStatusEmpty = "已订阅 {subscribed} 项。",
-            WorkshopStatusEmptyDetail = "",
             WorkshopStatusUnavailableKicker = "Workshop 数据不可用",
             WorkshopStatusUnavailable = "无法读取本机 Workshop 列表。",
             WorkshopStatusUnavailableDetail = "仍可手工输入 Workshop ID。",
@@ -314,7 +309,6 @@ namespace CustomMapMultiplayer
             WorkshopMapManualSelection = "手工 Workshop ID",
             WorkshopMapNoSelection = "Workshop ID 当前为空",
             WorkshopMapEnterId = "",
-            WorkshopMapEmpty = "没有已订阅 Workshop 项目。请在上方手工输入 Workshop ID。",
             WorkshopMapTitleLoading = "正在读取 Workshop 标题",
             WorkshopMapTitleUnavailable = "Workshop 标题不可用",
             WorkshopManualIdHelpReady = "直接输入数字 ID，或从已订阅地图中选择。",

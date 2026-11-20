@@ -137,12 +137,7 @@ namespace CustomMapMultiplayer
                 return;
             }
 
-            var target = typeof(Utility.Platforms.Platform).GetMethod(
-                "GetConnectionLayer",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
+            var target = HarmonyDiagnostics.GetInstanceMethod(typeof(Utility.Platforms.Platform), "GetConnectionLayer");
             var prefix = typeof(FrpDirectNetworkManager).GetMethod(
                 "GetConnectionLayerPrefix",
                 BindingFlags.NonPublic | BindingFlags.Static);

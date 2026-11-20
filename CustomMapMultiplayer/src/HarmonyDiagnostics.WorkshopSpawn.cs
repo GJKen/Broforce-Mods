@@ -452,9 +452,9 @@ namespace CustomMapMultiplayer
                         rebroadcastPositions.Append(",");
                     }
 
-                    rebroadcastPositions.Append(index);
-                    rebroadcastPositions.Append("=");
-                    rebroadcastPositions.Append(FormatVector3(spawnPosition));
+                    rebroadcastPositions.Append(index)
+                        .Append("=")
+                        .Append(FormatVector3(spawnPosition));
 
                     Networking.Networking.RPC<
                         TestVanDammeAnim,

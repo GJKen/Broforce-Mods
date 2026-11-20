@@ -70,10 +70,8 @@ namespace CustomMapMultiplayer
                     var found = false;
                     for (var i = 0; i < code.Count; i++) found |= CanSkipWorldReplayFactory(code, i);
                     if (!found) continue;
-                    _harmony.Patch(method,
-                        new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldReplayGenerationScopePrefix", null, null)),
-                        null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldReplayGenerationTranspiler", null, null)),
-                        new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldReplayGenerationScopeFinalizer", null, null)));
+                    PatchWorldMethod(method, "WorldReplayGenerationScopePrefix", null,
+                        "WorldReplayGenerationTranspiler", "WorldReplayGenerationScopeFinalizer");
                     count++;
                 }
             }
@@ -104,27 +102,29 @@ namespace CustomMapMultiplayer
         private static IEnumerable<CodeInstruction> WorldReplayGenerationTranspiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
         {
             var code = new List<CodeInstruction>(instructions);
+            var result = new List<CodeInstruction>();
             var allow = AccessTools.Method(typeof(HarmonyDiagnostics), "WorldReplayGenerationPrefix", null, null);
             for (var i = 0; i < code.Count; i++)
             {
                 var call = code[i];
-                if (!CanSkipWorldReplayFactory(code, i)) { yield return call; continue; }
+                if (!CanSkipWorldReplayFactory(code, i)) { result.Add(call); continue; }
                 var method = (MethodInfo)call.operand;
                 var run = generator.DefineLabel();
                 var done = generator.DefineLabel();
                 var guard = new CodeInstruction(OpCodes.Call, allow);
                 guard.labels.AddRange(call.labels); call.labels.Clear();
                 guard.blocks.AddRange(call.blocks); call.blocks.Clear();
-                yield return guard;
-                yield return new CodeInstruction(OpCodes.Brtrue, run);
-                foreach (var parameter in method.GetParameters()) yield return new CodeInstruction(OpCodes.Pop, null);
-                if (method.ReturnType != typeof(void)) yield return new CodeInstruction(OpCodes.Ldnull, null);
-                yield return new CodeInstruction(OpCodes.Br, done);
+                result.Add(guard);
+                result.Add(new CodeInstruction(OpCodes.Brtrue, run));
+                foreach (var parameter in method.GetParameters()) result.Add(new CodeInstruction(OpCodes.Pop, null));
+                if (method.ReturnType != typeof(void)) result.Add(new CodeInstruction(OpCodes.Ldnull, null));
+                result.Add(new CodeInstruction(OpCodes.Br, done));
                 call.labels.Add(run);
-                yield return call;
+                result.Add(call);
                 var end = new CodeInstruction(OpCodes.Nop, null); end.labels.Add(done);
-                yield return end;
+                result.Add(end);
             }
+            return result;
         }
     }
 }

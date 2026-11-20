@@ -1510,18 +1510,28 @@ namespace CustomMapMultiplayer
             return _settingsNavigationPanelStyle;
         }
 
+        private static GUIStyle CreateSettingsPanelStyle(
+            ref Texture2D background,
+            Color color,
+            RectOffset padding)
+        {
+            var style = new GUIStyle(GUI.skin.box);
+            style.normal.background = GetSettingsSolidBackground(ref background, color);
+            style.border = new RectOffset(7, 7, 7, 7);
+            style.padding = padding;
+            style.margin.left = 0;
+            style.margin.right = 0;
+            return style;
+        }
+
         private static GUIStyle GetSettingsContentPanelStyle()
         {
             if (_settingsContentPanelStyle == null)
             {
-                _settingsContentPanelStyle = new GUIStyle(GUI.skin.box);
-                _settingsContentPanelStyle.normal.background = GetSettingsSolidBackground(
+                _settingsContentPanelStyle = CreateSettingsPanelStyle(
                     ref _settingsContentPanelBackground,
-                    SettingsContentPanelColor);
-                _settingsContentPanelStyle.border = new RectOffset(7, 7, 7, 7);
-                _settingsContentPanelStyle.padding = new RectOffset(14, 14, 12, 14);
-                _settingsContentPanelStyle.margin.left = 0;
-                _settingsContentPanelStyle.margin.right = 0;
+                    SettingsContentPanelColor,
+                    new RectOffset(14, 14, 12, 14));
             }
             return _settingsContentPanelStyle;
         }
@@ -1555,10 +1565,7 @@ namespace CustomMapMultiplayer
                     GetSettingsSelectedNavigationActiveBackground();
                 _settingsSelectedNavigationStyle.focused.background =
                     GetSettingsSelectedNavigationHoverBackground();
-                _settingsSelectedNavigationStyle.normal.textColor = Color.white;
-                _settingsSelectedNavigationStyle.hover.textColor = Color.white;
-                _settingsSelectedNavigationStyle.active.textColor = Color.white;
-                _settingsSelectedNavigationStyle.focused.textColor = Color.white;
+                ApplySettingsTextColor(_settingsSelectedNavigationStyle, Color.white);
             }
             return _settingsSelectedNavigationStyle;
         }
@@ -1600,44 +1607,15 @@ namespace CustomMapMultiplayer
             Color fillColor,
             Color highlightColor)
         {
-            const int textureSize = 18;
-            const float cornerRadius = 7f;
-            var texture = new Texture2D(textureSize, textureSize, TextureFormat.RGBA32, false);
-            for (var y = 0; y < textureSize; y++)
-            {
-                for (var x = 0; x < textureSize; x++)
-                {
-                    var centerX = x + 0.5f;
-                    var centerY = y + 0.5f;
-                    var distanceX = centerX < cornerRadius
-                        ? cornerRadius - centerX
-                        : centerX > textureSize - cornerRadius
-                            ? centerX - (textureSize - cornerRadius)
-                            : 0f;
-                    var distanceY = centerY < cornerRadius
-                        ? cornerRadius - centerY
-                        : centerY > textureSize - cornerRadius
-                            ? centerY - (textureSize - cornerRadius)
-                            : 0f;
-                    var distanceSquared = distanceX * distanceX + distanceY * distanceY;
-                    if (distanceX > 0f && distanceY > 0f &&
-                        distanceSquared > cornerRadius * cornerRadius)
-                    {
-                        texture.SetPixel(x, y, Color.clear);
-                        continue;
-                    }
+            return CreateSettingsRoundedBackground(fillColor, 18, 7f, highlightColor);
+        }
 
-                    var highlightAmount = y >= textureSize - 4
-                        ? (y - (textureSize - 4) + 1) / 4f
-                        : 0f;
-                    texture.SetPixel(x, y, Color.Lerp(fillColor, highlightColor, highlightAmount));
-                }
-            }
-            texture.Apply();
-            texture.wrapMode = TextureWrapMode.Clamp;
-            texture.filterMode = FilterMode.Bilinear;
-            texture.hideFlags = HideFlags.HideAndDontSave;
-            return texture;
+        private static void ApplySettingsTextColor(GUIStyle style, Color color)
+        {
+            style.normal.textColor = color;
+            style.hover.textColor = color;
+            style.active.textColor = color;
+            style.focused.textColor = color;
         }
 
         private static void ApplySettingsButtonPalette(GUIStyle style)
@@ -1662,10 +1640,7 @@ namespace CustomMapMultiplayer
                 ref _settingsButtonSelectedActiveBackground,
                 SettingsButtonSelectedActiveColor);
             style.onFocused.background = _settingsButtonSelectedHoverBackground;
-            style.normal.textColor = SettingsPrimaryTextColor;
-            style.hover.textColor = SettingsPrimaryTextColor;
-            style.active.textColor = SettingsPrimaryTextColor;
-            style.focused.textColor = SettingsPrimaryTextColor;
+            ApplySettingsTextColor(style, SettingsPrimaryTextColor);
             style.onNormal.textColor = SettingsPrimaryTextColor;
             style.onHover.textColor = SettingsPrimaryTextColor;
             style.onActive.textColor = SettingsPrimaryTextColor;
@@ -1687,19 +1662,25 @@ namespace CustomMapMultiplayer
         {
             if (background == null)
             {
-                background = CreateSettingsRoundedBackground(color, textureSize, cornerRadius);
+                background = CreateSettingsRoundedBackground(color, textureSize, cornerRadius, null);
             }
             return background;
         }
 
         private static Texture2D CreateSettingsRoundedBackground(
-            Color color,
+            Color fillColor,
             int textureSize,
-            float cornerRadius)
+            float cornerRadius,
+            Color? highlightColor)
         {
             var texture = new Texture2D(textureSize, textureSize, TextureFormat.RGBA32, false);
             for (var y = 0; y < textureSize; y++)
             {
+                var color = highlightColor.HasValue
+                    ? Color.Lerp(fillColor, highlightColor.Value, y >= textureSize - 4
+                        ? (y - (textureSize - 4) + 1) / 4f
+                        : 0f)
+                    : fillColor;
                 for (var x = 0; x < textureSize; x++)
                 {
                     var centerX = x + 0.5f;
@@ -1805,10 +1786,7 @@ namespace CustomMapMultiplayer
                     SettingsTextFieldFocusedColor);
                 _settingsTextFieldStyle.focused.background = _settingsTextFieldFocusedBackground;
                 _settingsTextFieldStyle.active.background = _settingsTextFieldFocusedBackground;
-                _settingsTextFieldStyle.normal.textColor = SettingsPrimaryTextColor;
-                _settingsTextFieldStyle.hover.textColor = SettingsPrimaryTextColor;
-                _settingsTextFieldStyle.focused.textColor = SettingsPrimaryTextColor;
-                _settingsTextFieldStyle.active.textColor = SettingsPrimaryTextColor;
+                ApplySettingsTextColor(_settingsTextFieldStyle, SettingsPrimaryTextColor);
                 _settingsTextFieldStyle.border = new RectOffset(7, 7, 7, 7);
                 _settingsTextFieldStyle.fontSize = 13;
                 _settingsTextFieldStyle.fixedHeight = SettingsTextFieldHeight;
@@ -1835,14 +1813,10 @@ namespace CustomMapMultiplayer
         {
             if (_settingsSectionPanelStyle == null)
             {
-                _settingsSectionPanelStyle = new GUIStyle(GUI.skin.box);
-                _settingsSectionPanelStyle.normal.background = GetSettingsSolidBackground(
+                _settingsSectionPanelStyle = CreateSettingsPanelStyle(
                     ref _settingsSectionPanelBackground,
-                    SettingsSectionPanelColor);
-                _settingsSectionPanelStyle.border = new RectOffset(7, 7, 7, 7);
-                _settingsSectionPanelStyle.padding = new RectOffset(12, 12, 10, 12);
-                _settingsSectionPanelStyle.margin.left = 0;
-                _settingsSectionPanelStyle.margin.right = 0;
+                    SettingsSectionPanelColor,
+                    new RectOffset(12, 12, 10, 12));
             }
             return _settingsSectionPanelStyle;
         }

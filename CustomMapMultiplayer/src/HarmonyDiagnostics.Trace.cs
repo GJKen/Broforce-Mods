@@ -74,8 +74,8 @@ namespace CustomMapMultiplayer
             object[] arguments)
         {
             var builder = new StringBuilder();
-            builder.Append(DescribeMethod(method));
-            builder.Append("(");
+            builder.Append(DescribeMethod(method))
+                .Append("(");
 
             var parameters = GetTraceParameters(method);
             for (var index = 0; index < parameters.Length; index++)
@@ -86,8 +86,8 @@ namespace CustomMapMultiplayer
                 }
 
                 var parameter = parameters[index];
-                builder.Append(parameter.Name);
-                builder.Append("=");
+                builder.Append(parameter.Name)
+                    .Append("=");
                 var value = arguments != null && index < arguments.Length ? arguments[index] : null;
                 builder.Append(FormatArgument(parameter.Name, value));
             }
@@ -96,8 +96,8 @@ namespace CustomMapMultiplayer
             var state = BuildSafeObjectSummary(instance);
             if (!string.IsNullOrEmpty(state))
             {
-                builder.Append("; state=");
-                builder.Append(state);
+                builder.Append("; state=")
+                    .Append(state);
             }
 
             return builder.ToString();
@@ -273,11 +273,11 @@ namespace CustomMapMultiplayer
             var builder = new StringBuilder();
             builder.Append(FormatFields(value, PlayerTraceFields));
             builder.Length--;
-            builder.Append(", IsMine=");
-            builder.Append(FormatReadableProperty(value, "IsMine"));
-            builder.Append(", controllerNum=");
-            builder.Append(FormatReadableProperty(value, "controllerNum"));
-            builder.Append(", character=");
+            builder.Append(", IsMine=")
+                .Append(FormatReadableProperty(value, "IsMine"))
+                .Append(", controllerNum=")
+                .Append(FormatReadableProperty(value, "controllerNum"))
+                .Append(", character=");
             var player = value as Player;
             if (player != null && player.character != null)
             {
@@ -325,8 +325,8 @@ namespace CustomMapMultiplayer
         private static string FormatFields(object value, string[] fieldNames)
         {
             var builder = new StringBuilder();
-            builder.Append(value.GetType().Name);
-            builder.Append("{");
+            builder.Append(value.GetType().Name)
+                .Append("{");
             var wroteValue = false;
 
             foreach (var fieldName in fieldNames)
@@ -352,9 +352,9 @@ namespace CustomMapMultiplayer
                     builder.Append(", ");
                 }
 
-                builder.Append(fieldName);
-                builder.Append("=");
-                builder.Append(FormatFieldValue(fieldValue));
+                builder.Append(fieldName)
+                    .Append("=")
+                    .Append(FormatFieldValue(fieldValue));
                 wroteValue = true;
             }
 
@@ -400,10 +400,10 @@ namespace CustomMapMultiplayer
         {
             var builder = new StringBuilder();
             var elementType = array.GetType().GetElementType();
-            builder.Append(elementType == null ? "Array" : elementType.Name);
-            builder.Append("[");
-            builder.Append(array.Length);
-            builder.Append("]{");
+            builder.Append(elementType == null ? "Array" : elementType.Name)
+                .Append("[")
+                .Append(array.Length)
+                .Append("]{");
 
             var maxItems = System.Math.Min(array.Length, 8);
             for (var index = 0; index < maxItems; index++)
@@ -455,19 +455,19 @@ namespace CustomMapMultiplayer
                 {
                     if (index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
                     {
-                        builder.Append(current);
-                        builder.Append(value[++index]);
+                        builder.Append(current)
+                            .Append(value[++index]);
                     }
                     else
                     {
-                        builder.Append("\\u");
-                        builder.Append(((int)current).ToString("X4"));
+                        builder.Append("\\u")
+                            .Append(((int)current).ToString("X4"));
                     }
                 }
                 else if (char.IsLowSurrogate(current))
                 {
-                    builder.Append("\\u");
-                    builder.Append(((int)current).ToString("X4"));
+                    builder.Append("\\u")
+                        .Append(((int)current).ToString("X4"));
                 }
                 else
                 {

@@ -49,18 +49,8 @@ namespace CustomMapMultiplayer
 
         private static void PatchAcidDiagnostics()
         {
-            var nativeCoverInAcidMethod = typeof(TestVanDammeAnim).GetMethod(
-                "CoverInAcid",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            _nativeCoverInAcidRpcMethod = typeof(TestVanDammeAnim).GetMethod(
-                "CoverInAcidRPC",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
+            var nativeCoverInAcidMethod = GetInstanceMethod(typeof(TestVanDammeAnim), "CoverInAcid");
+            _nativeCoverInAcidRpcMethod = GetInstanceMethod(typeof(TestVanDammeAnim), "CoverInAcidRPC");
             var playerHasDiedRpc = typeof(HeroController).GetMethod(
                 "PlayerHasDiedRPC",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
@@ -83,27 +73,13 @@ namespace CustomMapMultiplayer
                     typeof(float)
                 },
                 null);
-            var coverInAcidPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "CoverInAcidDiagnosticsPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var coverInAcidPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "CoverInAcidDiagnosticsPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var coverInAcidRpcPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "CoverInAcidRpcDiagnosticsPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var coverInAcidRpcPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "CoverInAcidRpcDiagnosticsPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var playerHasDiedRpcPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "PlayerHasDiedRpcDiagnosticsPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var playerHasDiedRpcPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "PlayerHasDiedRpcDiagnosticsPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var acidDamagePrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "WorkshopAcidDamageDiagnosticsPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var coverInAcidPrefix = GetPatchMethod("CoverInAcidDiagnosticsPrefix");
+            var coverInAcidPostfix = GetPatchMethod("CoverInAcidDiagnosticsPostfix");
+            var coverInAcidRpcPrefix = GetPatchMethod("CoverInAcidRpcDiagnosticsPrefix");
+            var coverInAcidRpcPostfix = GetPatchMethod("CoverInAcidRpcDiagnosticsPostfix");
+            var playerHasDiedRpcPrefix = GetPatchMethod("PlayerHasDiedRpcDiagnosticsPrefix");
+            var playerHasDiedRpcPostfix = GetPatchMethod("PlayerHasDiedRpcDiagnosticsPostfix");
+            var acidDamagePrefix = GetPatchMethod("WorkshopAcidDamageDiagnosticsPrefix");
             var patchedCount = 0;
             var coverInAcidEntryCount = 0;
             if (nativeCoverInAcidMethod != null && _nativeCoverInAcidRpcMethod != null &&

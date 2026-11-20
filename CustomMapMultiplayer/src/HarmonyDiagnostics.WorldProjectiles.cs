@@ -10,18 +10,18 @@ namespace CustomMapMultiplayer
 {
     internal static partial class HarmonyDiagnostics
     {
-        private sealed class WorldProjectileSpawn
+        private sealed class WorldSpawn
         {
             internal NID Id, Actor;
             internal string Prefab, Type;
             internal int Owner, Player, Seed;
-            internal float X, Y, VX, VY, Offset;
+            internal float X, Y, VX, VY, Offset, Life;
         }
 
-        private static readonly Dictionary<NID, WorldProjectileSpawn> WorldProjectileSpawns =
-            new Dictionary<NID, WorldProjectileSpawn>();
-        private static readonly Dictionary<NID, WorldProjectileSpawn> WorldPendingProjectiles =
-            new Dictionary<NID, WorldProjectileSpawn>();
+        private static readonly Dictionary<NID, WorldSpawn> WorldProjectileSpawns =
+            new Dictionary<NID, WorldSpawn>();
+        private static readonly Dictionary<NID, WorldSpawn> WorldPendingProjectiles =
+            new Dictionary<NID, WorldSpawn>();
         private static readonly Dictionary<string, Projectile> WorldProjectilePrefabs =
             new Dictionary<string, Projectile>();
         private static readonly Dictionary<Type, FieldInfo[]> WorldProjectileFields =
@@ -59,25 +59,21 @@ namespace CustomMapMultiplayer
             PatchWorldMethod(typeof(Projectile).GetMethod("RunLife", WorldFields), "WorldSpearRunLifePrefix", null);
             PatchWorldMethod(AccessTools.Method(typeof(ProjectileController), "SpawnProjectileOverNetwork", null, null), "WorldSpearSyncSpawnPrefix", null);
             var syncUpdate = AccessTools.Method(typeof(SyncController), "Update", null, null);
-            _harmony.Patch(syncUpdate,
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldSpearSyncUpdatePrefix", BindingFlags.NonPublic | BindingFlags.Static)),
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldSpearSyncUpdatePostfix", BindingFlags.NonPublic | BindingFlags.Static)),
-                null,
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldSpearSyncUpdateFinalizer", BindingFlags.NonPublic | BindingFlags.Static)));
+            PatchWorldMethod(syncUpdate, "WorldSpearSyncUpdatePrefix", "WorldSpearSyncUpdatePostfix", null, "WorldSpearSyncUpdateFinalizer");
             foreach (var method in typeof(ProjectileController).GetMethods(BindingFlags.Public | BindingFlags.Static))
                 if (method.Name == "SpawnProjectileLocally")
                     PatchWorldMethod(method, "WorldSpawnProjectilePrefix", null);
             foreach (var type in new[] { typeof(Projectile), typeof(Rocket), typeof(HeavyShell), typeof(PlasmaBullet) })
                 _harmony.CreateReversePatcher(type.GetMethod("MakeEffects", WorldFields | BindingFlags.DeclaredOnly),
-                    new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(type == typeof(PlasmaBullet) ? "WorldBasePlasmaEffects" :
+                    new HarmonyMethod(GetPatchMethod(type == typeof(PlasmaBullet) ? "WorldBasePlasmaEffects" :
                         type == typeof(HeavyShell) ? "WorldBaseHeavyShellEffects" :
-                        type == typeof(Rocket) ? "WorldBaseRocketEffects" : "WorldBaseProjectileEffects", BindingFlags.NonPublic | BindingFlags.Static)))
+                        type == typeof(Rocket) ? "WorldBaseRocketEffects" : "WorldBaseProjectileEffects")))
                     .Patch(HarmonyReversePatchType.Original);
             _harmony.CreateReversePatcher(typeof(Rocket).GetMethod("RunSmokeTrail", WorldFields),
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldBaseRocketSmoke", BindingFlags.NonPublic | BindingFlags.Static)))
+                new HarmonyMethod(GetPatchMethod("WorldBaseRocketSmoke")))
                 .Patch(HarmonyReversePatchType.Original);
             _harmony.CreateReversePatcher(typeof(HeavyShell).GetMethod("RunPredictionTrail", WorldFields),
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldBaseHeavyShellPrediction", BindingFlags.NonPublic | BindingFlags.Static)))
+                new HarmonyMethod(GetPatchMethod("WorldBaseHeavyShellPrediction")))
                 .Patch(HarmonyReversePatchType.Original);
             foreach (var method in typeof(Map).GetMethods(BindingFlags.Public | BindingFlags.Static))
                 if (method.Name == "HeadShotUnit" || method.Name == "KnockAndDamageUnit" && method.GetParameters().Length == 11)
@@ -86,36 +82,33 @@ namespace CustomMapMultiplayer
             foreach (var method in typeof(Map).GetMethods(BindingFlags.Public | BindingFlags.Static))
                 if (method.Name == "DamageDoodads" || method.Name == "BurnUnitsAround_Local" ||
                     method.Name == "HitProjectiles" || method.Name == "DamageProjectile")
-                    _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics),
+                    PatchWorldMethod(method,
                         method.Name == "DamageDoodads" ? "WorldAreaDamageSenderPrefix" :
                         method.Name == "BurnUnitsAround_Local" ? "WorldAreaDamageFiredPrefix" :
-                        method.Name == "DamageProjectile" ? "WorldAreaDamageProjectilePrefix" : "WorldAreaDamagePrefix", null, null)),
-                        null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldAreaDamageFinalizer", null, null)));
+                        method.Name == "DamageProjectile" ? "WorldAreaDamageProjectilePrefix" : "WorldAreaDamagePrefix",
+                        null, null, "WorldAreaDamageFinalizer");
             PatchWorldMethod(AccessTools.Method(typeof(ProjectileController), "SpawnGrenadeLocally", null, null), "WorldSpawnGrenadePrefix", null);
-            _harmony.Patch(AccessTools.Method(typeof(ProjectileController), "SpawnGrenadeOverNetwork", null, null),
-                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldNetworkGrenadeSpawnPrefix", null, null)), null, null,
-                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldNetworkGrenadeSpawnFinalizer", null, null)));
+            PatchWorldMethod(AccessTools.Method(typeof(ProjectileController), "SpawnGrenadeOverNetwork", null, null),
+                "WorldNetworkGrenadeSpawnPrefix", null, null, "WorldNetworkGrenadeSpawnFinalizer");
             PatchWorldCarriers();
         }
 
         private static void PatchWorldDamageContext(MethodBase method, string prefix)
         {
-            var postfix = prefix == "WorldProjectileEffectsPrefix" ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                "WorldProjectileEffectsPostfix", BindingFlags.NonPublic | BindingFlags.Static)) : null;
+            var postfix = prefix == "WorldProjectileEffectsPrefix" ? "WorldProjectileEffectsPostfix" : null;
             var transpiler = prefix == "WorldProjectileEffectsPrefix" &&
                 (method.DeclaringType == typeof(Rocket) || method.DeclaringType == typeof(HeavyShell) ||
                  method.DeclaringType == typeof(PlasmaBullet) || method.DeclaringType == typeof(SachelPack) ||
                  method.DeclaringType == typeof(SachelPackTurkey))
-                ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldProjectileVisualRandomTranspiler", BindingFlags.NonPublic | BindingFlags.Static))
+                ? "WorldProjectileVisualRandomTranspiler"
                 : null;
-            _harmony.Patch(method, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(prefix, BindingFlags.NonPublic | BindingFlags.Static)), postfix, transpiler,
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldProjectileContextFinalizer", BindingFlags.NonPublic | BindingFlags.Static)));
+            PatchWorldMethod(method, prefix, postfix, transpiler, "WorldProjectileContextFinalizer");
         }
 
         private static IEnumerable<CodeInstruction> WorldProjectileVisualRandomTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
         {
-            var capture = typeof(HarmonyDiagnostics).GetMethod("CaptureWorldProjectileVisualRandomState",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var result = new List<CodeInstruction>();
+            var capture = GetPatchMethod("CaptureWorldProjectileVisualRandomState");
             var shell = __originalMethod.DeclaringType == typeof(HeavyShell);
             var plasma = __originalMethod.DeclaringType == typeof(PlasmaBullet);
             var satchel = __originalMethod.DeclaringType == typeof(SachelPack);
@@ -130,14 +123,15 @@ namespace CustomMapMultiplayer
                     called.DeclaringType == typeof(EffectsController) &&
                     (called.Name == "CreateSparkShower" || called.Name == "CreateHugeExplosion" || called.Name == "CreateMassiveExplosion")))
                 {
-                    yield return new CodeInstruction(System.Reflection.Emit.OpCodes.Ldarg_0, null);
-                    yield return new CodeInstruction(System.Reflection.Emit.OpCodes.Call, capture);
+                    result.Add(new CodeInstruction(System.Reflection.Emit.OpCodes.Ldarg_0, null));
+                    result.Add(new CodeInstruction(System.Reflection.Emit.OpCodes.Call, capture));
                     matches++;
                 }
-                yield return instruction;
+                result.Add(instruction);
             }
             if (matches != (shell || plasma || satchel || turkey ? 1 : 3))
                 throw new InvalidOperationException("Could not locate every " + __originalMethod.DeclaringType.Name + ".MakeEffects visual branch.");
+            return result;
         }
 
         private static FieldInfo[] GetWorldRandomStateFields()
@@ -260,7 +254,7 @@ namespace CustomMapMultiplayer
         {
             var request = kind <= 2 ? BeginWorldHitPresentation(target, type, vx, vy, knock || kind == 2) : 0;
             if (kind <= 2) PresentWorldHitDirected(target, request, damage, actualType, vx, vy, direction, target is Unit && kind == 2 ? (byte)0 : kind);
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 WriteWorldId(writer, target.Nid); WriteWorldId(writer, Registry.GetNID(actor));
@@ -285,7 +279,7 @@ namespace CustomMapMultiplayer
             float vx, float vy, int direction)
         {
             if (_worldEpoch == 0 || !IsWorldSession() || !target.IsMine || damage <= 0) return;
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 WriteWorldId(writer, target.Nid); writer.Write((byte)target.Owner.AsInt);
@@ -299,14 +293,12 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldOwnedHitPresentationRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
                 var id = ReadWorldId(reader); var owner = reader.ReadByte();
-                var sender = RPCController.CurrentRPC.messageInfo.Sender;
-                if (id.Sid != Connect.SessionID ||
-                    (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner)) return;
+                if (!IsWorldRpcObject(id, owner)) return;
                 var target = Registry.GetObject(id) as BroforceObject;
                 if (target == null || target.Owner.AsInt != owner || target.IsMine || !IsWorldObject(target) ||
                     !HasWorldOwnedHitPresentation(target)) return;
@@ -320,13 +312,13 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldProjectileHitRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
                 var id = ReadWorldId(reader); var actorId = ReadWorldId(reader); var owner = reader.ReadByte();
                 var sender = RPCController.CurrentRPC.messageInfo.Sender;
-                if (id.Sid != Connect.SessionID || (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner)) return;
+                if (!IsWorldRpcObject(id, owner)) return;
                 var target = Registry.GetObject(id) as BroforceObject;
                 if (target == null || !target.IsMine) return;
                 var actor = Registry.GetObject(actorId) as MonoBehaviour;
@@ -418,7 +410,7 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldHitAcknowledgementRPC(long epoch, NID id, int request)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
+            if (!AcceptWorldRpc(epoch)) return;
             WorldEntry entry;
             if (!WorldEntries.TryGetValue(id, out entry)) return;
             var targetOwner = entry.Object != null ? entry.Object.Owner : new PID(entry.Last.Owner);
@@ -603,10 +595,7 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldSpearTerminationRPC(long epoch, NID id, byte owner, int revision, float x, float y)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null ||
-                id.Sid != Connect.SessionID) return;
-            var sender = RPCController.CurrentRPC.messageInfo.Sender;
-            if (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner) return;
+            if (!AcceptWorldRpc(epoch) || !IsWorldRpcObject(id, owner)) return;
             WorldEntry entry;
             if (!WorldEntries.TryGetValue(id, out entry))
             {
@@ -922,7 +911,7 @@ namespace CustomMapMultiplayer
             UnityEngine.Random.State randomState = default(UnityEngine.Random.State);
             var hasRandomState = WorldRandomStateSupported &&
                 WorldProjectileVisualRandomStates.TryGetValue(__instance, out randomState);
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 WriteWorldId(writer, __instance.Nid); writer.Write((byte)__instance.Owner.AsInt);
@@ -942,14 +931,13 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldProjectileEffectsRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
                 var id = ReadWorldId(reader);
                 var owner = reader.ReadByte();
-                var sender = RPCController.CurrentRPC.messageInfo.Sender;
-                if (id.Sid != Connect.SessionID || (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner)) return;
+                if (!IsWorldRpcObject(id, owner)) return;
                 WorldEntry entry;
                 if (!WorldEntries.TryGetValue(id, out entry) || !(entry.Object is Projectile) || entry.Object == null) return;
                 var particles = reader.ReadBoolean(); var x = reader.ReadSingle(); var y = reader.ReadSingle(); var ray = reader.ReadBoolean();
@@ -1063,7 +1051,7 @@ namespace CustomMapMultiplayer
                 UnityEngine.Object.Destroy(__result.gameObject);
                 return false;
             }
-            var spawn = new WorldProjectileSpawn
+            var spawn = new WorldSpawn
             {
                 Id = Registry.AllocatePlayerUniqueID(), Actor = actor.Nid, Owner = actor.Owner.AsInt,
                 Prefab = prefab.name, Type = prefab.GetType().FullName,
@@ -1079,7 +1067,7 @@ namespace CustomMapMultiplayer
             return false;
         }
 
-        private static Projectile CreateWorldProjectile(WorldProjectileSpawn spawn, Projectile prefab, BroforceObject actor)
+        private static Projectile CreateWorldProjectile(WorldSpawn spawn, Projectile prefab, BroforceObject actor)
         {
             var projectile = UnityEngine.Object.Instantiate<Projectile>(prefab,
                 new Vector3(spawn.X, spawn.Y, 0f), Quaternion.identity);
@@ -1092,18 +1080,32 @@ namespace CustomMapMultiplayer
             return projectile;
         }
 
-        private static void SendWorldProjectileSpawn(WorldProjectileSpawn spawn, PID target)
+        private static void SendWorldSpawn(WorldSpawn spawn, float factoryValue, PID target, RpcSignature<long, byte[]> receive)
         {
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 WriteWorldId(writer, spawn.Id); WriteWorldId(writer, spawn.Actor);
                 writer.Write(spawn.Prefab); writer.Write(spawn.Type); writer.Write((byte)spawn.Owner);
                 writer.Write(spawn.Player); writer.Write(spawn.Seed); writer.Write(spawn.X); writer.Write(spawn.Y);
-                writer.Write(spawn.VX); writer.Write(spawn.VY); writer.Write(spawn.Offset);
-                global::Networking.Networking.RPC<long, byte[]>(target,
-                    new RpcSignature<long, byte[]>(ReceiveWorldProjectileRPC), _worldEpoch, stream.ToArray(), true);
+                writer.Write(spawn.VX); writer.Write(spawn.VY);
+                // Protocol 24 ends with the projectile offset or grenade lifetime.
+                writer.Write(factoryValue);
+                global::Networking.Networking.RPC<long, byte[]>(target, receive, _worldEpoch, stream.ToArray(), true);
             }
+        }
+
+        private static WorldSpawn ReadWorldSpawn(BinaryReader reader)
+        {
+            return new WorldSpawn { Id = ReadWorldId(reader), Actor = ReadWorldId(reader),
+                Prefab = reader.ReadString(), Type = reader.ReadString(), Owner = reader.ReadByte(),
+                Player = reader.ReadInt32(), Seed = reader.ReadInt32(), X = reader.ReadSingle(), Y = reader.ReadSingle(),
+                VX = reader.ReadSingle(), VY = reader.ReadSingle() };
+        }
+
+        private static void SendWorldProjectileSpawn(WorldSpawn spawn, PID target)
+        {
+            SendWorldSpawn(spawn, spawn.Offset, target, new RpcSignature<long, byte[]>(ReceiveWorldProjectileRPC));
         }
 
         private static void SendWorldProjectileSpawns(PID target)
@@ -1121,25 +1123,18 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldProjectileRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            WorldProjectileSpawn spawn;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            WorldSpawn spawn;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
-                spawn = new WorldProjectileSpawn
-                {
-                    Id = ReadWorldId(reader), Actor = ReadWorldId(reader), Prefab = reader.ReadString(), Type = reader.ReadString(),
-                    Owner = reader.ReadByte(), Player = reader.ReadInt32(), Seed = reader.ReadInt32(),
-                    X = reader.ReadSingle(), Y = reader.ReadSingle(), VX = reader.ReadSingle(), VY = reader.ReadSingle(), Offset = reader.ReadSingle()
-                };
+                spawn = ReadWorldSpawn(reader); spawn.Offset = reader.ReadSingle();
             }
-            var sender = RPCController.CurrentRPC.messageInfo.Sender;
-            if (spawn.Id.Sid != Connect.SessionID ||
-                (spawn.Owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != spawn.Owner)) return;
+            if (!IsWorldRpcObject(spawn.Id, spawn.Owner)) return;
             if (!TryCreateWorldProjectile(spawn) && WorldPendingProjectiles.Count < 256) WorldPendingProjectiles[spawn.Id] = spawn;
         }
 
-        private static bool TryCreateWorldProjectile(WorldProjectileSpawn spawn)
+        private static bool TryCreateWorldProjectile(WorldSpawn spawn)
         {
             if (WorldProjectileSpawns.ContainsKey(spawn.Id) || Registry.IsKeyInUse(spawn.Id)) return true;
             // A state tombstone may arrive before the spawn descriptor.

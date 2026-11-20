@@ -23,10 +23,7 @@ namespace CustomMapMultiplayer
                 // Harmony requires the declaration, not an inherited MethodInfo reflected from a hero subtype.
                 method = AccessTools.DeclaredMethod(method.DeclaringType, name, Type.EmptyTypes, null);
                 if (WorldHeroStatusMethods.Contains(method)) continue;
-                _harmony.Patch(method, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                    "WorldHeroStatusPrefix", BindingFlags.NonPublic | BindingFlags.Static)), null, null,
-                    new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(
-                    "WorldHeroStatusFinalizer", BindingFlags.NonPublic | BindingFlags.Static)));
+                PatchWorldMethod(method, "WorldHeroStatusPrefix", null, null, "WorldHeroStatusFinalizer");
                 WorldHeroStatusMethods.Add(method);
             }
         }
@@ -50,7 +47,7 @@ namespace CustomMapMultiplayer
             if (_worldStatusSource == null || !_worldStatusSource.IsMine || RPCController.CurrentRPC != null) return false;
             var kind = __originalMethod.Name == "Stun" ? 7 : __originalMethod.Name == "Freeze" ? 8 : __originalMethod.Name == "TearGas" ? 6 : __originalMethod.Name == "Panic" ? __args.Length - 1 :
                 (__originalMethod.Name == "Terrify" ? 3 : (__args.Length == 0 ? 4 : 5));
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 WriteWorldId(writer, __instance.Nid); WriteWorldId(writer, _worldStatusSource.Nid);
@@ -67,8 +64,8 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldStatusRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
                 var id = ReadWorldId(reader); var sourceId = ReadWorldId(reader);

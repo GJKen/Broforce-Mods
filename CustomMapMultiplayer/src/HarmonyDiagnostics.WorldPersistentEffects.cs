@@ -100,7 +100,7 @@ namespace CustomMapMultiplayer
                 Removed = obj == null || !obj.gameObject.activeInHierarchy || tag.Serial != entry.Serial };
             if (s.Removed) return s;
             s.Position = obj.transform.position;
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var w = new BinaryWriter(stream))
             {
                 var flash = obj as FlashBangExplosion;
@@ -175,11 +175,10 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldPersistentEffectRPC(long epoch, byte[] bytes)
         {
-            if (!IsWorldSession() || _worldEpoch == 0 || epoch != _worldEpoch || RPCController.CurrentRPC == null) return;
+            if (!AcceptWorldRpc(epoch)) return;
             WorldEffectState s;
-            using (var input = new MemoryStream(bytes))
-            using (var zip = new DeflateStream(input, CompressionMode.Decompress))
-            using (var r = new BinaryReader(zip)) s = ReadWorldEffect(r);
+            var input = new MemoryStream(DecompressWorldPacket(bytes));
+            using (var r = new BinaryReader(input)) s = ReadWorldEffect(r);
             if (RPCController.CurrentRPC.messageInfo.Sender.AsInt != s.Owner || s.Owner == PID.MyID.AsInt) return;
             s.ReceivedAt = Time.time;
             var key = WorldEffectKey(s.Owner, s.Serial); WorldEffectEntry entry; WorldEffectState pending;
@@ -228,7 +227,7 @@ namespace CustomMapMultiplayer
             }
             entry.Last = s; entry.Tag.Restored = true;
             var flash = entry.Object as FlashBangExplosion;
-            using (var stream = new MemoryStream(s.Data))
+            var stream = new MemoryStream(s.Data);
             using (var r = new BinaryReader(stream))
             {
                 if (flash != null)
@@ -318,8 +317,7 @@ namespace CustomMapMultiplayer
         {
             foreach (var method in typeof(LaserBeam).GetMethods(WorldFields | BindingFlags.DeclaredOnly))
                 if (method.Name == "Fire") PatchWorldMethod(method, null, "WorldLaserFirePostfix");
-            _harmony.Patch(AccessTools.Method(typeof(LaserBeam), "Update", null, null), new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldLaserContextPrefix", null, null)),
-                null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldProjectileContextFinalizer", null, null)));
+            PatchWorldMethod(AccessTools.Method(typeof(LaserBeam), "Update", null, null), "WorldLaserContextPrefix", null, null, "WorldProjectileContextFinalizer");
             PatchWorldMethod(AccessTools.Method(typeof(LaserBeam), "RunDamage", null, null), "WorldLaserDamagePrefix", null);
         }
         private static void WorldLaserFirePostfix(LaserBeam __instance, MonoBehaviour originObject)

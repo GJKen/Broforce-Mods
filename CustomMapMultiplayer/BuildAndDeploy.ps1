@@ -210,7 +210,8 @@ $compilerArguments = @(
     '/target:library',
     "/out:$outputPath",
     '/debug-',
-    '/optimize+'
+    '/optimize+',
+    '/filealign:512'
 )
 $compilerArguments += $references | ForEach-Object { "/reference:$_" }
 

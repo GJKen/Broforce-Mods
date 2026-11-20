@@ -464,10 +464,10 @@ namespace CustomMapMultiplayer
                 {
                     builder.Append(",");
                 }
-                builder.Append("P");
-                builder.Append(index + 1);
-                builder.Append("=");
-                builder.Append(Sanitize(selected[index]));
+                builder.Append("P")
+                    .Append(index + 1)
+                    .Append("=")
+                    .Append(Sanitize(selected[index]));
             }
             return builder.ToString();
         }

@@ -19,15 +19,13 @@ namespace CustomMapMultiplayer
                 if (typeof(Grenade).IsAssignableFrom(type))
                     foreach (var method in type.GetMethods(WorldFields | BindingFlags.DeclaredOnly))
                         if (method.Name == "Death")
-                            _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeSoundPrefix", null, null)),
-                                null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeSoundFinalizer", null, null)));
+                            PatchWorldMethod(method, "WorldGrenadeSoundPrefix", null, null, "WorldGrenadeSoundFinalizer");
             foreach (var type in typeof(TestVanDammeAnim).Assembly.GetTypes())
                 if (typeof(TestVanDammeAnim).IsAssignableFrom(type))
                     foreach (var method in type.GetMethods(WorldFields | BindingFlags.DeclaredOnly))
                         if (method.Name == "PlayHitSound" || method.Name == "PlayHurtSound" ||
                             method.Name == "PlayBurnSound" || method.Name == "PlayFizzleSound")
-                            _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldHitSoundPrefix", null, null)),
-                                null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldHitSoundFinalizer", null, null)));
+                            PatchWorldMethod(method, "WorldHitSoundPrefix", null, null, "WorldHitSoundFinalizer");
             PatchWorldMethod(AccessTools.Method(typeof(Sound), "PlaySoundEffectAt", new[] { typeof(AudioClip), typeof(float),
                 typeof(Vector3), typeof(float), typeof(bool), typeof(bool), typeof(bool), typeof(float) }, null), null, "WorldHitSoundPostfix");
         }
@@ -49,7 +47,7 @@ namespace CustomMapMultiplayer
             if (unit == null && _worldGrenadeEffectsDepth == 0) unit = _worldGrenadeSoundSource;
             if (clip == null || __result == null || unit == null || _worldApplying != 0 || _worldEpoch == 0 ||
                 !IsWorldSession() || !IsWorldObject(unit) || !unit.IsMine) return;
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 writer.Write((byte)unit.Owner.AsInt); writer.Write(clip.name);
@@ -63,12 +61,12 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldHitSoundRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
-                var owner = reader.ReadByte(); var sender = RPCController.CurrentRPC.messageInfo.Sender;
-                if (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner) return;
+                var owner = reader.ReadByte();
+                if (!IsWorldRpcOwner(owner)) return;
                 var name = reader.ReadString(); var volume = reader.ReadSingle();
                 var position = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 var pitch = reader.ReadSingle(); var reverb = reader.ReadBoolean(); var effects = reader.ReadBoolean();

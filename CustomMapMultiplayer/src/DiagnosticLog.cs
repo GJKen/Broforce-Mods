@@ -24,7 +24,6 @@ namespace CustomMapMultiplayer
     {
         private const int FlushIntervalMilliseconds = 750;
 
-        private static UnityModManager.ModEntry _modEntry;
         private static StreamWriter _eventWriter;
         private static StreamWriter _traceWriter;
         private static readonly object Sync = new object();
@@ -64,7 +63,6 @@ namespace CustomMapMultiplayer
 
         public static void Initialize(UnityModManager.ModEntry modEntry)
         {
-            _modEntry = modEntry;
             EnsureCategoryDefaults();
             try
             {
@@ -469,7 +467,6 @@ namespace CustomMapMultiplayer
                 {
                     CloseWritersLocked();
                     _sessionActive = false;
-                    _modEntry = null;
                 }
             }
         }
@@ -817,19 +814,19 @@ namespace CustomMapMultiplayer
                 {
                     if (index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
                     {
-                        builder.Append(current);
-                        builder.Append(value[++index]);
+                        builder.Append(current)
+                            .Append(value[++index]);
                     }
                     else
                     {
-                        builder.Append("\\u");
-                        builder.Append(((int)current).ToString("X4"));
+                        builder.Append("\\u")
+                            .Append(((int)current).ToString("X4"));
                     }
                 }
                 else if (char.IsLowSurrogate(current))
                 {
-                    builder.Append("\\u");
-                    builder.Append(((int)current).ToString("X4"));
+                    builder.Append("\\u")
+                        .Append(((int)current).ToString("X4"));
                 }
                 else
                 {

@@ -40,7 +40,7 @@ namespace CustomMapMultiplayer
             if (!__runOriginal || _worldApplying != 0 || _worldEpoch == 0 || !IsWorldSession() ||
                 !IsWorldObject(__instance) || !__instance.IsMine ||
                 __originalMethod != AccessTools.Method(__instance.GetType(), "MakeEffects", Type.EmptyTypes, null)) return;
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 WriteWorldId(writer, __instance.Nid); writer.Write((byte)__instance.Owner.AsInt);
@@ -56,13 +56,12 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveWorldGrenadeEffectsRPC(long epoch, byte[] bytes)
         {
-            if (_worldEpoch == 0 || epoch != _worldEpoch || !IsWorldSession() || RPCController.CurrentRPC == null) return;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
                 var id = ReadWorldId(reader); var owner = reader.ReadByte();
-                var sender = RPCController.CurrentRPC.messageInfo.Sender;
-                if (id.Sid != Connect.SessionID || (owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != owner)) return;
+                if (!IsWorldRpcObject(id, owner)) return;
                 var x = reader.ReadSingle(); var y = reader.ReadSingle();
                 var seed = reader.ReadInt32(); var calls = reader.ReadInt32();
                 var hasRandom = reader.ReadBoolean();

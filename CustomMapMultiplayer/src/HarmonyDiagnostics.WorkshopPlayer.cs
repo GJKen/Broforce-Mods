@@ -1096,19 +1096,19 @@ namespace CustomMapMultiplayer
                 }
 
                 var argument = arguments[index];
-                builder.Append(index);
-                builder.Append(":type=");
-                builder.Append(argument == null ? "<null>" : argument.GetType().FullName);
-                builder.Append(",value=");
+                builder.Append(index)
+                    .Append(":type=")
+                    .Append(argument == null ? "<null>" : argument.GetType().FullName)
+                    .Append(",value=");
                 try
                 {
                     builder.Append(argument == null ? "<null>" : Convert.ToString(argument));
                 }
                 catch (Exception exception)
                 {
-                    builder.Append("<error:");
-                    builder.Append(exception.GetType().Name);
-                    builder.Append(">");
+                    builder.Append("<error:")
+                        .Append(exception.GetType().Name)
+                        .Append(">");
                 }
             }
 

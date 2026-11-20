@@ -36,24 +36,10 @@ namespace CustomMapMultiplayer
 
         private static void PatchPauseMenuAfkMenu()
         {
-            var pauseMenuInstantiateItems = typeof(PauseMenu).GetMethod(
-                "InstantiateItems",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            var pauseMenuPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "PauseMenuInstantiateItemsPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var menuUpdate = typeof(Menu).GetMethod(
-                "Update",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            var menuUpdatePostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "MenuUpdateAfkFontMaterialPostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var pauseMenuInstantiateItems = GetInstanceMethod(typeof(PauseMenu), "InstantiateItems");
+            var pauseMenuPostfixMethod = GetPatchMethod("PauseMenuInstantiateItemsPostfix");
+            var menuUpdate = GetInstanceMethod(typeof(Menu), "Update");
+            var menuUpdatePostfixMethod = GetPatchMethod("MenuUpdateAfkFontMaterialPostfix");
             if (pauseMenuInstantiateItems == null || pauseMenuPostfixMethod == null ||
                 menuUpdate == null || menuUpdatePostfixMethod == null)
             {
@@ -64,12 +50,7 @@ namespace CustomMapMultiplayer
 
             try
             {
-                _menuInstantiateItemsMethod = typeof(Menu).GetMethod(
-                    "InstantiateItems",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    Type.EmptyTypes,
-                    null);
+                _menuInstantiateItemsMethod = GetInstanceMethod(typeof(Menu), "InstantiateItems");
                 if (_menuInstantiateItemsMethod == null)
                 {
                     DiagnosticLog.Warning(
@@ -937,28 +918,23 @@ namespace CustomMapMultiplayer
         private static string BuildAfkSnapshot(int playerNum, Player player)
         {
             var builder = new StringBuilder();
-            builder.Append("scene=");
-            builder.Append(Sanitize(SceneManager.GetActiveScene().name ?? string.Empty, 80));
-            builder.Append(";slotPlaying=");
-            builder.Append(IsAfkSlotPlaying(playerNum));
-            builder.Append(";playerPresent=");
-            builder.Append(player != null);
-            builder.Append(";isMine=");
-            builder.Append(ReadAfkPlayerIsMine(player));
-            builder.Append(";lives=");
-            builder.Append(player == null ? "n/a" : GetIntFieldOrProperty(player, "lives").ToString());
-            builder.Append(";characterPresent=");
-            builder.Append(player != null && player.character != null);
-            builder.Append(";characterAlive=");
-            builder.Append(ReadAfkCharacterAlive(player));
-            builder.Append(";idleSeconds=");
-            builder.Append(player == null ? "n/a" : FormatAfkSeconds(ReadPlayerIdleTimer(player)));
-            builder.Append(";alive=");
-            builder.Append(ReadHeroCount(delegate { return HeroController.GetPlayersAliveCount(); }));
-            builder.Append(";local=");
-            builder.Append(ReadHeroCount(delegate { return HeroController.GetLocalPlayerCount(); }));
-            builder.Append(";totalLives=");
-            builder.Append(ReadHeroCount(delegate { return HeroController.GetTotalLives(); }));
+            builder.Append("scene=")
+                .Append(Sanitize(SceneManager.GetActiveScene().name ?? string.Empty, 80))
+                .Append(";slotPlaying=")
+                .Append(IsAfkSlotPlaying(playerNum))
+                .Append(";playerPresent=")
+                .Append(player != null)
+                .Append(";isMine=")
+                .Append(ReadAfkPlayerIsMine(player))
+                .Append(";lives=")
+                .Append(player == null ? "n/a" : GetIntFieldOrProperty(player, "lives").ToString())
+                .Append(";characterPresent=")
+                .Append(player != null && player.character != null)
+                .Append(";characterAlive=")
+                .Append(ReadAfkCharacterAlive(player))
+                .Append(";idleSeconds=")
+                .Append(player == null ? "n/a" : FormatAfkSeconds(ReadPlayerIdleTimer(player)));
+            AppendHeroCounts(builder);
             return builder.ToString();
         }
 

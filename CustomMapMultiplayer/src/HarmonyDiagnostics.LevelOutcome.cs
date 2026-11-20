@@ -12,18 +12,10 @@ namespace CustomMapMultiplayer
     {
         private static void PatchLevelOutcomeDiagnostics()
         {
-            var levelFinishPrefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "LevelFinishOutcomePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var levelFinishPostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "LevelFinishOutcomePostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var removeLifePrefixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "RemoveLifeOutcomePrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var removeLifePostfixMethod = typeof(HarmonyDiagnostics).GetMethod(
-                "RemoveLifeOutcomePostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var levelFinishPrefixMethod = GetPatchMethod("LevelFinishOutcomePrefix");
+            var levelFinishPostfixMethod = GetPatchMethod("LevelFinishOutcomePostfix");
+            var removeLifePrefixMethod = GetPatchMethod("RemoveLifeOutcomePrefix");
+            var removeLifePostfixMethod = GetPatchMethod("RemoveLifeOutcomePostfix");
             if (levelFinishPrefixMethod == null || levelFinishPostfixMethod == null ||
                 removeLifePrefixMethod == null || removeLifePostfixMethod == null)
             {
@@ -199,8 +191,8 @@ namespace CustomMapMultiplayer
                     builder.Append(",");
                 }
 
-                builder.Append(parameters[index].Name);
-                builder.Append("=");
+                builder.Append(parameters[index].Name)
+                    .Append("=");
                 var value = arguments != null && index < arguments.Length ? arguments[index] : null;
                 builder.Append(FormatOutcomeValue(value));
             }
@@ -223,48 +215,43 @@ namespace CustomMapMultiplayer
             var room = GetCurrentRoom();
             var builder = new StringBuilder();
 
-            builder.Append("scene=");
-            builder.Append(Sanitize(SceneManager.GetActiveScene().name ?? string.Empty, 80));
-            builder.Append(";player=");
-            builder.Append(player == null ? "n/a" : player.playerNum.ToString());
-            builder.Append(";lives=");
-            builder.Append(player == null ? "n/a" : GetIntFieldOrProperty(player, "lives").ToString());
-            builder.Append(";alive=");
-            builder.Append(ReadHeroCount(delegate { return HeroController.GetPlayersAliveCount(); }));
-            builder.Append(";local=");
-            builder.Append(ReadHeroCount(delegate { return HeroController.GetLocalPlayerCount(); }));
-            builder.Append(";totalLives=");
-            builder.Append(ReadHeroCount(delegate { return HeroController.GetTotalLives(); }));
-            builder.Append(";helicopter=");
-            builder.Append(ReadHeroCount(delegate { return HeroController.GetPlayersOnHelicopterAmount(); }));
-            builder.Append(";levelFinished=");
-            builder.Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "levelFinished")));
-            builder.Append(";switchingLevel=");
-            builder.Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "switchingLevel")));
-            builder.Append(";waitingForReady=");
-            builder.Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "waitingForAllPlayersToReady")));
-            builder.Append(";nextScene=");
-            builder.Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "nextScene")));
-            builder.Append(";stateLevel=");
-            builder.Append(state == null ? "n/a" : GetIntFieldOrProperty(state, "levelNumber").ToString());
-            builder.Append(";stateScene=");
+            builder.Append("scene=")
+                .Append(Sanitize(SceneManager.GetActiveScene().name ?? string.Empty, 80))
+                .Append(";player=")
+                .Append(player == null ? "n/a" : player.playerNum.ToString())
+                .Append(";lives=")
+                .Append(player == null ? "n/a" : GetIntFieldOrProperty(player, "lives").ToString());
+            AppendHeroCounts(builder);
+            builder.Append(";helicopter=")
+                .Append(ReadHeroCount(delegate { return HeroController.GetPlayersOnHelicopterAmount(); }))
+                .Append(";levelFinished=")
+                .Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "levelFinished")))
+                .Append(";switchingLevel=")
+                .Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "switchingLevel")))
+                .Append(";waitingForReady=")
+                .Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "waitingForAllPlayersToReady")))
+                .Append(";nextScene=")
+                .Append(FormatOutcomeValue(GetFieldOrPropertyValue(controller, "nextScene")))
+                .Append(";stateLevel=")
+                .Append(state == null ? "n/a" : GetIntFieldOrProperty(state, "levelNumber").ToString())
+                .Append(";stateScene=");
             var stateScene = GetStringFieldOrProperty(state, "_sceneToLoad");
             if (string.IsNullOrEmpty(stateScene))
             {
                 stateScene = GetStringFieldOrProperty(state, "sceneToLoad");
             }
-            builder.Append(string.IsNullOrEmpty(stateScene) ? "n/a" : Sanitize(stateScene, 80));
-            builder.Append(";stateMode=");
-            builder.Append(FormatOutcomeValue(GetFieldOrPropertyValue(state, "gameMode")));
-            builder.Append(";stateLoadMode=");
-            builder.Append(FormatOutcomeValue(GetFieldOrPropertyValue(state, "loadMode")));
-            builder.Append(";roomLevel=");
-            builder.Append(room == null ? "n/a" : GetRoomInfoInt(room, "levelNumber", -1).ToString());
-            builder.Append(";roomScene=");
+            builder.Append(string.IsNullOrEmpty(stateScene) ? "n/a" : Sanitize(stateScene, 80))
+                .Append(";stateMode=")
+                .Append(FormatOutcomeValue(GetFieldOrPropertyValue(state, "gameMode")))
+                .Append(";stateLoadMode=")
+                .Append(FormatOutcomeValue(GetFieldOrPropertyValue(state, "loadMode")))
+                .Append(";roomLevel=")
+                .Append(room == null ? "n/a" : GetRoomInfoInt(room, "levelNumber", -1).ToString())
+                .Append(";roomScene=");
             var roomScene = room == null ? string.Empty : GetRoomInfoString(room, "CurrentSceneName");
-            builder.Append(string.IsNullOrEmpty(roomScene) ? "n/a" : Sanitize(roomScene, 80));
-            builder.Append(";roomMode=");
-            builder.Append(FormatOutcomeValue(GetFieldOrPropertyValue(room, "gameMode")));
+            builder.Append(string.IsNullOrEmpty(roomScene) ? "n/a" : Sanitize(roomScene, 80))
+                .Append(";roomMode=")
+                .Append(FormatOutcomeValue(GetFieldOrPropertyValue(room, "gameMode")));
             return builder.ToString();
         }
 
@@ -294,6 +281,16 @@ namespace CustomMapMultiplayer
             {
                 return null;
             }
+        }
+
+        private static void AppendHeroCounts(StringBuilder builder)
+        {
+            builder.Append(";alive=")
+                .Append(ReadHeroCount(delegate { return HeroController.GetPlayersAliveCount(); }))
+                .Append(";local=")
+                .Append(ReadHeroCount(delegate { return HeroController.GetLocalPlayerCount(); }))
+                .Append(";totalLives=")
+                .Append(ReadHeroCount(delegate { return HeroController.GetTotalLives(); }));
         }
 
         private static string ReadHeroCount(Func<int> reader)

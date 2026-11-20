@@ -26,9 +26,7 @@ namespace CustomMapMultiplayer
                     null,
                     Type.EmptyTypes,
                     null);
-                var transpiler = typeof(HarmonyDiagnostics).GetMethod(
-                    "DemolitionBroUseFireTranspiler",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var transpiler = GetPatchMethod("DemolitionBroUseFireTranspiler");
                 if (useFire == null || transpiler == null)
                 {
                     DiagnosticLog.Warning(
@@ -57,9 +55,7 @@ namespace CustomMapMultiplayer
                 null,
                 Type.EmptyTypes,
                 null);
-            var detonate = typeof(HarmonyDiagnostics).GetMethod(
-                "DetonateDemolitionBomb",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var detonate = GetPatchMethod("DetonateDemolitionBomb");
             if (projectileDeath == null || detonate == null)
             {
                 DiagnosticLog.Warning(
@@ -100,7 +96,7 @@ namespace CustomMapMultiplayer
 
             try
             {
-                if (IsDemolitionBombDetonationSession() && projectile.IsMine)
+                if (IsProjectileDetonationSession() && projectile.IsMine)
                 {
                     var nid = Registry.GetNID(projectile);
                     if (nid == NID.NoID)
@@ -144,7 +140,7 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ApplyDemolitionBombDetonationRPC(NID nid, float x, float y)
         {
-            if (!IsDemolitionBombDetonationSession() || nid == NID.NoID)
+            if (!IsProjectileDetonationSession() || nid == NID.NoID)
             {
                 return;
             }
@@ -182,7 +178,7 @@ namespace CustomMapMultiplayer
                 "; position=" + x + "," + y + ".");
         }
 
-        private static bool IsDemolitionBombDetonationSession()
+        private static bool IsProjectileDetonationSession()
         {
             return _networkSessionActive && IsOnline() &&
                    PID.MyIdHasBeenSet && PID.ServerHasBeenSet;

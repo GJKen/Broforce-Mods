@@ -26,7 +26,7 @@ namespace CustomMapMultiplayer
             try
             {
                 var useSpecial = typeof(McBrover).GetMethod("UseSpecial", BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
-                var transpiler = typeof(HarmonyDiagnostics).GetMethod("McBroverUseSpecialTranspiler", BindingFlags.NonPublic | BindingFlags.Static);
+                var transpiler = GetPatchMethod("McBroverUseSpecialTranspiler");
                 if (useSpecial == null || transpiler == null)
                 {
                     DiagnosticLog.Warning("MCBROVER_TURKEY McBrover.UseSpecial hook could not be resolved.");
@@ -36,7 +36,7 @@ namespace CustomMapMultiplayer
                 _harmony.Patch(useSpecial, null, null, new HarmonyMethod(transpiler), null);
                 var spawn = typeof(ProjectileController).GetMethod("SpawnProjectileOverNetwork", BindingFlags.Public | BindingFlags.Static, null,
                     new[] { typeof(Projectile), typeof(MonoBehaviour), typeof(float), typeof(float), typeof(float), typeof(float), typeof(bool), typeof(int), typeof(bool), typeof(bool), typeof(float) }, null);
-                var spawnPostfix = typeof(HarmonyDiagnostics).GetMethod("McBroverTurkeySpawnPostfix", BindingFlags.NonPublic | BindingFlags.Static);
+                var spawnPostfix = GetPatchMethod("McBroverTurkeySpawnPostfix");
                 if (spawn != null && spawnPostfix != null)
                 {
                     _harmony.Patch(spawn, null, new HarmonyMethod(spawnPostfix), null, null);
@@ -49,12 +49,8 @@ namespace CustomMapMultiplayer
                 var onDestroy = typeof(SachelPack).GetMethod(
                     "OnDestroy",
                     BindingFlags.Instance | BindingFlags.NonPublic);
-                var onDestroyPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "McBroverTurkeyOnDestroyPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var onDestroyPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                    "McBroverTurkeyOnDestroyPostfix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var onDestroyPrefix = GetPatchMethod("McBroverTurkeyOnDestroyPrefix");
+                var onDestroyPostfix = GetPatchMethod("McBroverTurkeyOnDestroyPostfix");
                 if (onDestroy != null && onDestroyPrefix != null && onDestroyPostfix != null)
                 {
                     _harmony.Patch(
@@ -73,9 +69,7 @@ namespace CustomMapMultiplayer
                 var makeEffects = typeof(SachelPackTurkey).GetMethod(
                     "MakeEffects",
                     BindingFlags.Instance | BindingFlags.NonPublic);
-                var makeEffectsPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "McBroverTurkeyMakeEffectsPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var makeEffectsPrefix = GetPatchMethod("McBroverTurkeyMakeEffectsPrefix");
                 if (makeEffects != null && makeEffectsPrefix != null)
                 {
                     _harmony.Patch(
@@ -103,7 +97,7 @@ namespace CustomMapMultiplayer
         {
             var result = new List<CodeInstruction>(instructions);
             var projectileDeath = typeof(Projectile).GetMethod("Death", BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null);
-            var detonate = typeof(HarmonyDiagnostics).GetMethod("DetonateMcBroverTurkey", BindingFlags.NonPublic | BindingFlags.Static);
+            var detonate = GetPatchMethod("DetonateMcBroverTurkey");
             if (projectileDeath == null || detonate == null)
             {
                 DiagnosticLog.Warning("MCBROVER_TURKEY transpiler could not resolve detonation methods.");
@@ -223,7 +217,7 @@ namespace CustomMapMultiplayer
 
             try
             {
-                if (IsMcBroverTurkeyDetonationSession() && turkey.IsMine)
+                if (IsProjectileDetonationSession() && turkey.IsMine)
                 {
                     var nid = Registry.GetNID(turkey);
                     if (nid == NID.NoID)
@@ -256,7 +250,7 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ApplyMcBroverTurkeyDetonationRPC(NID nid, float x, float y)
         {
-            if (!IsMcBroverTurkeyDetonationSession() || nid == NID.NoID)
+            if (!IsProjectileDetonationSession() || nid == NID.NoID)
             {
                 return;
             }
@@ -334,11 +328,6 @@ namespace CustomMapMultiplayer
                 PendingMcBroverTurkeyDetonations.Remove(nid);
                 DiagnosticLog.Warning("MCBROVER_TURKEY remote NID remained unregistered; residual risk detected; nid=" + nid + ".");
             }
-        }
-
-        private static bool IsMcBroverTurkeyDetonationSession()
-        {
-            return _networkSessionActive && IsOnline() && PID.MyIdHasBeenSet && PID.ServerHasBeenSet;
         }
 
         private static void ClearMcBroverTurkeyDetonationState()

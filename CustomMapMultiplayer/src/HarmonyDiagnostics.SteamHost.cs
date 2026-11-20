@@ -16,13 +16,13 @@ namespace CustomMapMultiplayer
         {
             const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
             _harmony.Patch(AccessTools.PropertyGetter(typeof(SteamLayer), "IsHost"),
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("SteamHostQueryPrefix", flags)),
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("SteamHostQueryPostfix", flags)),
+                new HarmonyMethod(GetPatchMethod("SteamHostQueryPrefix")),
+                new HarmonyMethod(GetPatchMethod("SteamHostQueryPostfix")),
                 null, null);
 
             // Ownership changes arrive through Steam callbacks. Clear before each
             // lobby event as well so migration handlers cannot reuse an old role.
-            var clear = new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("ClearSteamHostQueryCache", flags));
+            var clear = new HarmonyMethod(GetPatchMethod("ClearSteamHostQueryCache"));
             _harmony.Patch(typeof(SteamAPI).GetMethod("RunCallbacks"), clear, clear, null, null);
             _harmony.Patch(typeof(SteamLayer).GetMethod("LobbyChatUpdate_Callback", flags),
                 clear, null, null, null);

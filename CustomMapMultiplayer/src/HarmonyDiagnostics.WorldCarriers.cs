@@ -31,8 +31,7 @@ namespace CustomMapMultiplayer
                     foreach (var method in type.GetMethods(WorldFields | BindingFlags.DeclaredOnly))
                         if (method.Name == "Update" || method.Name == "EffectFirstUpdate" || method.Name == "CreateFlashBangPoint" ||
                             method.Name == "TryAssassinateUnits" || method.Name == "RunPoints")
-                            _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldCarrierContextPrefix", null, null)),
-                                null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldProjectileContextFinalizer", null, null)));
+                            PatchWorldMethod(method, "WorldCarrierContextPrefix", null, null, "WorldProjectileContextFinalizer");
             PatchWorldLasers();
         }
 

@@ -25,9 +25,7 @@ namespace CustomMapMultiplayer
             }
 
             var loadLevel = FindStaticMethod(steamControllerType, "LoadLevel", 1);
-            var loadPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "WorkshopSteamLoadLevelPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var loadPrefix = GetPatchMethod("WorkshopSteamLoadLevelPrefix");
             if (loadLevel == null || loadPrefix == null)
             {
                 DiagnosticLog.Warning("Workshop cache patch skipped: SteamController.LoadLevel target not found.");
@@ -49,9 +47,7 @@ namespace CustomMapMultiplayer
                 steamControllerType,
                 "Cloud_CloudGetPublishedFileDetailsResult",
                 2);
-            var detailsPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                "WorkshopPublishedFileDetailsPrefix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var detailsPrefix = GetPatchMethod("WorkshopPublishedFileDetailsPrefix");
             if (detailsMethod != null && detailsPrefix != null)
             {
                 try
@@ -69,9 +65,7 @@ namespace CustomMapMultiplayer
                 steamControllerType,
                 "OnLevelLoadComplete",
                 1);
-            var completionPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                "WorkshopLevelLoadCompletePostfix",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var completionPostfix = GetPatchMethod("WorkshopLevelLoadCompletePostfix");
             if (completionMethod != null && completionPostfix != null)
             {
                 try

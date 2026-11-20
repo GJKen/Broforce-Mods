@@ -27,24 +27,9 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                var checkForKick = typeof(TestVanDammeAnim).GetMethod(
-                    "CheckForKick",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    null,
-                    Type.EmptyTypes,
-                    null);
-                var kick = typeof(TestVanDammeAnim).GetMethod(
-                    "Kick",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    null,
-                    Type.EmptyTypes,
-                    null);
-                var kickRpc = typeof(TestVanDammeAnim).GetMethod(
-                    "KickRPC",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    null,
-                    Type.EmptyTypes,
-                    null);
+                var checkForKick = GetInstanceMethod(typeof(TestVanDammeAnim), "CheckForKick");
+                var kick = GetInstanceMethod(typeof(TestVanDammeAnim), "Kick");
+                var kickRpc = GetInstanceMethod(typeof(TestVanDammeAnim), "KickRPC");
                 var notifyPlayerThatHeHasBeenKicked = typeof(Connect).GetMethod(
                     "NotifyPlayerThatHeHasBeenKicked",
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
@@ -58,33 +43,19 @@ namespace CustomMapMultiplayer
                 _nativeKickBubbleField = typeof(TestVanDammeAnim).GetField(
                     "kickPlayerBubble",
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                var checkForKickPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "CheckForKickPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var checkForKickPostfix = typeof(HarmonyDiagnostics).GetMethod(
-                    "CheckForKickPostfix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var kickPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "KickPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var kickRpcPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "KickRpcPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var notifyPlayerThatHeHasBeenKickedPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "NotifyPlayerThatHeHasBeenKickedPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var checkForKickPrefix = GetPatchMethod("CheckForKickPrefix");
+                var checkForKickPostfix = GetPatchMethod("CheckForKickPostfix");
+                var kickPrefix = GetPatchMethod("KickPrefix");
+                var kickRpcPrefix = GetPatchMethod("KickRpcPrefix");
+                var notifyPlayerThatHeHasBeenKickedPrefix = GetPatchMethod("NotifyPlayerThatHeHasBeenKickedPrefix");
                 var dropoutRpc = typeof(HeroController).GetMethod(
                     "DropoutRPC",
                     BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
                     null,
                     new[] { typeof(int) },
                     null);
-                var dropoutRpcPrefix = typeof(HarmonyDiagnostics).GetMethod(
-                    "DropoutRpcPermissionPrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var kickRoutineTranspiler = typeof(HarmonyDiagnostics).GetMethod(
-                    "KickRoutineTranspiler",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var dropoutRpcPrefix = GetPatchMethod("DropoutRpcPermissionPrefix");
+                var kickRoutineTranspiler = GetPatchMethod("KickRoutineTranspiler");
 
                 if (checkForKick == null || kick == null || kickRpc == null ||
                     notifyPlayerThatHeHasBeenKicked == null ||
@@ -232,12 +203,8 @@ namespace CustomMapMultiplayer
                     typeof(bool)
                 },
                 null);
-            var damageGroundReplacement = typeof(HarmonyDiagnostics).GetMethod(
-                "HandleNativeKickGroundDamage",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var explodeUnitsReplacement = typeof(HarmonyDiagnostics).GetMethod(
-                "HandleNativeKickExplosion",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var damageGroundReplacement = GetPatchMethod("HandleNativeKickGroundDamage");
+            var explodeUnitsReplacement = GetPatchMethod("HandleNativeKickExplosion");
             if (damageGround == null || explodeUnits == null ||
                 damageGroundReplacement == null || explodeUnitsReplacement == null)
             {

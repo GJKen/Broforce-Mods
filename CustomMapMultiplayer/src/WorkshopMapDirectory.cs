@@ -392,12 +392,7 @@ namespace CustomMapMultiplayer
             var steamId = getSteamId.Invoke(null, null);
             var getAccountId = steamId == null
                 ? null
-                : steamId.GetType().GetMethod(
-                    "GetAccountID",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    Type.EmptyTypes,
-                    null);
+                : HarmonyDiagnostics.GetInstanceMethod(steamId.GetType(), "GetAccountID");
             if (getAccountId == null)
             {
                 throw new InvalidOperationException("Steam user account ID could not be read.");

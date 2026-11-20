@@ -141,9 +141,9 @@ namespace CustomMapMultiplayer
             }
 
             var sent = false;
-            foreach (var remote in SelectPeers(targetMachineId, false))
+            foreach (var remote in _peers)
             {
-                if (!CanSendApplicationMessage(remote))
+                if (!IsSelectedPeer(remote, targetMachineId) || !CanSendApplicationMessage(remote))
                 {
                     continue;
                 }
@@ -203,9 +203,9 @@ namespace CustomMapMultiplayer
             var targetMachineId = _role == FrpRole.Client || string.Equals(route, "*", StringComparison.Ordinal)
                 ? null
                 : route;
-            foreach (var remote in SelectPeers(targetMachineId, string.Equals(route, "*", StringComparison.Ordinal)))
+            foreach (var remote in _peers)
             {
-                if (!CanSendApplicationMessage(remote) ||
+                if (!IsSelectedPeer(remote, targetMachineId) || !CanSendApplicationMessage(remote) ||
                     string.Equals(remote.MachineId, excludeMachineId, StringComparison.Ordinal))
                 {
                     continue;
@@ -235,7 +235,7 @@ namespace CustomMapMultiplayer
             }
 
             var sent = false;
-            foreach (var remote in SelectPeers(null, true))
+            foreach (var remote in _peers)
             {
                 if (!CanSendApplicationMessage(remote) ||
                     string.Equals(remote.MachineId, excludeMachineId, StringComparison.Ordinal))
@@ -1150,17 +1150,10 @@ namespace CustomMapMultiplayer
                 remote.Connection.AverageRoundtripTime);
         }
 
-        private IEnumerable<FrpPeer> SelectPeers(string targetMachineId, bool broadcast)
+        private static bool IsSelectedPeer(FrpPeer remote, string targetMachineId)
         {
-            foreach (var remote in _peers)
-            {
-                if (!broadcast && !string.IsNullOrEmpty(targetMachineId) &&
-                    !string.Equals(remote.MachineId, targetMachineId, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-                yield return remote;
-            }
+            return string.IsNullOrEmpty(targetMachineId) ||
+                string.Equals(remote.MachineId, targetMachineId, StringComparison.Ordinal);
         }
 
         private NetOutgoingMessage CreateControlMessage(ControlMessageKind kind)
@@ -1174,9 +1167,9 @@ namespace CustomMapMultiplayer
         private bool SendEmptyControlMessage(ControlMessageKind kind, string targetMachineId)
         {
             var sent = false;
-            foreach (var remote in SelectPeers(targetMachineId, false))
+            foreach (var remote in _peers)
             {
-                if (!CanSendApplicationMessage(remote))
+                if (!IsSelectedPeer(remote, targetMachineId) || !CanSendApplicationMessage(remote))
                 {
                     continue;
                 }

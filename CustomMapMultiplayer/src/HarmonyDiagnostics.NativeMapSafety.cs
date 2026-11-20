@@ -42,12 +42,7 @@ namespace CustomMapMultiplayer
                     null),
                 "MapRemoveProjectileSafetyPrefix");
             patchedCount += PatchNativeMapSafetyMethod(
-                typeof(TorturedVillager).GetMethod(
-                    "Awake",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    Type.EmptyTypes,
-                    null),
+                GetInstanceMethod(typeof(TorturedVillager), "Awake"),
                 "TorturedVillagerAwakeSafetyPrefix");
             if (PickupableControllerInstanceField == null)
             {
@@ -57,12 +52,7 @@ namespace CustomMapMultiplayer
             else
             {
                 patchedCount += PatchNativeMapSafetyMethod(
-                    typeof(DoodadCrate).GetMethod(
-                        "SetupBlockAtStart",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                        null,
-                        Type.EmptyTypes,
-                        null),
+                    GetInstanceMethod(typeof(DoodadCrate), "SetupBlockAtStart"),
                     "DoodadCrateSetupBlockAtStartSafetyPrefix");
             }
 
@@ -91,9 +81,7 @@ namespace CustomMapMultiplayer
 
         private static int PatchNativeMapSafetyMethod(MethodInfo target, string prefixName)
         {
-            var prefix = typeof(HarmonyDiagnostics).GetMethod(
-                prefixName,
-                BindingFlags.NonPublic | BindingFlags.Static);
+            var prefix = GetPatchMethod(prefixName);
             if (target == null || prefix == null)
             {
                 DiagnosticLog.Warning(

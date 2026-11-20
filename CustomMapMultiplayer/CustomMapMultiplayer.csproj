@@ -6,6 +6,7 @@
     <AssemblyName>CustomMapMultiplayer</AssemblyName>
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <FileAlignment>512</FileAlignment>
     <PackageModPath>$(MSBuildProjectDirectory)\Release</PackageModPath>
     <PackageUmmModPath>$(PackageModPath)\UMM\Mods\CustomMapMultiplayer</PackageUmmModPath>
     <OutputPath>$(PackageUmmModPath)\</OutputPath>

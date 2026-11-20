@@ -139,6 +139,22 @@ namespace CustomMapMultiplayer
                 !SceneLoader.IsSceneLoading && Map.MapData != null && !Map.isEditing;
         }
 
+        private static bool AcceptWorldRpc(long epoch)
+        {
+            return _worldEpoch != 0 && epoch == _worldEpoch && IsWorldSession() && RPCController.CurrentRPC != null;
+        }
+
+        private static bool IsWorldRpcOwner(int owner)
+        {
+            var sender = RPCController.CurrentRPC.messageInfo.Sender;
+            return owner == PID.TargetServer.AsInt ? sender == PID.ServerID : sender.AsInt == owner;
+        }
+
+        private static bool IsWorldRpcObject(NID id, int owner)
+        {
+            return id.Sid == Connect.SessionID && IsWorldRpcOwner(owner);
+        }
+
         private static bool IsWorldObject(BroforceObject obj)
         {
             var unit = obj as Unit;
@@ -161,9 +177,17 @@ namespace CustomMapMultiplayer
 
         private static void PatchWorldMethod(MethodBase method, string prefix, string postfix)
         {
-            _harmony.Patch(method,
-                prefix == null ? null : new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(prefix, BindingFlags.NonPublic | BindingFlags.Static)),
-                postfix == null ? null : new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(postfix, BindingFlags.NonPublic | BindingFlags.Static)), null, null);
+            PatchWorldMethod(method, prefix, postfix, null, null);
+        }
+
+        private static HarmonyMethod WorldPatch(string name)
+        {
+            return name == null ? null : new HarmonyMethod(GetPatchMethod(name));
+        }
+
+        private static void PatchWorldMethod(MethodBase method, string prefix, string postfix, string transpiler, string finalizer)
+        {
+            _harmony.Patch(method, WorldPatch(prefix), WorldPatch(postfix), WorldPatch(transpiler), WorldPatch(finalizer));
         }
 
         private static void PatchEntityFinalStateSynchronization()
@@ -197,13 +221,9 @@ namespace CustomMapMultiplayer
                         name == "DestroyBlockInternal")
                         PatchWorldMethod(method, "WorldCollapsePrefix", "WorldMutationPostfix");
                     else if (name == "RunMovement" && typeof(Unit).IsAssignableFrom(type))
-                        _harmony.Patch(method,
-                            new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldMovementPrefix", BindingFlags.NonPublic | BindingFlags.Static)),
-                            null, null, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldMovementFinalizer", BindingFlags.NonPublic | BindingFlags.Static)));
+                        PatchWorldMethod(method, "WorldMovementPrefix", null, null, "WorldMovementFinalizer");
                     else if (name == "Update" && typeof(Pickupable).IsAssignableFrom(type))
-                        _harmony.Patch(method,
-                            new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldPickupUpdatePrefix", BindingFlags.NonPublic | BindingFlags.Static)),
-                            null, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldPickupVisibilityTranspiler", BindingFlags.NonPublic | BindingFlags.Static)), null);
+                        PatchWorldMethod(method, "WorldPickupUpdatePrefix", null, "WorldPickupVisibilityTranspiler", null);
                     else if (name == "ChangeFrame" && typeof(TestVanDammeAnim).IsAssignableFrom(type))
                         PatchWorldMethod(method, "WorldPoseAnimationPrefix", "WorldElectrifiedPosePostfix");
                     else if (name == "CreateGibEffects" && typeof(TestVanDammeAnim).IsAssignableFrom(type))
@@ -217,12 +237,9 @@ namespace CustomMapMultiplayer
                     else if (name == "MakeEffects" && method.GetParameters().Length == 6 && typeof(Projectile).IsAssignableFrom(type))
                         PatchWorldDamageContext(method, "WorldProjectileEffectsPrefix");
                     else if (name == "MakeEffects" && method.GetParameters().Length == 0 && typeof(Grenade).IsAssignableFrom(type))
-                        _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeEffectsPrefix", null, null)),
-                            new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeEffectsPostfix", null, null)), null,
-                            new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeEffectsFinalizer", null, null)));
+                        PatchWorldMethod(method, "WorldGrenadeEffectsPrefix", "WorldGrenadeEffectsPostfix", null, "WorldGrenadeEffectsFinalizer");
                     else if (name == "Update" && typeof(Grenade).IsAssignableFrom(type))
-                        _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeUpdatePrefix", null, null)),
-                            null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeUpdateFinalizer", null, null)));
+                        PatchWorldMethod(method, "WorldGrenadeUpdatePrefix", null, null, "WorldGrenadeUpdateFinalizer");
                     else if ((name == "Panic" || name == "Blind" || name == "Terrify" || name == "TearGas" || name == "Stun" || name == "Freeze") && typeof(Unit).IsAssignableFrom(type))
                         PatchWorldMethod(method, "WorldStatusPrefix", "WorldMutationPostfix");
                     else if (name == "MakeEffects" && method.GetParameters().Length == 0 &&
@@ -232,7 +249,7 @@ namespace CustomMapMultiplayer
             }
             // Copy only the base visual method: overrides can drop grenades or deal explosion damage.
             _harmony.CreateReversePatcher(typeof(TestVanDammeAnim).GetMethod("CreateGibEffects", WorldFields | BindingFlags.DeclaredOnly),
-                new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldBaseGibEffects", BindingFlags.NonPublic | BindingFlags.Static)))
+                new HarmonyMethod(GetPatchMethod("WorldBaseGibEffects")))
                 .Patch(HarmonyReversePatchType.Original);
             PatchWorldMethod(typeof(DogAI).GetMethod("IsAtActionGridpoint", WorldFields | BindingFlags.DeclaredOnly), null, "WorldDogArrivalPostfix");
             PatchWorldMethod(typeof(Registry).GetMethod("RegisterObject", BindingFlags.Public | BindingFlags.Static), null, "WorldRegisterPostfix");
@@ -263,9 +280,7 @@ namespace CustomMapMultiplayer
             PatchWorldMethod(typeof(RPCController).GetMethod("CreateRPC", BindingFlags.Public | BindingFlags.Static),
                 "WorldBlockRpcPrefix", null);
             PatchWorldMethod(AccessTools.Method(typeof(Block), "CheckForMine", null, null), "WorldCheckForMinePrefix", null);
-            _harmony.Patch(AccessTools.Method(typeof(Mine), "Explode", null, null),
-                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldMineExplosionPrefix", null, null)), null, null,
-                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldMineExplosionFinalizer", null, null)));
+            PatchWorldMethod(AccessTools.Method(typeof(Mine), "Explode", null, null), "WorldMineExplosionPrefix", null, null, "WorldMineExplosionFinalizer");
             DiagnosticLog.Info("WORLD_STATE authoritative object state synchronization enabled; protocol=" + WorldProtocol + ".");
         }
 
@@ -938,7 +953,7 @@ namespace CustomMapMultiplayer
         private static void SendWorldStates(IList<WorldSnapshot> states, PID target, bool reliable)
         {
             if (states.Count == 0) return;
-            using (var stream = new MemoryStream())
+            var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {
                 for (var i = 0; i < states.Count; i++)
@@ -970,35 +985,38 @@ namespace CustomMapMultiplayer
         [AllowedRPC]
         private static void ReceiveCompressedWorldStatesRPC(long epoch, byte[] bytes)
         {
-            if (!IsWorldSession() || _worldEpoch == 0 || epoch != _worldEpoch || RPCController.CurrentRPC == null) return;
+            if (!AcceptWorldRpc(epoch)) return;
+            ReceiveWorldStatesRPC(epoch, DecompressWorldPacket(bytes));
+        }
+
+        private static byte[] DecompressWorldPacket(byte[] bytes)
+        {
             using (var input = new MemoryStream(bytes))
             using (var decompressor = new DeflateStream(input, CompressionMode.Decompress))
             using (var output = new MemoryStream())
             {
                 // Unity's Mono inflater can stop at input EOF with output still buffered.
-                // Read the whole batch (1000 bytes plus one snapshot) in one buffer.
+                // Drain buffered output in blocks before decoding individual fields.
                 var buffer = new byte[4096];
                 int count;
                 while ((count = decompressor.Read(buffer, 0, buffer.Length)) > 0)
                     output.Write(buffer, 0, count);
-                ReceiveWorldStatesRPC(epoch, output.ToArray());
+                return output.ToArray();
             }
         }
 
         [AllowedRPC]
         private static void ReceiveWorldStatesRPC(long epoch, byte[] bytes)
         {
-            if (!IsWorldSession() || _worldEpoch == 0 || epoch != _worldEpoch || RPCController.CurrentRPC == null) return;
-            var sender = RPCController.CurrentRPC.messageInfo.Sender;
-            using (var stream = new MemoryStream(bytes))
+            if (!AcceptWorldRpc(epoch)) return;
+            var stream = new MemoryStream(bytes);
             using (var reader = new BinaryReader(stream))
             {
                 while (stream.Position < stream.Length)
                 {
                     var state = ReadWorldState(reader);
                     state.StatusReceivedAt = Time.time;
-                    if (state.Id.Sid != Connect.SessionID ||
-                        (state.Owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != state.Owner)) continue;
+                    if (!IsWorldRpcObject(state.Id, state.Owner)) continue;
                     if (!TryApplyWorldState(state) && WorldPending.Count < 4096)
                     {
                         WorldSnapshot previous;

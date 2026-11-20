@@ -50,18 +50,18 @@ namespace CustomMapMultiplayer
             var phase = (Time.unscaledTime % HostGradientCycleSeconds) /
                         HostGradientCycleSeconds;
             var builder = new StringBuilder(playerName.Length * 24);
-            builder.Append("<color=#AEB3B8>HOST</color>");
-            builder.Append(SeparatorRichText);
+            builder.Append("<color=#AEB3B8>HOST</color>")
+                .Append(SeparatorRichText);
             for (var index = 0; index < textElements.Count; index++)
             {
                 var position = textElements.Count <= 1
                     ? phase
                     : (phase + (index / (float)(textElements.Count - 1)) * 0.45f) % 1f;
-                builder.Append("<color=#");
-                builder.Append(SampleHostGradient(position));
-                builder.Append(">");
-                builder.Append(EscapeRichText(textElements[index]));
-                builder.Append("</color>");
+                builder.Append("<color=#")
+                    .Append(SampleHostGradient(position))
+                    .Append(">")
+                    .Append(EscapeRichText(textElements[index]))
+                    .Append("</color>");
             }
             return builder.ToString();
         }
