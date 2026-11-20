@@ -89,6 +89,12 @@ namespace CustomMapMultiplayer
 
         private static void DetonateDemolitionBomb(Projectile projectile)
         {
+            if (_worldEpoch != 0 && IsWorldSession())
+            {
+                // World effects and removal already synchronize the owner's detonation.
+                if (projectile != null && projectile.IsMine) projectile.Death();
+                return;
+            }
             if (projectile == null)
             {
                 return;
