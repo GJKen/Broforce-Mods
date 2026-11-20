@@ -42,6 +42,10 @@
       <HintPath>$(BroforceManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(BroforceManagedPath)\UnityEngine.AudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityModManager">
       <HintPath>$(UnityModManagerPath)\UnityModManager.dll</HintPath>
       <Private>false</Private>
@@ -91,8 +95,19 @@
     <Compile Include="src\HarmonyDiagnostics.WorkshopLevelEnd.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldState.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldFire.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldMutations.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldReplayGeneration.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldPickups.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldProjectiles.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldGrenades.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldDoodads.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldRegistration.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldPersistentStatus.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldPersistentEffects.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldGrenadeEffects.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldUnitEffects.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldCarriers.cs" />
+    <Compile Include="src\HarmonyDiagnostics.WorldHitSounds.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldHitPresentation.cs" />
       <Compile Include="src\HarmonyDiagnostics.WorldSpecialHits.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldActors.cs" />

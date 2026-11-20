@@ -205,6 +205,12 @@ namespace CustomMapMultiplayer
 
         private static void DetonateMcBroverTurkey(Projectile projectile)
         {
+            if (_worldEpoch != 0 && IsWorldSession())
+            {
+                // World effects/state now carry active and ordinary impacts through one public path.
+                if (projectile != null && projectile.IsMine) projectile.Death();
+                return;
+            }
             var turkey = projectile as SachelPackTurkey;
             if (turkey == null)
             {

@@ -24,6 +24,7 @@ namespace CustomMapMultiplayer
             // Big mooks pass their adjusted offset through this shared implementation too.
             PatchWorldMethod(AccessTools.DeclaredMethod(typeof(TestVanDammeAnim), "CreateElectricShockPuff", null, null),
                 "WorldUnitShockPrefix", "WorldUnitShockPostfix");
+            PatchWorldHitSounds();
         }
 
         private static IEnumerable<CodeInstruction> WorldHitEffectsTranspiler(IEnumerable<CodeInstruction> instructions)
@@ -33,6 +34,7 @@ namespace CustomMapMultiplayer
                 var method = instruction.operand as MethodInfo;
                 if (method != null && method.DeclaringType == typeof(EffectsController) &&
                     (method.Name == "CreateMeleeStrikeEffect" || method.Name == "CreateWhiteFlashPop" ||
+                     method.Name == "CreateBloodGushEffect" || method.Name == "CreateBackgroundBloodSpray" ||
                      method.Name == "CreateBloodParticles" && method.GetParameters().Length == 9))
                 {
                     var load = new CodeInstruction(OpCodes.Ldarg_0, null);
@@ -40,7 +42,10 @@ namespace CustomMapMultiplayer
                     load.blocks.AddRange(instruction.blocks); instruction.blocks.Clear();
                     instruction.operand = AccessTools.Method(typeof(HarmonyDiagnostics),
                         method.Name == "CreateMeleeStrikeEffect" ? "WorldMeleeStrikeEffect" :
-                        method.Name == "CreateWhiteFlashPop" ? "WorldWhiteFlashEffect" : "WorldBloodParticlesEffect", null, null);
+                        method.Name == "CreateWhiteFlashPop" ? "WorldWhiteFlashEffect" :
+                        method.Name == "CreateBloodGushEffect" ? "WorldBloodGushEffect" :
+                        method.Name == "CreateBackgroundBloodSpray" ? "WorldBackgroundBloodEffect" : "WorldBloodParticlesEffect", null, null);
+                    instruction.opcode = OpCodes.Call;
                     yield return load;
                 }
                 yield return instruction;
@@ -67,6 +72,20 @@ namespace CustomMapMultiplayer
         {
             EffectsController.CreateWhiteFlashPop(x, y);
             SendWorldHitEffect(unit, 2, BloodColor.None, x, y, 0, 0f, 0f, 0f, 0f, 0f);
+        }
+
+        private static void WorldBloodGushEffect(BloodColor color, float x, float y, float vx, float vy,
+            bool dots, bool slimes, TestVanDammeAnim unit)
+        {
+            EffectsController.CreateBloodGushEffect(color, x, y, vx, vy, dots, slimes);
+            SendWorldHitEffect(unit, 3, color, x, y, (dots ? 1 : 0) | (slimes ? 2 : 0), 0, 0, 0, vx, vy);
+        }
+
+        private static void WorldBackgroundBloodEffect(EffectsController effects, float x, float y, float vx, float vy,
+            TestVanDammeAnim unit)
+        {
+            effects.CreateBackgroundBloodSpray(x, y, vx, vy);
+            SendWorldHitEffect(unit, 4, BloodColor.None, x, y, 0, 0, 0, 0, vx, vy);
         }
 
         private static void SendWorldHitEffect(TestVanDammeAnim unit, byte kind, BloodColor color,
@@ -108,6 +127,8 @@ namespace CustomMapMultiplayer
                 if (kind == 0) EffectsController.CreateMeleeStrikeEffect(x, y, vx, vy);
                 else if (kind == 1) EffectsController.CreateBloodParticles(color, x, y, count, radiusX, radiusY, force, vx, vy);
                 else if (kind == 2) EffectsController.CreateWhiteFlashPop(x, y);
+                else if (kind == 3) EffectsController.CreateBloodGushEffect(color, x, y, vx, vy, (count & 1) != 0, (count & 2) != 0);
+                else if (kind == 4) EffectsController.instance.CreateBackgroundBloodSpray(x, y, vx, vy);
             }
         }
 

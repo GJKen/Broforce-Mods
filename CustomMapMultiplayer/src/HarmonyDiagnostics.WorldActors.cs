@@ -34,7 +34,7 @@ namespace CustomMapMultiplayer
         private static void WorldHeroStatusPrefix(Unit __instance, out Unit __state)
         {
             __state = _worldStatusSource;
-            _worldStatusSource = _worldEpoch != 0 && IsWorldSession() && __instance.IsHero && __instance.IsMine ? __instance : null;
+            _worldStatusSource = _worldEpoch != 0 && IsWorldSession() && __instance.IsHero ? __instance : null;
         }
 
         private static void WorldHeroStatusFinalizer(Unit __state)
@@ -47,8 +47,8 @@ namespace CustomMapMultiplayer
             if (_worldEpoch == 0 || !IsWorldSession() || !IsWorldObject(__instance) || _worldApplying != 0) return true;
             if (__instance.IsMine) return true;
             // Native replica AI also calls Panic. Only an owning hero may initiate a new remote status.
-            if (_worldStatusSource == null || RPCController.CurrentRPC != null) return false;
-            var kind = __originalMethod.Name == "Panic" ? __args.Length - 1 :
+            if (_worldStatusSource == null || !_worldStatusSource.IsMine || RPCController.CurrentRPC != null) return false;
+            var kind = __originalMethod.Name == "Stun" ? 7 : __originalMethod.Name == "Freeze" ? 8 : __originalMethod.Name == "TearGas" ? 6 : __originalMethod.Name == "Panic" ? __args.Length - 1 :
                 (__originalMethod.Name == "Terrify" ? 3 : (__args.Length == 0 ? 4 : 5));
             using (var stream = new MemoryStream())
             using (var writer = new BinaryWriter(stream))
@@ -56,7 +56,7 @@ namespace CustomMapMultiplayer
                 WriteWorldId(writer, __instance.Nid); WriteWorldId(writer, _worldStatusSource.Nid);
                 writer.Write((byte)kind);
                 writer.Write(kind == 2 ? (int)__args[0] : 0);
-                writer.Write(kind == 1 || kind == 5 ? (float)__args[0] : (kind == 2 ? (float)__args[1] : 0f));
+                writer.Write(kind == 1 || kind >= 5 ? (float)__args[0] : (kind == 2 ? (float)__args[1] : 0f));
                 writer.Write(kind <= 2 && (bool)__args[__args.Length - 1]);
                 global::Networking.Networking.RPC<long, byte[]>(__instance.Owner,
                     new RpcSignature<long, byte[]>(ReceiveWorldStatusRPC), _worldEpoch, stream.ToArray(), false);
@@ -87,12 +87,18 @@ namespace CustomMapMultiplayer
                     case 3: target.Terrify(); break;
                     case 4: target.Blind(); break;
                     case 5: target.Blind(time); break;
+                    case 6: target.TearGas(time); break;
+                    case 7: target.Stun(time); break;
+                    case 8: target.Freeze(time); break;
                 }
             }
         }
 
         private static void ApplyWorldStatus(Unit unit, WorldSnapshot state, float age)
         {
+            var tvd = unit as TestVanDammeAnim;
+            age = Mathf.Max(age, WorldStatusAge(state));
+            if (tvd != null) ApplyWorldPersistentStatus(tvd, state, age);
             var mook = unit as Mook;
             if (mook == null) return;
             mook.blindTime = Mathf.Max(0f, state.BlindTime - age);

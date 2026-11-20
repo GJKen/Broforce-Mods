@@ -54,7 +54,7 @@ namespace CustomMapMultiplayer
             }
             else if (unit != null)
             {
-                unit.burnTime = state.BurnTime;
+                unit.burnTime = Mathf.Max(0f, state.BurnTime - (unit is TestVanDammeAnim ? WorldStatusAge(state) : 0f));
                 WorldUnitBurnDamage.SetValue(unit, state.BurnDamage);
             }
             if (obj is BarrelBlock) WorldBarrelExplosion.SetValue(obj, state.BurnExplosion);
@@ -63,6 +63,8 @@ namespace CustomMapMultiplayer
         private static void WorldBurnLogicPrefix(BroforceObject __instance, out WorldDamageContext __state)
         {
             __state = new WorldDamageContext { Previous = _worldDamageSource };
+            if (_worldEpoch != 0 && IsWorldSession() && IsWorldObject(__instance) && __instance.IsMine)
+                _worldDamageSource = __instance;
             if (!IsWorldReplica(__instance)) return;
             // Keep native flames and ammunition-crate flashes. Map effects and
             // mutation prefixes suppress replica damage, ignition and collapse.

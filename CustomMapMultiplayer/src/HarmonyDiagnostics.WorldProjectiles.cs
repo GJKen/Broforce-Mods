@@ -49,6 +49,8 @@ namespace CustomMapMultiplayer
             internal BroforceObject Previous;
             internal bool VisualReplay;
             internal bool EffectContext;
+            internal Unit PreviousStatus;
+            internal bool StatusContext;
         }
 
         private static void PatchWorldProjectiles()
@@ -81,9 +83,19 @@ namespace CustomMapMultiplayer
                 if (method.Name == "HeadShotUnit" || method.Name == "KnockAndDamageUnit" && method.GetParameters().Length == 11)
                     PatchWorldMethod(method, "WorldProjectileHitPrefix", null);
             PatchWorldMethod(typeof(MapController).GetMethod("Damage_Networked", BindingFlags.Public | BindingFlags.Static), "WorldProjectileBlockHitPrefix", null);
-            // Grenades inherit Shrapnel, so Projectile's six-argument hook never sees this effect.
-            PatchWorldMethod(AccessTools.DeclaredMethod(typeof(Grenade), "MakeEffects", Type.EmptyTypes, null),
-                "WorldGrenadeEffectsPrefix", "WorldGrenadeEffectsPostfix");
+            foreach (var method in typeof(Map).GetMethods(BindingFlags.Public | BindingFlags.Static))
+                if (method.Name == "DamageDoodads" || method.Name == "BurnUnitsAround_Local" ||
+                    method.Name == "HitProjectiles" || method.Name == "DamageProjectile")
+                    _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics),
+                        method.Name == "DamageDoodads" ? "WorldAreaDamageSenderPrefix" :
+                        method.Name == "BurnUnitsAround_Local" ? "WorldAreaDamageFiredPrefix" :
+                        method.Name == "DamageProjectile" ? "WorldAreaDamageProjectilePrefix" : "WorldAreaDamagePrefix", null, null)),
+                        null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldAreaDamageFinalizer", null, null)));
+            PatchWorldMethod(AccessTools.Method(typeof(ProjectileController), "SpawnGrenadeLocally", null, null), "WorldSpawnGrenadePrefix", null);
+            _harmony.Patch(AccessTools.Method(typeof(ProjectileController), "SpawnGrenadeOverNetwork", null, null),
+                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldNetworkGrenadeSpawnPrefix", null, null)), null, null,
+                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldNetworkGrenadeSpawnFinalizer", null, null)));
+            PatchWorldCarriers();
         }
 
         private static void PatchWorldDamageContext(MethodBase method, string prefix)
@@ -92,7 +104,8 @@ namespace CustomMapMultiplayer
                 "WorldProjectileEffectsPostfix", BindingFlags.NonPublic | BindingFlags.Static)) : null;
             var transpiler = prefix == "WorldProjectileEffectsPrefix" &&
                 (method.DeclaringType == typeof(Rocket) || method.DeclaringType == typeof(HeavyShell) ||
-                 method.DeclaringType == typeof(PlasmaBullet))
+                 method.DeclaringType == typeof(PlasmaBullet) || method.DeclaringType == typeof(SachelPack) ||
+                 method.DeclaringType == typeof(SachelPackTurkey))
                 ? new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldProjectileVisualRandomTranspiler", BindingFlags.NonPublic | BindingFlags.Static))
                 : null;
             _harmony.Patch(method, new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(prefix, BindingFlags.NonPublic | BindingFlags.Static)), postfix, transpiler,
@@ -105,11 +118,14 @@ namespace CustomMapMultiplayer
                 BindingFlags.NonPublic | BindingFlags.Static);
             var shell = __originalMethod.DeclaringType == typeof(HeavyShell);
             var plasma = __originalMethod.DeclaringType == typeof(PlasmaBullet);
+            var satchel = __originalMethod.DeclaringType == typeof(SachelPack);
+            var turkey = __originalMethod.DeclaringType == typeof(SachelPackTurkey);
             var matches = 0;
             foreach (var instruction in instructions)
             {
                 var called = instruction.operand as MethodInfo;
-                if (called != null && (plasma ? called.DeclaringType == typeof(EffectsController) && called.Name == "CreateShrapnel" :
+                if (called != null && (satchel || plasma ? called.DeclaringType == typeof(EffectsController) && called.Name == "CreateShrapnel" :
+                    turkey ? called.DeclaringType == typeof(EffectsController) && called.Name == "CreatePlumes" :
                     shell ? called.DeclaringType == typeof(Map) && called.Name == "ShakeTrees" :
                     called.DeclaringType == typeof(EffectsController) &&
                     (called.Name == "CreateSparkShower" || called.Name == "CreateHugeExplosion" || called.Name == "CreateMassiveExplosion")))
@@ -120,7 +136,7 @@ namespace CustomMapMultiplayer
                 }
                 yield return instruction;
             }
-            if (matches != (shell || plasma ? 1 : 3))
+            if (matches != (shell || plasma || satchel || turkey ? 1 : 3))
                 throw new InvalidOperationException("Could not locate every " + __originalMethod.DeclaringType.Name + ".MakeEffects visual branch.");
         }
 
@@ -179,6 +195,7 @@ namespace CustomMapMultiplayer
         private static void WorldProjectileContextFinalizer(WorldDamageContext __state)
         {
             _worldDamageSource = __state.Previous;
+            if (__state.StatusContext) _worldStatusSource = __state.PreviousStatus;
             if (__state.VisualReplay) _worldApplying--;
             if (__state.EffectContext && --_worldProjectileEffectsDepth == 0)
                 WorldProjectileVisualRandomStates.Clear();
@@ -187,6 +204,7 @@ namespace CustomMapMultiplayer
         private static bool WorldProjectileHitPrefix(MonoBehaviour __0, Unit __1, int __2, DamageType __3,
             float __4, float __5, int __6, bool __7, float __8, float __9, MethodBase __originalMethod)
         {
+            if (_worldApplying == 0 && IsWorldRemoteHeroAttack(__0, __1)) return false;
             var source = GetWorldHitSource(__0);
             if (_worldApplying != 0 || source == null || __1 == null || __1.IsMine ||
                 _worldDamageSource == null && !IsWorldObject(__1)) return true;
@@ -199,7 +217,7 @@ namespace CustomMapMultiplayer
             int damage, DamageType type, float forceX, float forceY, float x, float y)
         {
             var source = GetWorldHitSource(damageSender);
-            if (_worldApplying != 0 || source == null) return true;
+            if (_worldApplying != 0) return true;
             DamageType actualType;
             var target = ResolveWorldHitReceiver(damageReciever, type, out actualType);
             if (target == null || target.Nid == NID.NoID ||
@@ -207,6 +225,8 @@ namespace CustomMapMultiplayer
             var relay = damageReciever.GetComponent<DamageRelay>();
             var contact = relay == null ? NID.NoID : Registry.GetNID(relay);
             if (relay != null && contact == NID.NoID) return true;
+            if (IsWorldRemoteHeroAttack(damageSender, target)) return false;
+            if (source == null) return true;
             if (target.IsMine)
             {
                 if (HasWorldOwnedHitPresentation(target))
@@ -220,6 +240,8 @@ namespace CustomMapMultiplayer
 
         private static BroforceObject GetWorldHitSource(MonoBehaviour actor)
         {
+            // Mine.Explode already settles through each peer's native collapse.
+            if (actor is Mine) return null;
             if (_worldDamageSource != null) return _worldDamageSource;
             // Hero-owned splash effects can hit on later animation frames, outside
             // Projectile.Update. Route those hits through the same owner settlement.
@@ -236,8 +258,8 @@ namespace CustomMapMultiplayer
         private static void SendWorldProjectileContactHit(BroforceObject source, BroforceObject target, MonoBehaviour actor, int damage,
             DamageType type, float vx, float vy, int direction, bool knock, float x, float y, byte kind, NID contact, DamageType actualType)
         {
-            var request = BeginWorldHitPresentation(target, type, vx, vy, knock || kind == 2);
-            PresentWorldHitDirected(target, request, damage, actualType, vx, vy, direction, target is Unit && kind == 2 ? (byte)0 : kind);
+            var request = kind <= 2 ? BeginWorldHitPresentation(target, type, vx, vy, knock || kind == 2) : 0;
+            if (kind <= 2) PresentWorldHitDirected(target, request, damage, actualType, vx, vy, direction, target is Unit && kind == 2 ? (byte)0 : kind);
             using (var stream = new MemoryStream())
             using (var writer = new BinaryWriter(stream))
             {
@@ -247,6 +269,12 @@ namespace CustomMapMultiplayer
                 writer.Write(direction); writer.Write(knock); writer.Write(x); writer.Write(y);
                 writer.Write(request);
                 WriteWorldId(writer, contact);
+                if (kind >= 7)
+                {
+                    var entry = RegisterWorldObject(target);
+                    WriteWorldId(writer, source.Nid);
+                    writer.Write(entry.Life); writer.Write(++entry.DirectSequence);
+                }
                 global::Networking.Networking.RPC<long, byte[]>(target.Owner,
                     new RpcSignature<long, byte[]>(ReceiveWorldProjectileHitRPC), _worldEpoch, stream.ToArray(), true);
                 _worldHitMessagesPending = true;
@@ -307,17 +335,42 @@ namespace CustomMapMultiplayer
                 var knock = reader.ReadBoolean(); var x = reader.ReadSingle(); var y = reader.ReadSingle();
                 var request = reader.ReadInt32();
                 var contactId = ReadWorldId(reader);
+                if (kind >= 7)
+                {
+                    var sourceId = ReadWorldId(reader);
+                    var life = reader.ReadInt32(); var sequence = reader.ReadInt32();
+                    var source = Registry.GetObject(sourceId) as BroforceObject;
+                    if (kind > 9 || !(target is Unit) || !IsWorldObject(target) || target.destroyed ||
+                        sourceId.Sid != Connect.SessionID || source == null || source.Owner.AsInt != owner ||
+                        !(source is Unit && ((Unit)source).IsHero) && !IsWorldObject(source)) return;
+                    var entry = RegisterWorldObject(target);
+                    // Publish a revival that happened since the last periodic snapshot first.
+                    var unit = (Unit)target;
+                    if (entry.Last != null && (entry.Last.Flags & WorldFlags.Dead) != 0 &&
+                        unit.health > 0 && unit.actionState != ActionState.Dead) SendWorldHitResult(target);
+                    if (entry.Life != life || entry.Last != null && (entry.Last.Flags & WorldFlags.Removed) != 0) return;
+                    int previous;
+                    if (entry.DirectReceived != null && entry.DirectReceived.TryGetValue(sender.AsInt, out previous) && sequence <= previous) return;
+                    if (entry.DirectReceived == null) entry.DirectReceived = new Dictionary<int, int>();
+                    entry.DirectReceived[sender.AsInt] = sequence;
+                }
                 var contact = Registry.GetObject(contactId) as DamageRelay;
                 DamageType actualType;
                 var receiver = contactId == NID.NoID ? target.gameObject : contact == null ? null : contact.gameObject;
                 if (receiver != null && ResolveWorldHitReceiver(receiver, type, out actualType) != target) receiver = null;
                 var crate = target as CrateBlock;
                 var drop = crate == null ? null : WorldCratePickup.GetValue(crate) as Pickupable;
+                var previousRequest = _worldSettlingHit; var previousRequestor = _worldHitRequestor;
+                var previousTarget = _worldReceivingTarget;
+                _worldReceivingTarget = target;
                 _worldSettlingHit = request;
                 _worldHitRequestor = sender.AsInt;
+                _worldReceivingHit++;
                 try
                 {
-                if (kind == 2)
+                if (kind >= 3 && kind <= 9)
+                    ApplyWorldDirectMutation(target, actor, kind, damage, type, vx, vy, direction, x, y);
+                else if (kind == 2)
                 {
                     if (receiver != null) receiver.SendMessage("Damage", new DamageObject(damage, type, vx, vy, x, y, actor));
                 }
@@ -330,7 +383,11 @@ namespace CustomMapMultiplayer
                     else unit.Damage(damage, type, vx, vy, direction, actor, x, y);
                 }
                 }
-                finally { _worldSettlingHit = 0; _worldHitRequestor = -1; }
+                finally
+                {
+                    _worldReceivingHit--; _worldReceivingTarget = previousTarget;
+                    _worldSettlingHit = previousRequest; _worldHitRequestor = previousRequestor;
+                }
                 // Capture after the entire damage/death call, including corpse setup.
                 SendWorldHitResult(target);
                 var bossPiece = target as BossPiece;
@@ -817,6 +874,8 @@ namespace CustomMapMultiplayer
             var tracked = BeginWorldProjectileContext(__instance, out __state);
             __state.EffectContext = true;
             _worldProjectileEffectsDepth++;
+            if (WorldRandomStateSupported && tracked && __instance.IsMine && _worldProjectileEffectsDepth == 1)
+                WorldProjectileVisualRandomStates[__instance] = UnityEngine.Random.state;
             if (_worldApplying != 0 || !tracked) return true;
             if (__instance.IsMine)
             {
@@ -908,8 +967,15 @@ namespace CustomMapMultiplayer
                 {
                     // HitUnits can temporarily scale velocity; use the values at the actual impact.
                     projectile.xI = vx; projectile.yI = vy;
+                    var method = AccessTools.Method(projectile.GetType(), "MakeEffects", WorldProjectileEffectParameters, null);
                     var rocket = entry.Object as Rocket;
-                    if (rocket != null)
+                    if (method.DeclaringType != typeof(Projectile) && method.DeclaringType != typeof(Rocket) &&
+                        method.DeclaringType != typeof(HeavyShell) && method.DeclaringType != typeof(PlasmaBullet))
+                    {
+                        if (hasRandomState) UnityEngine.Random.state = randomState;
+                        method.Invoke(projectile, new object[] { particles, x, y, ray, normal, point });
+                    }
+                    else if (rocket != null)
                     {
                         // Rocket.MakeEffects keeps these visuals in its owner-only damage branch.
                         Map.ShakeTrees(x, y, 128f, 48f, 100f);

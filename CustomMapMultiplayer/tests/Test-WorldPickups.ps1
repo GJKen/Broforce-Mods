@@ -2,10 +2,16 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
+[xml]$props = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'LocalBroforcePath.props')
+$harmonyPath = Join-Path $props.Project.PropertyGroup.UnityModManagerPath '0Harmony.dll'
 $worldSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldState.cs')
 $hitSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldProjectiles.cs')
 $presentationSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldHitPresentation.cs')
 $collectSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorkshopPickup.cs')
+$doodadSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldDoodads.cs')
+$registrationSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldRegistration.cs')
+$statusSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldPersistentStatus.cs')
+$effectSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldPersistentEffects.cs')
 
 function Read-Declaration([string]$source, [string]$signature) {
     $start = $source.IndexOf($signature)
@@ -25,6 +31,17 @@ $declarations = @(
     Read-Declaration $worldSource 'private enum WorldFlags'
     Read-Declaration $worldSource 'private sealed class WorldSnapshot'
     Read-Declaration $worldSource 'private static bool WorldCriticalChanged('
+    Read-Declaration $doodadSource 'private static bool WorldDoodadChanged('
+    Read-Declaration $registrationSource 'private static bool MatchesWorldTombstone('
+    Read-Declaration $statusSource 'private static bool WorldPersistentStatusChanged('
+    Read-Declaration $statusSource 'private static void WriteWorldPersistentStatus('
+    Read-Declaration $statusSource 'private static void ReadWorldPersistentStatus('
+    Read-Declaration $effectSource 'private sealed class WorldEffectState'
+    Read-Declaration $effectSource 'private static void WriteWorldEffect('
+    Read-Declaration $effectSource 'private static WorldEffectState ReadWorldEffect('
+    Read-Declaration $effectSource 'private static bool IsNewWorldEffect('
+    Read-Declaration $effectSource 'private static bool IsExpiredWorldEffect('
+    Read-Declaration $effectSource 'private static long WorldEffectKey('
     Read-Declaration $worldSource 'private static bool IsWorldObject('
     Read-Declaration $worldSource 'private static bool IsWorldReplica('
     Read-Declaration $worldSource 'private static bool WorldMutationPrefix('
@@ -70,10 +87,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using Networking;
 using HarmonyLib;
-namespace HarmonyLib { public class CodeInstruction { public object operand; } public static class AccessTools {
- public static MethodInfo Method(Type t,string n,Type[] p,Type[] g) { return t.GetMethod(n,BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static); }
- public static FieldInfo Field(Type t,string n) { for(;t!=null;t=t.BaseType) { var f=t.GetField(n,BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static); if(f!=null)return f; } return null; }
-} }
 namespace UnityEngine {
  public class Object { public static void Destroy(object o) { } }
  public class MonoBehaviour { }
@@ -115,7 +128,7 @@ public struct SID {
 }
 public struct PID {
  public int AsInt; public PID(int n) { AsInt=n; }
- public static PID MyID=new PID(7), ServerID=new PID(6), TargetServer=new PID(0), TargetOthers=new PID(-1);
+ public static PID MyID=new PID(7), ServerID=new PID(6), TargetServer=new PID(0), TargetOthers=new PID(-1), TargetAll=new PID(-2);
  public static bool operator ==(PID a,PID b) { return a.AsInt==b.AsInt; }
  public static bool operator !=(PID a,PID b) { return !(a==b); }
  public override bool Equals(object o) { return o is PID && this==(PID)o; }
@@ -133,7 +146,10 @@ public struct NID {
 public enum DamageType { None, Normal, Melee, Explosion, Bullet, Blade, Crush, Fire, Acid, Plasma, Unholy }
 public enum ActionState { Idle, Dead, Panicking }
 public enum PickupType { Ammo, Airstrike, RemotecontrolCar }
-public class DamageObject { public DamageObject(int d,DamageType t,float vx,float vy,float x,float y,MonoBehaviour a) { } }
+public class DamageObject { public int damage; public DamageType damageType; public float xForce,yForce,x,y; public MonoBehaviour damageSender;
+ public DamageObject(int d,DamageType t,float vx,float vy,float x,float y,MonoBehaviour a) { damage=d;damageType=t;xForce=vx;yForce=vy;this.x=x;this.y=y;damageSender=a; } }
+public class Player { public TestVanDammeAnim character; }
+public class HeroController { public static Player[] players=new Player[4]; }
 public class BroforceObject:Component {
  public NID Nid; public PID Owner; public bool IsMine; public Transform transform;
  public float xI,yI; public BroforceObject() { gameObject=new GameObject(); gameObject.owner=this; transform=new Transform(this); Renderers[0].transform=transform; }
@@ -147,11 +163,37 @@ public class BroforceObject:Component {
 public class Unit:BroforceObject {
  public ActionState actionState;
  public bool IsHero,deathNotificationSent,invulnerable; public int DamageCalls,KnockCalls;
- public void Damage(int d,DamageType t,float vx,float vy,int dir,MonoBehaviour a,float x,float y) { DamageCalls++; }
+ public DamageObject DirectHit; public int DirectDirection,GibCalls; public bool Fail; public Unit Collateral;
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ public virtual void Damage(int d,DamageType t,float vx,float vy,int dir,MonoBehaviour a,float x,float y) {
+  if(Fail)throw new InvalidOperationException("fixture failure");
+  DamageCalls++;DirectHit=new DamageObject(d,t,vx,vy,x,y,a);DirectDirection=dir;
+  if(Collateral!=null)Collateral.Damage(d,t,vx,vy,dir,a,x,y);
+ }
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ public virtual void GibNow(DamageType t,float vx,float vy) { Gib(t,vx,vy); }
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ protected virtual void Gib(DamageType t,float vx,float vy) { GibCalls++; }
  public void HeadShot(int d,DamageType t,float vx,float vy,int dir,float x,float y,MonoBehaviour a) { DamageCalls++; }
  public void Knock(DamageType t,float vx,float vy,bool local) { KnockCalls++; }
+ public int BurnCalls,BurnDamage,BurnDirection; public void BurnInternal(int d,int direction) { BurnCalls++;BurnDamage=d;BurnDirection=direction; }
 }
 public class TestVanDammeAnim:Unit { public bool canGib=true,WillReviveAlready,hasBeenCoverInAcid,AmmoFull; public object inseminatorUnit; public float xIBlast,yIBlast; public BloodColor bloodColor; public bool IsAmmoFull() { return AmmoFull; } public void ChangeFrame() { } public void Sound() { } }
+public class GuardedUnit:Unit {
+ public int Overrides; public bool Shield;
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ public override void Damage(int d,DamageType t,float vx,float vy,int dir,MonoBehaviour a,float x,float y) { Overrides++;if(!Shield)base.Damage(d,t,vx,vy,dir,a,x,y); }
+}
+public static class AreaFactory {
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ public static void DamageDoodads(MonoBehaviour sender,int playerNum,out bool hit) { CustomMapMultiplayer.HarmonyDiagnostics.ObserveArea();hit=true; }
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ public static void BurnUnitsAround_Local(MonoBehaviour firedBy,int playerNum) { CustomMapMultiplayer.HarmonyDiagnostics.ObserveArea(); }
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ public static void HitProjectiles(int playerNum) { CustomMapMultiplayer.HarmonyDiagnostics.ObserveArea(); }
+ [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+ public static void DamageProjectile(int newPlayerNum) { CustomMapMultiplayer.HarmonyDiagnostics.ObserveArea(); }
+}
 public class Mook:TestVanDammeAnim { }
 public class MookTrooper:Mook { }
 public class MookBigGuy:Mook { }
@@ -190,18 +232,27 @@ public class EffectsController {
  public static void CreatePuffDisappearRingEffect(float x,float y,float vx,float vy) { }
 }
 public static class SortOfFollow { public static bool Visible; public static bool IsItSortOfVisible(float x,float y,float a,float b) { return Visible; } }
-public class Doodad:BroforceObject { }
+public class Doodad:BroforceObject { public int Hits; public DamageObject LastHit; public bool DamageOptional(DamageObject hit,ref bool show) { Hits++;LastHit=hit;show=true;return true; } }
+public class DoodadDestroyable:Doodad { public int Ignitions; public void SetAlight_Local() { Ignitions++; } }
 public class BlockPiece:BroforceObject { }
 public class Block:BroforceObject {
  public bool protectedFromDestruction; public float collapseChance=1; public object shrapnelPrefab,shrapnelBitPrefab; public BlockPiece backgroundMesh;
+ public Mine mine; public int Collapses,NativeMineChecks; public bool FailCollapse;
+ public void CheckForMine() { NativeMineChecks++; }
  public void Sound() { }
- public void ActuallyCollapse(float x,float y,bool around) { }
+ public void ActuallyCollapse(float x,float y,bool around) { if(FailCollapse)throw new InvalidOperationException(); if(destroyed)return;Collapses++;destroyed=true;if(mine!=null)mine.Detonate(true); }
  public void DestroyBlockInternal(bool around) { }
  public void Damage() { }
+ public int Ignitions; public void SetAlight_Local() { Ignitions++; }
 }
 public class DirtBlock:Block { public void ShowBrokenBackground() { backgroundMesh=new BlockPiece(); } }
-public class Projectile:BroforceObject { }
+public class Projectile:BroforceObject { public int Hits,NewPlayer; public float Delay; public void Damage(int d,DamageType t,float vx,float vy,float delay,int player) { Hits++;Delay=delay;NewPlayer=player; } }
 public class Grenade:BroforceObject { }
+public class Mine:BroforceObject {
+ public bool exploded,detonated;public int Starts,ImmediateExplosions; public Action ExplosionAction;
+ public void Detonate(bool immediate) { if(!detonated){detonated=true;Starts++;}if(immediate&&!exploded){ImmediateExplosions++;exploded=true;} }
+ public void Explode(int playerNum) { if(exploded)return;exploded=true;if(ExplosionAction!=null)ExplosionAction(); }
+}
 public class FallingBlock:Block { public int collapseHealthPoint=-15; }
 public class CrateBlock:FallingBlock {
  public object shrapnelBitPrefab3; public bool containsPresent; public int Rewards;
@@ -228,20 +279,26 @@ public static class PickupableController {
 public static class Connect { public static SID SessionID=new SID(20); }
 public static class Registry {
  public static Dictionary<NID,BroforceObject> Items=new Dictionary<NID,BroforceObject>();
- public static NID GetNID(object o) { return ((BroforceObject)o).Nid; }
+ public static NID GetNID(object o) { var obj=o as BroforceObject;return obj==null?NID.NoID:obj.Nid; }
  public static object GetObject(NID id) { BroforceObject o; return Items.TryGetValue(id,out o)?o:null; }
 }
 public class RPCInfo { public PID Sender; }
 public class RPCObject { public RPCInfo messageInfo=new RPCInfo(); }
-public static class RPCController { public static RPCObject CurrentRPC; }
+public class CreatedRPC { public object Target;public MethodInfo Method;public object[] Parameters;public bool Immediate; }
+public static class RPCController {
+ public static RPCObject CurrentRPC;
+ public static CreatedRPC CreateRPC(object targetObject,MethodInfo methodInfo,object[] parameters,bool immediate) { return new CreatedRPC{Target=targetObject,Method=methodInfo,Parameters=parameters,Immediate=immediate}; }
+}
 public static class RPCBatcher { public static int Flushes; public static void FlushQueue() { Flushes++; } }
 namespace Networking {
+ public class AllowedRPCAttribute:Attribute { }
  public delegate void RpcSignature<T,U>(T a,U b);
  public delegate void RpcSignature<T,U,V>(T a,U b,V c);
  public static class Networking {
-  public static int Calls; public static PID Target; public static bool Immediate; public static byte[] Bytes;
+  public static int Calls; public static PID Target; public static bool Immediate; public static byte[] Bytes; public static CreatedRPC Last;
   public static void RPC<T,U>(PID target,RpcSignature<T,U> method,T a,U b,bool immediate) {
-   Calls++; Target=target; Immediate=immediate; Bytes=(byte[])(object)b;
+   Calls++; Target=target; Immediate=immediate; Bytes=(object)b as byte[];
+   Last=RPCController.CreateRPC(method.Target,method.Method,new object[]{a,b},immediate);
   }
   public static void RPC<T,U,V>(PID target,RpcSignature<T,U,V> method,T a,U b,V c,bool immediate) { }
  }
@@ -249,15 +306,16 @@ namespace Networking {
 namespace CustomMapMultiplayer {
  internal static partial class HarmonyDiagnostics {
   private const BindingFlags WorldFields=BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public;
-  private static long _worldEpoch=123; private static int _worldApplying;
+  private static long _worldEpoch=123; private static int _worldApplying, _worldGrenadeReplicaUpdate, _worldNetworkGrenadeSpawnDepth;
   private static bool Session=true; private static BroforceObject _worldDamageSource;
+  private static Unit _worldStatusSource;
   private static bool _workshopDuplicatePickupCollectLogged;
   private static bool IsWorkshopOnlineSession() { return Session; }
   private static class DiagnosticLog { public static void Info(string message) { } }
   private static int _worldSequence,Published,DamageAtCapture,_worldHitSequence,Applied;
   private const float WorldSendInterval=1f/12f;
   private static bool _worldHitMessagesPending;
-  private sealed class WorldEntry { public bool Dirty; public WorldSnapshot Last; public float SentAt,ReceivedAt,PendingHitUntil; public int PendingHit; public Vector2 LerpFrom; public BroforceObject Object; public WorldHitPresentation Presentation; public WorldFlags PresentedFlags; }
+  private sealed class WorldEntry { public bool Dirty; public int Life=1,DirectSequence; public Dictionary<int,int> DirectReceived; public WorldSnapshot Last; public float SentAt,ReceivedAt,PendingHitUntil; public int PendingHit; public Vector2 LerpFrom; public BroforceObject Object; public WorldHitPresentation Presentation; public WorldFlags PresentedFlags; }
   private static int _worldSettlingHit,_worldHitRequestor,_worldSuppressCrateDebris,Gibs,Corpses;
   private static Dictionary<int,byte> WorldPresentedHitEffects=new Dictionary<int,byte>();
   private static Dictionary<Type,bool> WorldPlainDamageTypes=new Dictionary<Type,bool>();
@@ -279,7 +337,7 @@ namespace CustomMapMultiplayer {
   private static WorldEntry Entry=new WorldEntry();
   private static WorldEntry RegisterWorldObject(BroforceObject o) { if(!WorldEntries.TryGetValue(o.Nid,out Entry)) { Entry=new WorldEntry { Object=o }; WorldEntries.Add(o.Nid,Entry); } return Entry; }
   private static bool ApplyWorldObjectState(WorldEntry e,WorldSnapshot s) { Applied++; return true; }
-  private static WorldSnapshot CaptureWorldState(WorldEntry e) { if(e.Object is Unit)DamageAtCapture=((Unit)e.Object).DamageCalls; return new WorldSnapshot { SentAt=42, Health=e.Object.health }; }
+  private static WorldSnapshot CaptureWorldState(WorldEntry e) { if(e.Object is Unit)DamageAtCapture=((Unit)e.Object).DamageCalls; return new WorldSnapshot { SentAt=42, Health=e.Object.health,Life=e.Life }; }
   private static void SendWorldStates(IList<WorldSnapshot> states,PID target,bool reliable) {
    Check(target==PID.TargetOthers && reliable,"hit results must reliably reach all replicas"); Published+=states.Count;
   }
@@ -353,11 +411,54 @@ namespace CustomMapMultiplayer {
    Session=false; WorldBlockRpcPrefix(crate,typeof(Block).GetMethod("ActuallyCollapse"),ref immediate);
    Check(!immediate,"offline block RPC timing remains unchanged"); Session=true;
    using(var stream=new MemoryStream())using(var w=new BinaryWriter(stream)) {
+    var gas=new WorldEffectState { Owner=6,Serial=42,Revision=7,Prefab="TearGasExplosion",Type="FlashBangExplosion",Remaining=3.5f,Clock=123,Position=new Vector3(12,24,1),Data=new byte[]{1,0,8} };
+    WriteWorldEffect(w,gas); WriteWorldEffect(w,new WorldEffectState { Owner=7,Serial=42,Revision=9,Prefab="beam",Type="LaserBeam",Removed=true,Laser=true });
+    w.Flush();stream.Position=0;
+    using(var r=new BinaryReader(stream)) {
+     var decoded=ReadWorldEffect(r); var removed=ReadWorldEffect(r);
+     Check(decoded.Owner==6 && decoded.Serial==42 && decoded.Revision==7 && decoded.Remaining==3.5f,"effect identity and remaining duration survive production codec");
+     Check(decoded.Position.y==24 && decoded.Data.Length==3 && decoded.Data[2]==8,"effect grid payload survives production codec");
+     Check(removed.Laser && removed.Removed && stream.Position==stream.Length,"effect removal and adjacent framing survive production codec");
+     Check(WorldEffectKey(6,42)!=WorldEffectKey(7,42),"different owners cannot collide at the same pool serial");
+     Check(!IsNewWorldEffect(gas,decoded),"duplicate effect state is ignored");
+     decoded.Revision=6;Check(!IsNewWorldEffect(gas,decoded),"older baseline cannot overwrite newer live effect");
+     decoded.Revision=8;Check(IsNewWorldEffect(gas,decoded),"newer live effect is accepted");
+     decoded.Removed=true;Check(IsNewWorldEffect(gas,decoded),"newer Removed terminates a live effect");
+     gas.Revision=9;Check(!IsNewWorldEffect(decoded,gas),"terminated pool life cannot be resurrected by a delayed active state");
+     Check(IsExpiredWorldEffect(gas,3.5f) && !IsExpiredWorldEffect(gas,3.4f),"pending elapsed time prevents full-duration restart");
+     Check(IsExpiredWorldEffect(removed,0),"removed effects expire without an object or duration");
+     Check(IsNewWorldEffect(null,gas),"new pool identity can start a separate lifecycle");
+    }
+   }
+   using(var stream=new MemoryStream())using(var w=new BinaryWriter(stream)) {
+    active.DoodadVisual=15; active.DoodadColliders=10; active.DoodadMaterial=2;
+    active.DoodadPixel=new Vector2(128,64); active.DoodadChildren=new byte[] {0,1,0};
+    active.StunTime=8; active.FrozenTime=6; active.ShockTime=3; active.PlasmaTime=4; active.PlasmaDamage=2;
+    active.Acid=true; active.AcidTime=.6f; active.StatusMaterial="acid"; active.TearGas=true;
+    active.Inseminator=new NID(new SID(20),PID.TargetServer,110,3); active.InseminationTime=1.2f; active.InseminatedTime=.8f; active.InseminationFrame=4;
     WriteWorldState(w,active); WriteWorldState(w,inactive); w.Flush(); stream.Position=0;
     using(var r=new BinaryReader(stream)) {
      var a=ReadWorldState(r); var b=ReadWorldState(r);
      Check(a.Id==active.Id && a.PickupType==active.PickupType && a.PickupDelay==.3f && a.X==800,"pickup wire round trip");
      Check(float.IsPositiveInfinity(a.LifeTime) && (b.Flags&WorldFlags.PickupActive)==0 && stream.Position==stream.Length,"adjacent snapshot framing");
+     Check(a.DoodadVisual==15 && a.DoodadColliders==10 && a.DoodadMaterial==2 && a.DoodadPixel.x==128 && a.DoodadPixel.y==64,"doodad stage and appearance survive the production codec");
+     Check(a.DoodadChildren.Length==3 && a.DoodadChildren[1]==1 && b.DoodadVisual==0,"doodad children preserve exact active states without changing adjacent non-doodad framing");
+     var same=ReadDoodadCopy(a);
+     Check(a.StunTime==8 && a.FrozenTime==6 && a.ShockTime==3 && a.PlasmaTime==4 && a.PlasmaDamage==2,"persistent unit timers survive production codec");
+     Check(a.Acid && a.AcidTime==.6f && a.StatusMaterial=="acid" && a.TearGas,"acid material and choking survive production codec");
+     Check(a.Inseminator==active.Inseminator && a.InseminationTime==1.2f && a.InseminatedTime==.8f && a.InseminationFrame==4,"parasite dependency and progress survive production codec");
+     Check(!WorldPersistentStatusChanged(a,same),"duplicate persistent status does not become a new transition");
+     same.FrozenTime=0; Check(WorldCriticalChanged(a,same),"freeze expiry needs reliable state");
+     same=ReadDoodadCopy(a); same.Acid=false; Check(WorldCriticalChanged(a,same),"acid recovery needs reliable state");
+     same=ReadDoodadCopy(a); same.Inseminator=NID.NoID; Check(WorldCriticalChanged(a,same),"parasite removal needs reliable state");
+     same=ReadDoodadCopy(a);
+     Check(!WorldDoodadChanged(a,same),"repeated damaged state is unchanged");
+     same.DoodadColliders=4;
+     Check(WorldCriticalChanged(a,same),"collision phase changes require reliable delivery at unchanged health");
+     same=ReadDoodadCopy(a); same.DoodadChildren[0]=1;
+     Check(WorldCriticalChanged(a,same),"pristine child state changes require reliable delivery");
+     same=ReadDoodadCopy(a); same.DoodadMaterial=1;
+     Check(WorldCriticalChanged(a,same),"material stage changes require reliable delivery");
     }
    }
    p.collected=false; p.pickupDelay=.3f;
@@ -608,8 +709,256 @@ namespace CustomMapMultiplayer {
    cageHit=BeginWorldHitPresentation(cage,DamageType.Explosion,0,200,true); PresentWorldHit(cage,cageHit,30,DamageType.Explosion,0,200,2);
    FinishWorldHitPresentation(cageEntry,new WorldSnapshot { Health=3 });
    Check(cage.Renderers[0].enabled && cageBar.enabled && hostage.Renderers[0].enabled && bubble.enabled && !hiddenGun.enabled,"rejected cage prediction restores only its own renderers");
+   RunMutationChecks();
+   _worldApplying=1;_worldGrenadeReplicaUpdate=1;
+   var grenadeEnd=typeof(Pickupable).GetMethod("Death");
+   Check(!WorldMutationPrefix(new Grenade(),grenadeEnd),"replica grenade update cannot expire into native damage or children during visual replay");
+   Check(WorldMutationPrefix(new Pickupable(),grenadeEnd),"grenade update guard preserves unrelated pickup lifecycle replay");
+   _worldGrenadeReplicaUpdate=0;
+   Check(WorldMutationPrefix(new Grenade(),grenadeEnd),"leaving grenade update restores explicit lifecycle replay");
+   _worldApplying=0;
+   var late=new Doodad { Owner=PID.TargetServer, IsMine=false };
+   var tombstone=new WorldEntry { Object=late, Last=new WorldSnapshot { Type="Doodad",Owner=PID.TargetServer.AsInt,Life=1,Flags=WorldFlags.Removed } };
+   Check(MatchesWorldTombstone(tombstone),"late matching replica consumes its lifecycle tombstone");
+   late.IsMine=true; Check(!MatchesWorldTombstone(tombstone),"registration cannot delete an owned object before or after native ownership setup"); late.IsMine=false;
+   tombstone.Last.Type="Unit";Check(!MatchesWorldTombstone(tombstone),"a tombstone cannot retire a different component type");tombstone.Last.Type="Doodad";
+   tombstone.Last.Owner=8;Check(!MatchesWorldTombstone(tombstone),"a tombstone cannot retire an object with a different final owner");tombstone.Last.Owner=PID.TargetServer.AsInt;
+   tombstone.Life=2;Check(!MatchesWorldTombstone(tombstone),"an older tombstone cannot delete a newer lifecycle");tombstone.Life=1;
+   tombstone.Last.Flags=WorldFlags.None;Check(!MatchesWorldTombstone(tombstone),"an active state never schedules terminal cleanup");
    Console.WriteLine("PASS: "+Checks+" world pickup, codec and owner-hit regression checks");
   }
+  private static WorldSnapshot ReadDoodadCopy(WorldSnapshot state) {
+   using(var stream=new MemoryStream())using(var w=new BinaryWriter(stream)) {
+    WriteWorldState(w,state);w.Flush();stream.Position=0;
+    using(var r=new BinaryReader(stream))return ReadWorldState(r);
+   }
+  }
+  private static void RunMutationChecks() {
+   _worldApplying=0;_worldReceivingHit=0;_worldDamageSource=null;_worldStatusSource=null;RPCController.CurrentRPC=null;Session=true;
+   var source=new TestVanDammeAnim { IsMine=true,IsHero=true,Nid=new NID(new SID(20),new PID(8),501,3),Owner=new PID(8) };
+   var target=new Doodad { Nid=new NID(new SID(20),PID.TargetServer,502,3),Owner=PID.TargetServer };
+   Registry.Items[source.Nid]=source;Registry.Items[target.Nid]=target;
+   var optional=typeof(Doodad).GetMethod("DamageOptional");
+   object[] args={new DamageObject(7,DamageType.Explosion,12,34,56,78,source),false};
+   int before=Networking.Networking.Calls;
+   Check(!WorldDirectMutationPrefix(target,optional,args) && Networking.Networking.Calls==before+1 && target.Hits==0,"direct optional damage sends one request without mutating the replica");
+   byte[] packet=Networking.Networking.Bytes;source.IsMine=false;target.IsMine=true;
+   before=Networking.Networking.Calls;
+   Check(!WorldDirectMutationPrefix(target,optional,args) && Networking.Networking.Calls==before,"remote hero replay does not settle or send another direct hit");
+   RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   ReceiveWorldProjectileHitRPC(123,packet);
+   Check(target.Hits==1 && target.LastHit.damage==7 && target.LastHit.x==56 && target.LastHit.yForce==34,"owner receives the exact optional-damage virtual entry and parameters");
+   Check(_worldReceivingHit==0,"direct settlement scope is restored");
+   Check(IsWorldRemoteHeroAttack(source,new Unit { IsMine=true,Nid=target.Nid }),"common public hits reject the remote hero animation");
+   var localVictim=new Unit { IsMine=true,Nid=target.Nid };
+   Check(!WorldProjectileHitPrefix(source,localVictim,2,DamageType.Explosion,0,0,1,false,0,0,typeof(HarmonyDiagnostics).GetMethod("KnockAndDamageUnit")),"public unit route suppresses the remote animation on the target owner");
+   Check(!WorldProjectileBlockHitPrefix(source,target.gameObject,2,DamageType.Explosion,0,0,0,0),"public contact route suppresses the remote animation on the target owner");
+   _worldReceivingHit=1;Check(!IsWorldRemoteHeroAttack(source,target),"authoritative settlement can invoke nested public methods");_worldReceivingHit=0;
+   source.IsMine=true;target.IsMine=false;_worldDirectSource=source;
+   _worldReceivingHit=1;_worldDamageSource=source;before=Networking.Networking.Calls;
+   Check(!WorldDirectMutationPrefix(target,optional,args) && Networking.Networking.Calls==before+1,"settlement can forward collateral damage to another owner");
+   _worldReceivingHit=0;_worldDamageSource=null;
+   var burnTarget=new Unit { Nid=new NID(new SID(20),PID.TargetServer,503,3),Owner=PID.TargetServer };Registry.Items[burnTarget.Nid]=burnTarget;
+   Check(!WorldDirectMutationPrefix(burnTarget,typeof(Unit).GetMethod("BurnInternal"),new object[]{5,-1}),"direct burn sends through the shared request");
+   packet=Networking.Networking.Bytes;burnTarget.IsMine=true;ReceiveWorldProjectileHitRPC(123,packet);
+   Check(burnTarget.BurnCalls==1 && burnTarget.BurnDamage==5 && burnTarget.BurnDirection==-1,"owner retains native burn amount and direction");
+   var block=new Block { Nid=new NID(new SID(20),PID.TargetServer,504,3),Owner=PID.TargetServer };Registry.Items[block.Nid]=block;
+   Check(!WorldDirectMutationPrefix(block,typeof(Block).GetMethod("SetAlight_Local"),new object[0]),"direct ground ignition forwards");
+   packet=Networking.Networking.Bytes;block.IsMine=true;ReceiveWorldProjectileHitRPC(123,packet);Check(block.Ignitions==1,"owner ignites ground once");
+   var shot=new Projectile { Nid=new NID(new SID(20),PID.TargetServer,505,3),Owner=PID.TargetServer };Registry.Items[shot.Nid]=shot;
+   Check(!WorldDirectMutationPrefix(shot,typeof(Projectile).GetMethod("Damage"),new object[]{4,DamageType.Explosion,11f,22f,.25f,2}),"projectile damage forwards");
+   packet=Networking.Networking.Bytes;shot.IsMine=true;ReceiveWorldProjectileHitRPC(123,packet);
+   Check(shot.Hits==1 && shot.Delay==.25f && shot.NewPlayer==2,"projectile delay and newPlayerNum survive the request codec");
+   _worldApplying=1;before=Networking.Networking.Calls;
+   Check(!WorldDirectMutationPrefix(target,optional,args) && Networking.Networking.Calls==before,"visual replay neither mutates nor forwards damage");
+   _worldApplying=0;_worldDirectSource=null;_worldStatusSource=null;
+   Check(WorldDirectMutationKind(typeof(Unit).GetMethod("Damage"))==7,"eight-parameter Unit.Damage has an explicit request kind");
+   RunDirectUnitChecks();
+  }
+  private static void RunDirectUnitChecks() {
+   var harmony=new Harmony("cmm.direct-unit.regression");
+   foreach(var t in new[]{typeof(Unit),typeof(GuardedUnit)})foreach(var m in t.GetMethods(WorldFields|BindingFlags.DeclaredOnly))
+    if(WorldDirectMutationKind(m)>=7)harmony.Patch(m,new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldDirectMutationPrefix",BindingFlags.NonPublic|BindingFlags.Static)),null,null,null);
+   var source=new Unit { IsHero=true,IsMine=true,Owner=new PID(8),Nid=new NID(new SID(20),new PID(8),510,3) };
+   var target=new GuardedUnit { Owner=PID.TargetServer,Nid=new NID(new SID(20),PID.TargetServer,511,3) };
+   Registry.Items[source.Nid]=source;Registry.Items[target.Nid]=target;
+   RPCController.CurrentRPC=null;_worldStatusSource=source;
+   int before=Networking.Networking.Calls;
+   target.Damage(13,DamageType.Melee,14,15,-1,source,16,17);byte[] damage=Networking.Networking.Bytes;
+   target.GibNow(DamageType.Explosion,18,19);byte[] gib=Networking.Networking.Bytes;
+   Check(Networking.Networking.Calls==before+2 && target.Overrides==0 && target.GibCalls==0,"direct replica Damage/GibNow send one ordered request per call; no base or Gib duplicate");
+   source.IsMine=false;target.IsMine=true;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   ReceiveWorldProjectileHitRPC(123,damage);ReceiveWorldProjectileHitRPC(123,gib);
+   Check(target.Overrides==1 && target.DamageCalls==1 && target.GibCalls==1 && Networking.Networking.Calls==before+2,"owner virtual override/base and GibNow/Gib execute once without recursive requests");
+   Check(target.DirectHit.damage==13 && target.DirectHit.damageType==DamageType.Melee && target.DirectHit.xForce==14 && target.DirectHit.yForce==15 && target.DirectDirection==-1 && target.DirectHit.x==16 && target.DirectHit.y==17 && target.DirectHit.damageSender==source,"all direct damage parameters and actor survive production codec");
+   ReceiveWorldProjectileHitRPC(123,damage);ReceiveWorldProjectileHitRPC(123,gib);
+   Check(target.DamageCalls==1 && target.GibCalls==1,"duplicate direct and terminal packets are rejected");
+   ReceiveWorldProjectileHitRPC(124,damage);RegisterWorldObject(target).Life=2;ReceiveWorldProjectileHitRPC(123,gib);
+   Check(target.GibCalls==1,"expired epoch and older life terminal are rejected");RegisterWorldObject(target).Life=1;
+   RPCController.CurrentRPC=null;before=Networking.Networking.Calls;
+   target.Damage(1,DamageType.Melee,0,0,1,source,0,0);target.GibNow(DamageType.Explosion,0,0);
+   Check(target.DamageCalls==1 && target.GibCalls==1 && Networking.Networking.Calls==before,"remote hero animation cannot duplicate direct damage or terminal on target owner");
+   source.IsMine=true;target.IsMine=false;
+   target.Damage(1,DamageType.Melee,0,0,1,source,0,0);byte[] first=Networking.Networking.Bytes;
+   target.Damage(2,DamageType.Plasma,0,0,1,source,0,0);byte[] second=Networking.Networking.Bytes;
+   target.IsMine=true;source.IsMine=false;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   ReceiveWorldProjectileHitRPC(123,first);ReceiveWorldProjectileHitRPC(123,second);
+   Check(target.DamageCalls==3 && target.DirectHit.damageType==DamageType.Plasma,"same-frame legitimate multi-hit and additional Plasma both settle");
+   var collateral=new Unit { Owner=new PID(9),Nid=new NID(new SID(20),new PID(9),512,3) };Registry.Items[collateral.Nid]=collateral;
+   source.IsMine=true;target.IsMine=false;RPCController.CurrentRPC=null;
+   target.Damage(3,DamageType.Melee,0,0,1,source,0,0);byte[] nested=Networking.Networking.Bytes;
+   source.IsMine=false;target.IsMine=true;target.Collateral=collateral;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   before=Networking.Networking.Calls;ReceiveWorldProjectileHitRPC(123,nested);byte[] forwarded=Networking.Networking.Bytes;
+   Check(Networking.Networking.Calls==before+1 && Networking.Networking.Target==collateral.Owner,"owner settlement forwards nested damage to a different owner once");
+   target.Collateral=null;target.IsMine=false;collateral.IsMine=true;RPCController.CurrentRPC.messageInfo.Sender=PID.ServerID;
+   ReceiveWorldProjectileHitRPC(123,forwarded);
+   Check(collateral.DamageCalls==1 && collateral.DirectHit.damageSender==source,"nested owner request keeps original actor while checking settlement authority");
+   source.IsMine=true;target.IsMine=false;RPCController.CurrentRPC=null;
+   target.Damage(4,DamageType.Melee,0,0,1,source,0,0);byte[] shield=Networking.Networking.Bytes;
+   target.IsMine=true;target.Shield=true;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   before=target.DamageCalls;ReceiveWorldProjectileHitRPC(123,shield);
+   Check(target.DamageCalls==before,"owner override shield gate is preserved");target.Shield=false;
+   source.IsMine=true;target.IsMine=false;RPCController.CurrentRPC=null;
+   target.Damage(5,DamageType.Melee,0,0,1,source,0,0);byte[] failing=Networking.Networking.Bytes;
+   target.IsMine=true;target.Fail=true;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   try { ReceiveWorldProjectileHitRPC(123,failing); }catch(InvalidOperationException) { }
+   Check(_worldReceivingHit==0 && _worldReceivingTarget==null && _worldSettlingHit==0,"throwing owner virtual call restores all settlement scopes");target.Fail=false;
+   source.IsMine=true;target.IsMine=false;RPCController.CurrentRPC=null;
+   target.GibNow(DamageType.Explosion,21,22);byte[] late=Networking.Networking.Bytes;
+   source.IsMine=false;target.IsMine=true;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   int gibs=target.GibCalls;RegisterWorldObject(target).Life=2;ReceiveWorldProjectileHitRPC(123,late);
+   Check(target.GibCalls==gibs,"a fresh unconsumed terminal packet cannot affect a newer life");RegisterWorldObject(target).Life=1;
+   ReceiveWorldProjectileHitRPC(124,late);Check(target.GibCalls==gibs,"a fresh terminal packet from an expired epoch is rejected");
+   RPCController.CurrentRPC.messageInfo.Sender=new PID(9);ReceiveWorldProjectileHitRPC(123,late);
+   Check(target.GibCalls==gibs,"a different sender cannot claim the source owner");
+   RPCController.CurrentRPC.messageInfo.Sender=source.Owner;source.Owner=new PID(9);ReceiveWorldProjectileHitRPC(123,late);
+   Check(target.GibCalls==gibs,"source Registry ownership must agree with sender");source.Owner=new PID(8);
+   target.destroyed=true;ReceiveWorldProjectileHitRPC(123,late);Check(target.GibCalls==gibs,"removed terminal targets reject late requests");target.destroyed=false;
+   ReceiveWorldProjectileHitRPC(123,late);Check(target.GibCalls==gibs+1,"rejecting stale or invalid packets does not consume a valid terminal request");
+   source.IsMine=true;target.IsMine=false;RPCController.CurrentRPC=null;
+   target.Damage(6,DamageType.Melee,0,0,1,null,0,0);byte[] noActor=Networking.Networking.Bytes;
+   source.IsMine=false;target.IsMine=true;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   ReceiveWorldProjectileHitRPC(123,noActor);Check(target.DirectHit.damageSender==null,"context-sourced damage preserves an original null actor");
+   source.IsMine=true;target.IsMine=false;RPCController.CurrentRPC=null;
+   var gibMethod=typeof(Unit).GetMethod("Gib",BindingFlags.Instance|BindingFlags.NonPublic);
+   gibMethod.Invoke(target,new object[]{DamageType.Explosion,23f,24f});byte[] protectedGib=Networking.Networking.Bytes;
+   source.IsMine=false;target.IsMine=true;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   ReceiveWorldProjectileHitRPC(123,protectedGib);Check(target.GibCalls==gibs+2,"direct protected Gib retains its virtual dispatch path");
+   RPCController.CurrentRPC=null;_worldStatusSource=null;before=Networking.Networking.Calls;
+   var unknown=new Unit { IsHero=true,IsMine=true,Nid=NID.NoID };target.IsMine=false;
+   target.Damage(1,DamageType.Melee,0,0,1,unknown,0,0);
+   Check(Networking.Networking.Calls==before,"an unregistered source keeps the existing replica boundary");
+   _worldStatusSource=source;source.IsMine=true;
+   target.Damage(1,DamageType.Melee,0,0,1,new MonoBehaviour(),0,0);
+   Check(Networking.Networking.Calls==before,"an unregistered explicit actor is not silently replaced with a null sender");_worldStatusSource=null;
+   target.IsMine=true;RPCController.CurrentRPC=new RPCObject();before=target.DamageCalls;
+   target.Damage(1,DamageType.Melee,0,0,1,source,0,0);
+   Check(target.DamageCalls==before+1,"native RPC execution retains the existing owner gate without a new request");
+   RPCController.CurrentRPC=null;_worldStatusSource=source;source.IsMine=true;
+   harmony.Patch(typeof(Doodad).GetMethod("DamageOptional"),new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldDirectOptionalMutationPrefix",BindingFlags.NonPublic|BindingFlags.Static)),null,null,null);
+   var optional=new Doodad { Owner=PID.TargetServer,Nid=new NID(new SID(20),PID.TargetServer,513,3) };Registry.Items[optional.Nid]=optional;
+   bool show=true;before=Networking.Networking.Calls;
+   Check(!optional.DamageOptional(new DamageObject(7,DamageType.Melee,0,0,0,0,source),ref show) && show && Networking.Networking.Calls==before+1,"typed optional prefix preserves the caller ref and sends one request");
+   byte[] optionalPacket=Networking.Networking.Bytes;optional.IsMine=true;RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   ReceiveWorldProjectileHitRPC(123,optionalPacket);Check(optional.Hits==1,"typed optional entry retains owner execution without recursion");
+   foreach(var m in typeof(AreaFactory).GetMethods(BindingFlags.Public|BindingFlags.Static)) {
+    string prefix=m.Name=="DamageDoodads"?"WorldAreaDamageSenderPrefix":m.Name=="BurnUnitsAround_Local"?"WorldAreaDamageFiredPrefix":m.Name=="DamageProjectile"?"WorldAreaDamageProjectilePrefix":"WorldAreaDamagePrefix";
+    harmony.Patch(m,new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod(prefix,BindingFlags.NonPublic|BindingFlags.Static)),null,null,new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldAreaDamageFinalizer",BindingFlags.NonPublic|BindingFlags.Static)));
+   }
+   HeroController.players[1]=new Player { character=new TestVanDammeAnim() };_worldDirectSource=null;
+   AreaFactory.DamageDoodads(source,1,out show);
+   Check(show && ObservedArea==source && _worldDirectSource==null,"named sender prefix retains out bool and restores the context");
+   AreaFactory.BurnUnitsAround_Local(source,1);Check(ObservedArea==source,"named firedBy prefix keeps explicit actor ahead of playerNum");
+   AreaFactory.HitProjectiles(1);Check(ObservedArea==HeroController.players[1].character && _worldDirectSource==null,"player-only area prefix sets and restores the source");
+   _worldDirectSource=source;AreaFactory.DamageProjectile(1);
+   Check(ObservedArea==source && _worldDirectSource==source,"nested projectile area keeps the existing source ahead of newPlayerNum");_worldDirectSource=null;
+   var mine=new Mine { Owner=PID.TargetServer,Nid=new NID(new SID(20),PID.TargetServer,514,3) };Registry.Items[mine.Nid]=mine;
+   var receivingBlock=new Block { IsMine=true,Owner=PID.TargetServer,Nid=new NID(new SID(20),PID.TargetServer,515,3) };
+   _worldReceivingHit=1;_worldReceivingTarget=receivingBlock;_worldDamageSource=source;_worldDirectSource=source;
+   RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=source.Owner;
+   Check(WorldDirectActor(mine)==mine && GetWorldHitSource(mine)==null,"native mine explosion keeps its explicit source instead of inheriting a received hit or projectile");
+   target.IsMine=false;before=Networking.Networking.Calls;int mineHits=target.DamageCalls;
+   target.Damage(20,DamageType.Explosion,0,0,1,mine,0,0);
+   Check(Networking.Networking.Calls==before && target.DamageCalls==mineHits,"native mine collateral does not send a duplicate hit before the replica collapse explosion");
+   Check(WorldProjectileHitPrefix(mine,target,20,DamageType.Explosion,0,0,1,false,0,0,typeof(HarmonyDiagnostics).GetMethod("KnockAndDamageUnit")) && Networking.Networking.Calls==before,"native mine public unit hit keeps per-peer owner settlement");
+   Check(WorldProjectileBlockHitPrefix(mine,receivingBlock.gameObject,12,DamageType.Explosion,0,0,0,0) && Networking.Networking.Calls==before,"native mine ground hit retains the native terrain path");
+   target.IsMine=true;target.Damage(20,DamageType.Explosion,0,0,1,mine,0,0);
+   Check(target.DamageCalls==mineHits+1 && target.DirectHit.damageSender==mine,"native mine still damages its local owned target once");
+   _worldApplying=1;target.Damage(20,DamageType.Explosion,0,0,1,mine,0,0);_worldApplying=0;
+   Check(target.DamageCalls==mineHits+1,"mine explosion during snapshot application does not replay damage");
+   target.IsMine=false;target.Damage(3,DamageType.Melee,0,0,1,source,0,0);
+   Check(Networking.Networking.Calls==before+1 && _worldReceivingTarget==receivingBlock && _worldDamageSource==source,"other nested owner hits remain routed with their existing scopes");
+   _worldReceivingHit=0;_worldReceivingTarget=null;_worldDamageSource=null;_worldDirectSource=null;
+   harmony.UnpatchAll(harmony.Id);_worldStatusSource=null;RPCController.CurrentRPC=null;
+   RunMineCountdownChecks();
+   RunMinePrimeChecks();
+  }
+  private static void WorldBlockRpcPrefix(object targetObject,MethodInfo methodInfo,ref bool immediate) {
+   object[] parameters={0f,0f,true};WorldBlockRpcPrefix(ref targetObject,ref methodInfo,ref parameters,ref immediate);
+  }
+  private static void RunMineCountdownChecks() {
+   var h=new Harmony("cmm.mine-countdown.regression");
+   h.Patch(typeof(Mine).GetMethod("Explode"),new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldMineExplosionPrefix",BindingFlags.Static|BindingFlags.NonPublic)),null,null,new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldMineExplosionFinalizer",BindingFlags.Static|BindingFlags.NonPublic)));
+   h.Patch(typeof(RPCController).GetMethod("CreateRPC"),new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldBlockRpcPrefix",BindingFlags.Static|BindingFlags.NonPublic,null,new[]{typeof(object).MakeByRefType(),typeof(MethodInfo).MakeByRefType(),typeof(object[]).MakeByRefType(),typeof(bool).MakeByRefType()},null)),null,null,null);
+   var mine=new Mine();var neighbor=new Mine();var block=new Block{IsMine=true,Owner=PID.TargetServer,Nid=new NID(Connect.SessionID,PID.TargetServer,520,0),mine=mine};
+   var other=new Block{IsMine=true,Owner=PID.TargetServer,Nid=new NID(Connect.SessionID,PID.TargetServer,521,0),mine=neighbor};
+   var collapse=typeof(Block).GetMethod("ActuallyCollapse");CreatedRPC self=null,adjacent=null;
+   neighbor.ExplosionAction=delegate{self=RPCController.CreateRPC(block,collapse,new object[]{12f,34f,false},false);adjacent=RPCController.CreateRPC(other,collapse,new object[]{0f,0f,true},false);};
+   mine.ExplosionAction=delegate{neighbor.Explode(5);};mine.Explode(-10);
+   Check(self.Target==null&&self.Method.Name=="ReceiveWorldMineCollapseRPC"&&self.Immediate&&self.Parameters.Length==5&&(long)self.Parameters[0]==123&&(NID)self.Parameters[1]==block.Nid&&(float)self.Parameters[2]==12&&(float)self.Parameters[3]==34&&!(bool)self.Parameters[4],"native countdown self-collapse is encoded with epoch/block and exact native arguments through actual Harmony CreateRPC");
+   Check(adjacent.Target==other&&adjacent.Method==collapse&&_worldCountdownMine==null,"neighbor immediate explosion retains native collapse while nested countdown scope restores");
+   Registry.Items[block.Nid]=block;block.IsMine=false;block.mine=new Mine{detonated=true};var pending=block.mine;
+   RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=PID.ServerID;
+   self.Method.Invoke(null,self.Parameters);self.Method.Invoke(null,self.Parameters);
+   Check(block.Collapses==1&&block.mine==pending&&pending.detonated&&!pending.exploded&&pending.ImmediateExplosions==0,"owner collapse delivery destroys replica terrain once without preempting its existing mine countdown");
+   block.destroyed=false;block.mine=new Mine();pending=block.mine;self.Method.Invoke(null,self.Parameters);
+   Check(pending.Starts==1&&!pending.exploded&&block.mine==pending,"collapse arriving before delayed native priming starts one countdown without immediate explosion");
+   var fresh=new Mine();other.mine=fresh;other.ActuallyCollapse(0,0,true);
+   Check(fresh.Starts==1&&fresh.ImmediateExplosions==1,"fresh mine destruction retains native immediate explosion");
+   block.destroyed=false;pending=block.mine=new Mine();int count=block.Collapses;
+   ReceiveWorldMineCollapseRPC(124,block.Nid,0,0,true);RPCController.CurrentRPC.messageInfo.Sender=new PID(9);ReceiveWorldMineCollapseRPC(123,block.Nid,0,0,true);
+   Check(block.Collapses==count&&pending.Starts==0,"expired epoch and non-owner mine-collapse replay do not prime or destroy terrain");
+   RPCController.CurrentRPC.messageInfo.Sender=PID.ServerID;block.FailCollapse=true;
+   try{ReceiveWorldMineCollapseRPC(123,block.Nid,0,0,true);}catch(InvalidOperationException){}
+   Check(block.mine==pending,"throwing native collapse restores the attached mine reference");block.FailCollapse=false;
+   Session=false;mine.exploded=false;mine.ExplosionAction=delegate{self=RPCController.CreateRPC(block,collapse,new object[]{0f,0f,true},false);};mine.Explode(-10);Session=true;
+   Check(self.Target==block&&self.Method==collapse&&!self.Immediate,"disabled world session retains native mine collapse RPC");
+   mine.exploded=false;mine.ExplosionAction=delegate{throw new InvalidOperationException();};try{mine.Explode(-10);}catch(InvalidOperationException){}
+   Check(_worldCountdownMine==null,"throwing native explosion restores countdown context");
+   h.UnpatchAll(h.Id);RPCController.CurrentRPC=null;
+  }
+  private static void RunMinePrimeChecks() {
+   var h=new Harmony("cmm.mine-prime.regression");
+   h.Patch(typeof(Block).GetMethod("CheckForMine"),new HarmonyMethod(typeof(HarmonyDiagnostics).GetMethod("WorldCheckForMinePrefix",BindingFlags.Static|BindingFlags.NonPublic)),null,null,null);
+   var id=new NID(Connect.SessionID,PID.TargetServer,530,0);
+   var mine=new Mine{Nid=new NID(Connect.SessionID,PID.TargetServer,900,3)};
+   var block=new Block{IsMine=false,Nid=id,mine=mine};int calls=Networking.Networking.Calls;
+   block.CheckForMine();var sent=Networking.Networking.Last;
+   Check(block.NativeMineChecks==0&&Networking.Networking.Calls==calls+1&&Networking.Networking.Target==PID.TargetAll&&!sent.Immediate&&sent.Target==null&&sent.Method.Name=="ReceiveWorldMinePrimeRPC"&&(long)sent.Parameters[0]==123&&(NID)sent.Parameters[1]==id,"actual patched CheckForMine primes by block identity with native queued TargetAll semantics from either owner");
+   var replicaMine=new Mine{Nid=new NID(Connect.SessionID,PID.TargetServer,903,3)};
+   var replica=new Block{Nid=id,mine=replicaMine};var unrelated=new Mine{Nid=mine.Nid};
+   Registry.Items[id]=replica;Registry.Items[mine.Nid]=unrelated;
+   RPCController.CurrentRPC=new RPCObject();RPCController.CurrentRPC.messageInfo.Sender=new PID(9);
+   sent.Method.Invoke(null,sent.Parameters);
+   Check(replicaMine.Starts==1&&!replicaMine.exploded&&unrelated.Starts==0,"priming resolves the attached replica mine despite mismatched mine keys and leaves the misleading same-key mine untouched");
+   sent.Method.Invoke(null,sent.Parameters);replica.CheckForMine();
+   Check(replicaMine.Starts==1&&replicaMine.ImmediateExplosions==0&&Networking.Networking.Calls==calls+1,"repeated delivery and stepping keep one native delayed start without an immediate explosion");
+   replicaMine.exploded=true;sent.Method.Invoke(null,sent.Parameters);replica.CheckForMine();
+   Check(replicaMine.Starts==1&&Networking.Networking.Calls==calls+1,"already exploded mine remains idempotent for repeated stepping and delivery");
+   replica.mine=new Mine();ReceiveWorldMinePrimeRPC(124,id);ReceiveWorldMinePrimeRPC(123,new NID(new SID(21),PID.TargetServer,530,0));
+   RPCController.CurrentRPC=null;ReceiveWorldMinePrimeRPC(123,id);
+   Check(replica.mine.Starts==0,"expired epoch, foreign scene and calls outside RPC execution cannot prime a mine");
+   RPCController.CurrentRPC=new RPCObject();ReceiveWorldMinePrimeRPC(123,new NID(Connect.SessionID,PID.TargetServer,999,0));replica.mine=null;ReceiveWorldMinePrimeRPC(123,id);
+   Check(unrelated.Starts==0,"missing block or attached mine cannot redirect priming to another registry object");
+   Session=false;block.CheckForMine();ReceiveWorldMinePrimeRPC(123,id);Session=true;
+   _worldEpoch=0;block.CheckForMine();_worldEpoch=123;
+   Check(block.NativeMineChecks==2&&Networking.Networking.Calls==calls+1,"disabled session and absent epoch retain the native CheckForMine entry");
+   block.Nid=NID.NoID;block.CheckForMine();
+   Check(block.NativeMineChecks==3&&Networking.Networking.Calls==calls+1,"unregistered blocks retain the native entry without inventing an identity");
+   h.UnpatchAll(h.Id);RPCController.CurrentRPC=null;
+  }
+  private static BroforceObject ObservedArea;
+  public static void ObserveArea() { ObservedArea=_worldDirectSource; }
   __PRODUCTION_DECLARATIONS__
  }
 }
@@ -622,8 +971,9 @@ try {
     $fixturePath = Join-Path $temporaryPath 'Fixture.cs'
     $outputPath = Join-Path $temporaryPath 'Fixture.exe'
     [IO.File]::WriteAllText($fixturePath, $fixture, (New-Object Text.UTF8Encoding($false)))
+    Copy-Item -LiteralPath $harmonyPath -Destination (Join-Path $temporaryPath '0Harmony.dll')
     $compiler = Join-Path $env:windir 'Microsoft.NET\Framework64\v3.5\csc.exe'
-    & $compiler /nologo /nowarn:0649 /target:exe "/out:$outputPath" $fixturePath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldPickups.cs') (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldSpecialHits.cs')
+    & $compiler /nologo /nowarn:0649 /target:exe "/reference:$harmonyPath" "/out:$outputPath" $fixturePath (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldPickups.cs') (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldSpecialHits.cs') (Join-Path $projectRoot 'src\HarmonyDiagnostics.WorldMutations.cs')
     if ($LASTEXITCODE -ne 0) { throw 'World pickup fixture compilation failed.' }
     & $outputPath
     if ($LASTEXITCODE -ne 0) { throw 'World pickup regression failed.' }

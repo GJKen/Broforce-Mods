@@ -14,7 +14,7 @@ namespace CustomMapMultiplayer
     {
         private const float WorldSendInterval = 1f / 12f;
         private const float WorldSpearSyncInterval = 1f / 60f;
-        private const int WorldProtocol = 17;
+        private const int WorldProtocol = 24;
         private const BindingFlags WorldFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Dictionary<NID, WorldEntry> WorldEntries = new Dictionary<NID, WorldEntry>();
         private static readonly Dictionary<NID, WorldSnapshot> WorldPending = new Dictionary<NID, WorldSnapshot>();
@@ -82,6 +82,15 @@ namespace CustomMapMultiplayer
             internal float BurnTime, BurnExplosion;
             internal int BurnDamage;
             internal bool Oily;
+            internal byte DoodadVisual, DoodadColliders, DoodadMaterial;
+            internal Vector2 DoodadPixel;
+            internal byte[] DoodadChildren;
+            internal float StatusTime, StunTime, FrozenTime, PlasmaTime, ShockTime, AcidTime, InseminatedTime, InseminationTime;
+            internal int PlasmaDamage, InseminationFrame;
+            internal bool Acid, TearGas;
+            internal NID Inseminator = NID.NoID;
+            internal string StatusMaterial = "";
+            internal float StatusReceivedAt;
         }
 
         private struct WorldProjectileSample
@@ -96,6 +105,8 @@ namespace CustomMapMultiplayer
             internal NID Id;
             internal WorldSnapshot Last;
             internal int Life = 1;
+            internal int DirectSequence;
+            internal Dictionary<int, int> DirectReceived;
             internal int DeathLife = -1;
             internal float SentAt, ReceivedAt, CheckAt;
             internal Vector2 LerpFrom;
@@ -117,6 +128,7 @@ namespace CustomMapMultiplayer
             internal float PendingHitUntil;
             internal WorldHitPresentation Presentation;
             internal WorldFlags PresentedFlags;
+            internal int RegistrationFrame = -1, DoodadEffectRevision;
         }
 
         private static bool IsWorldSession()
@@ -169,9 +181,10 @@ namespace CustomMapMultiplayer
                         // Mook and some doodads override OnDestroy without calling the base implementation.
                         PatchWorldMethod(method, "WorldDestroyPrefix", null);
                     else if (name == "Damage" || name == "DamageInternal" || name == "DamageOptional" ||
-                        name == "Death" || name == "QuietDeath" || name == "Gib" || name == "Burn" ||
+                        name == "Death" || name == "QuietDeath" || name == "Gib" || name == "GibNow" || name == "Burn" ||
                         name == "BurnInternal" || name == "ForceBurn" || name == "SetAlight_Local")
-                        PatchWorldMethod(method, "WorldMutationPrefix", "WorldMutationPostfix");
+                        PatchWorldMethod(method, WorldDirectMutationKind(method) == 0 ? "WorldMutationPrefix" :
+                            WorldDirectMutationKind(method) == 3 ? "WorldDirectOptionalMutationPrefix" : "WorldDirectMutationPrefix", "WorldMutationPostfix");
                     else if (name == "RunBurnLogic")
                         PatchWorldDamageContext(method, "WorldBurnLogicPrefix");
                     else if (name == "RunExploding" && typeof(BarrelBlock).IsAssignableFrom(type))
@@ -203,7 +216,14 @@ namespace CustomMapMultiplayer
                         PatchWorldMethod(method, "WorldProjectileSpawnCheckPrefix", null);
                     else if (name == "MakeEffects" && method.GetParameters().Length == 6 && typeof(Projectile).IsAssignableFrom(type))
                         PatchWorldDamageContext(method, "WorldProjectileEffectsPrefix");
-                    else if ((name == "Panic" || name == "Blind" || name == "Terrify") && typeof(Unit).IsAssignableFrom(type))
+                    else if (name == "MakeEffects" && method.GetParameters().Length == 0 && typeof(Grenade).IsAssignableFrom(type))
+                        _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeEffectsPrefix", null, null)),
+                            new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeEffectsPostfix", null, null)), null,
+                            new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeEffectsFinalizer", null, null)));
+                    else if (name == "Update" && typeof(Grenade).IsAssignableFrom(type))
+                        _harmony.Patch(method, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeUpdatePrefix", null, null)),
+                            null, null, new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldGrenadeUpdateFinalizer", null, null)));
+                    else if ((name == "Panic" || name == "Blind" || name == "Terrify" || name == "TearGas" || name == "Stun" || name == "Freeze") && typeof(Unit).IsAssignableFrom(type))
                         PatchWorldMethod(method, "WorldStatusPrefix", "WorldMutationPostfix");
                     else if (name == "MakeEffects" && method.GetParameters().Length == 0 &&
                         (typeof(MookSuicide).IsAssignableFrom(type) || typeof(MookSuicideUndead).IsAssignableFrom(type)))
@@ -217,7 +237,7 @@ namespace CustomMapMultiplayer
             PatchWorldMethod(typeof(DogAI).GetMethod("IsAtActionGridpoint", WorldFields | BindingFlags.DeclaredOnly), null, "WorldDogArrivalPostfix");
             PatchWorldMethod(typeof(Registry).GetMethod("RegisterObject", BindingFlags.Public | BindingFlags.Static), null, "WorldRegisterPostfix");
             PatchWorldMethod(typeof(Registry).GetMethod("Reset", BindingFlags.Public | BindingFlags.Static), null, "ClearEntityFinalStateSynchronizationState");
-            PatchWorldMethod(typeof(NetworkObject).GetMethod("OnDestroy", WorldFields), "WorldDestroyPrefix", null);
+            PatchWorldMethod(typeof(NetworkObject).GetMethod("OnDestroy", WorldFields), "WorldNetworkDestroyPrefix", null);
             PatchWorldMethod(typeof(NetworkObject).GetMethod("RunSync", WorldFields), "WorldNativeSyncPrefix", null);
             PatchWorldMethod(typeof(NetworkObject).GetMethod("AddState", WorldFields), "WorldNativeStatePrefix", null);
             PatchWorldMethod(WorldDisarmShield, "WorldShieldDisarmPrefix", "WorldShieldDisarmPostfix");
@@ -228,19 +248,37 @@ namespace CustomMapMultiplayer
                     if (method.Name.StartsWith("Hit", StringComparison.Ordinal) ||
                         method.Name.StartsWith("Damage", StringComparison.Ordinal) ||
                         method.Name.StartsWith("Burn", StringComparison.Ordinal) ||
-                        method.Name == "ExplodeUnits" || method.Name == "KnockAndDamageUnit")
+                        method.Name == "ExplodeUnits" || method.Name == "KnockAndDamageUnit" ||
+                        method.Name == "TearGasUnits" || method.Name == "FreezeUnits" || method.Name == "PanicUnits" || method.Name == "BlindUnits")
                         PatchWorldMethod(method, "WorldEffectPrefix", null);
             PatchWorldProjectiles();
+            PatchWorldReplayGeneration();
             PatchWorldHitEffects();
             PatchWorldHitPresentation();
+            PatchWorldDoodads();
+            PatchWorldPersistentStatus();
             PatchWorldMethod(AccessTools.Method(typeof(RPCController), "SendRPC", null, null), "WorldBossReplayRpcPrefix", null);
             PatchWorldMethod(typeof(RPCController).GetMethod("CreateRPC", BindingFlags.Public | BindingFlags.Static),
                 "WorldBlockRpcPrefix", null);
+            PatchWorldMethod(AccessTools.Method(typeof(Block), "CheckForMine", null, null), "WorldCheckForMinePrefix", null);
+            _harmony.Patch(AccessTools.Method(typeof(Mine), "Explode", null, null),
+                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldMineExplosionPrefix", null, null)), null, null,
+                new HarmonyMethod(AccessTools.Method(typeof(HarmonyDiagnostics), "WorldMineExplosionFinalizer", null, null)));
             DiagnosticLog.Info("WORLD_STATE authoritative object state synchronization enabled; protocol=" + WorldProtocol + ".");
         }
 
-        private static void WorldBlockRpcPrefix(object targetObject, MethodInfo methodInfo, ref bool immediate)
+        private static void WorldBlockRpcPrefix(ref object targetObject, ref MethodInfo methodInfo, ref object[] parameters, ref bool immediate)
         {
+            // A grenade can detonate during Launch. Its native instantiate/setup must
+            // execute before the immediate effect/removal events on the same stream.
+            if (_worldNetworkGrenadeSpawnDepth > 0) immediate = true;
+            if (_worldEpoch != 0 && IsWorldSession() && targetObject is RemoteControlExplosiveCar &&
+                methodInfo.Name == "MakeEffects")
+            {
+                // Play the native car explosion before its immediate removal snapshot
+                // retires the replica and makes the interpolated effect RPC lose its target.
+                immediate = true;
+            }
             if (_worldEpoch != 0 && IsWorldSession() && methodInfo.Name == "ReceiveWorldOwnedHitPresentationRPC")
             {
                 immediate = true;
@@ -253,20 +291,35 @@ namespace CustomMapMultiplayer
             }
             if (_worldEpoch != 0 && IsWorldSession() && targetObject is Block &&
                 (methodInfo.Name == "ActuallyCollapse" || methodInfo.Name == "DestroyBlockInternal"))
+            {
                 // Native collapse includes debris and crate effects. Execute it in
                 // send order before an immediate state snapshot marks it destroyed.
                 immediate = true;
+                PreserveWorldMineCountdown(ref targetObject, ref methodInfo, ref parameters);
+            }
         }
 
         private static WorldEntry RegisterWorldObject(BroforceObject obj)
         {
             if (!IsWorldObject(obj)) return null;
             WorldEntry entry;
-            if (WorldEntries.TryGetValue(obj.Nid, out entry)) return entry;
+            if (WorldEntries.TryGetValue(obj.Nid, out entry))
+            {
+                if (entry.Object == null)
+                {
+                    entry.Object = obj;
+                    entry.Transient = obj is Projectile || obj is Grenade;
+                    if (!WorldCandidates.Contains(entry)) WorldCandidates.Add(entry);
+                    if (obj is Unit && !WorldUnits.Contains(entry)) WorldUnits.Add(entry);
+                    QueueWorldRegistration(entry);
+                }
+                return entry;
+            }
             entry = new WorldEntry { Object = obj, Id = obj.Nid, Transient = obj is Projectile || obj is Grenade };
             WorldEntries.Add(entry.Id, entry);
             WorldCandidates.Add(entry);
             if (obj is Unit) WorldUnits.Add(entry);
+            QueueWorldRegistration(entry);
             return entry;
         }
 
@@ -277,11 +330,12 @@ namespace CustomMapMultiplayer
             var hero = obj as Unit;
             if (hero != null && hero.IsHero) PatchWorldHeroStatusContext(hero.GetType());
             // Ordinary static blocks are enrolled only when changed.
-            if (obj != null && (!(obj is Block) || obj is FallingBlock)) RegisterWorldObject(obj);
+            if (obj != null && (!(obj is Block) || obj is FallingBlock || WorldEntries.ContainsKey(obj.Nid))) RegisterWorldObject(obj);
         }
 
         private static bool WorldMutationPrefix(BroforceObject __instance, MethodBase __originalMethod)
         {
+            if (_worldGrenadeReplicaUpdate > 0 && __instance is Grenade) return false;
             if (_worldApplying != 0)
                 return __originalMethod.Name != "Damage" && __originalMethod.Name != "DamageInternal" &&
                     __originalMethod.Name != "DamageOptional" && __originalMethod.Name != "Burn" &&
@@ -543,7 +597,9 @@ namespace CustomMapMultiplayer
                 state.Pilot = Registry.GetNID(tvd.pilottedUnit);
                 state.ReviveSource = Registry.GetNID(WorldReviveSource.GetValue(tvd));
                 state.Electrified = HasWorldElectrifiedPose(tvd);
-                if ((state.Flags & WorldFlags.Dead) != 0 || state.Electrified || entry.Last != null && entry.Last.Electrified)
+                CaptureWorldPersistentStatus(tvd, state);
+                if ((state.Flags & WorldFlags.Dead) != 0 || state.Electrified || state.FrozenTime > 0f || state.Acid ||
+                    state.Inseminator != NID.NoID || entry.Last != null && entry.Last.Electrified)
                 {
                     if (entry.Sprite == null) entry.Sprite = (SpriteSM)WorldUnitSprite.GetValue(tvd);
                     if (entry.Sprite != null)
@@ -593,6 +649,7 @@ namespace CustomMapMultiplayer
             if (pickup != null) CaptureWorldPickupState(pickup, state);
             CaptureWorldSpecialHitState(obj, state);
             CaptureWorldBurnState(obj, state);
+            CaptureWorldDoodadState(obj, state);
             if (entry.Last != null && (entry.Last.Flags & WorldFlags.Dead) != 0 &&
                 (state.Flags & WorldFlags.Dead) == 0) state.Life = ++entry.Life;
             return state;
@@ -603,7 +660,8 @@ namespace CustomMapMultiplayer
             return a == null || a.Owner != b.Owner || a.Flags != b.Flags || a.Life != b.Life ||
                 a.Health != b.Health || a.MaxHealth != b.MaxHealth || a.Facing != b.Facing ||
                 a.ArmourDamage != b.ArmourDamage || a.FireDamage != b.FireDamage || a.Invulnerable != b.Invulnerable || a.BossDamaged != b.BossDamaged ||
-                a.GunnerEjected != b.GunnerEjected ||
+                a.GunnerEjected != b.GunnerEjected || WorldDoodadChanged(a, b) ||
+                WorldPersistentStatusChanged(a, b) ||
                 a.Electrified != b.Electrified ||
                 a.BurnDamage != b.BurnDamage || a.Oily != b.Oily || (a.BurnTime > 0f) != (b.BurnTime > 0f) ||
                 (a.BurnExplosion > 0f) != (b.BurnExplosion > 0f) ||
@@ -632,14 +690,17 @@ namespace CustomMapMultiplayer
             {
                 _worldServer = PID.ServerID.AsInt;
                 _worldEpoch = 0;
+                ClearWorldPersistentEffects();
                 _worldRequestAt = 0f;
                 _worldSpearSyncAt = 0f;
                 _worldSpearLoggedFirstSend = false;
                 _worldSpearLoggedFirstReceive = false;
                 WorldPending.Clear();
-                foreach (var entry in WorldCandidates)
+                WorldRemovedObjects.Clear(); WorldRegistrations.Clear();
+                foreach (var entry in WorldEntries.Values)
                 {
                     entry.Last = null; entry.Dirty = true; ResetWorldProjectileMotion(entry);
+                    entry.RegistrationFrame = -1; entry.DoodadEffectRevision = 0;
                     entry.SpearEnding = false; entry.SpearEffectFrame = -1;
                 }
             }
@@ -661,7 +722,10 @@ namespace CustomMapMultiplayer
                 global::Networking.Networking.RPC<int, PID, long>(PID.TargetServer,
                     new RpcSignature<int, PID, long>(RequestWorldBaselineRPC), WorldProtocol, PID.MyID, 0L, false);
             }
-            if (_worldEpoch == 0 || now < _worldSendAt) return;
+            if (_worldEpoch == 0) return;
+            UpdateWorldRegistrations();
+            UpdateWorldPersistentEffects();
+            if (now < _worldSendAt) return;
             _worldSendAt = now + WorldSendInterval;
             var motion = WorldMotionBatch;
             var critical = WorldCriticalBatch;
@@ -677,8 +741,9 @@ namespace CustomMapMultiplayer
                 {
                     if (entry.Transient)
                     {
-                        WorldEntries.Remove(entry.Id);
+                        // Keep the full lifecycle/version tombstone for native late registrations.
                         WorldProjectileSpawns.Remove(entry.Id.BaseID);
+                        WorldGrenadeSpawns.Remove(entry.Id.BaseID);
                     }
                     continue;
                 }
@@ -705,6 +770,7 @@ namespace CustomMapMultiplayer
             SendWorldStates(critical, PID.TargetOthers, true);
             SendWorldStates(motion, PID.TargetOthers, false);
             UpdateWorldPendingProjectiles();
+            UpdateWorldPendingGrenades();
             WorldPendingApplied.Clear();
             foreach (var pair in WorldPending)
             {
@@ -736,15 +802,18 @@ namespace CustomMapMultiplayer
                 RPCController.CurrentRPC == null || RPCController.CurrentRPC.messageInfo.Sender != PID.ServerID ||
                 epoch < _worldEpoch) return;
             if (_worldEpoch == epoch) return;
+            ClearWorldPersistentEffects();
             _worldEpoch = epoch;
             _worldServer = PID.ServerID.AsInt;
             _worldSpearSyncAt = 0f;
             _worldSpearLoggedFirstSend = false;
             _worldSpearLoggedFirstReceive = false;
             WorldPending.Clear();
-            foreach (var entry in WorldCandidates)
+            WorldRemovedObjects.Clear(); WorldRegistrations.Clear();
+            foreach (var entry in WorldEntries.Values)
             {
                 entry.Last = null; entry.Dirty = true; entry.DeathLife = -1; ResetWorldProjectileMotion(entry);
+                entry.RegistrationFrame = -1; entry.DoodadEffectRevision = 0;
                 entry.SpearEnding = false; entry.SpearEffectFrame = -1;
             }
             global::Networking.Networking.RPC<int, PID, long>(PID.TargetOthers,
@@ -769,7 +838,9 @@ namespace CustomMapMultiplayer
                     states.Add(entry.Last);
             }
             SendWorldProjectileSpawns(target);
+            SendWorldGrenadeSpawns(target);
             SendWorldStates(states, target, true);
+            SendWorldPersistentEffects(target);
         }
 
         private static void WriteWorldId(BinaryWriter writer, NID id)
@@ -791,9 +862,18 @@ namespace CustomMapMultiplayer
             w.Write(s.Action); w.Write(s.Facing); w.Write(s.Input); w.Write(s.Turn); w.Write(s.Unfold); w.Write(s.Player);
             w.Write(s.LifeTime); w.Write(s.Row); w.Write(s.Column); w.Write(s.GroundHeight);
             w.Write(s.BlindTime); w.Write(s.ScaredTime); w.Write(s.Mental);
+            WriteWorldPersistentStatus(w, s);
             w.Write(s.ArmourDamage); w.Write(s.FireDamage); w.Write(s.ArmourKnocks); w.Write(s.ShieldTime); w.Write(s.Invulnerable); w.Write(s.BossDamaged);
             w.Write(s.GunnerEjected); w.Write(s.Electrified);
             w.Write(s.BurnTime); w.Write(s.BurnDamage); w.Write(s.Oily); w.Write(s.BurnExplosion);
+            w.Write(s.DoodadVisual);
+            if (s.DoodadVisual != 0)
+            {
+                w.Write(s.DoodadColliders); w.Write(s.DoodadMaterial);
+                w.Write(s.DoodadPixel.x); w.Write(s.DoodadPixel.y);
+                w.Write((ushort)(s.DoodadChildren == null ? 0 : s.DoodadChildren.Length));
+                if (s.DoodadChildren != null) w.Write(s.DoodadChildren);
+            }
             WriteWorldId(w, s.Parent); WriteWorldId(w, s.Pilot); WriteWorldId(w, s.ReviveSource);
             if ((s.Flags & WorldFlags.SpritePose) != 0)
             {
@@ -822,9 +902,17 @@ namespace CustomMapMultiplayer
             s.Action = r.ReadInt32(); s.Facing = r.ReadInt32(); s.Input = r.ReadInt16(); s.Turn = r.ReadInt32(); s.Unfold = r.ReadInt32(); s.Player = r.ReadInt32();
             s.LifeTime = r.ReadSingle(); s.Row = r.ReadInt32(); s.Column = r.ReadInt32(); s.GroundHeight = r.ReadSingle();
             s.BlindTime = r.ReadSingle(); s.ScaredTime = r.ReadSingle(); s.Mental = r.ReadInt32();
+            ReadWorldPersistentStatus(r, s);
             s.ArmourDamage = r.ReadInt32(); s.FireDamage = r.ReadInt32(); s.ArmourKnocks = r.ReadInt32(); s.ShieldTime = r.ReadSingle(); s.Invulnerable = r.ReadBoolean(); s.BossDamaged = r.ReadBoolean();
             s.GunnerEjected = r.ReadBoolean(); s.Electrified = r.ReadBoolean();
             s.BurnTime = r.ReadSingle(); s.BurnDamage = r.ReadInt32(); s.Oily = r.ReadBoolean(); s.BurnExplosion = r.ReadSingle();
+            s.DoodadVisual = r.ReadByte();
+            if (s.DoodadVisual != 0)
+            {
+                s.DoodadColliders = r.ReadByte(); s.DoodadMaterial = r.ReadByte();
+                s.DoodadPixel = new Vector2(r.ReadSingle(), r.ReadSingle());
+                s.DoodadChildren = r.ReadBytes(r.ReadUInt16());
+            }
             s.Parent = ReadWorldId(r); s.Pilot = ReadWorldId(r); s.ReviveSource = ReadWorldId(r);
             if ((s.Flags & WorldFlags.SpritePose) != 0)
             {
@@ -906,12 +994,14 @@ namespace CustomMapMultiplayer
                 while (stream.Position < stream.Length)
                 {
                     var state = ReadWorldState(reader);
+                    state.StatusReceivedAt = Time.time;
                     if (state.Id.Sid != Connect.SessionID ||
                         (state.Owner == PID.TargetServer.AsInt ? sender != PID.ServerID : sender.AsInt != state.Owner)) continue;
                     if (!TryApplyWorldState(state) && WorldPending.Count < 4096)
                     {
                         WorldSnapshot previous;
-                        if (!WorldPending.TryGetValue(state.Id, out previous) || previous.Revision <= state.Revision)
+                        if (!WorldPending.TryGetValue(state.Id, out previous) || previous.Life < state.Life ||
+                            previous.Life == state.Life && previous.Revision <= state.Revision)
                             WorldPending[state.Id] = state;
                     }
                 }
@@ -920,7 +1010,6 @@ namespace CustomMapMultiplayer
 
         private static bool TryApplyWorldState(WorldSnapshot state)
         {
-            if ((state.Flags & WorldFlags.Removed) == 0 && WorldRemovedObjects.Contains(state.Id)) return true;
             WorldEntry entry;
             if (!WorldEntries.TryGetValue(state.Id, out entry))
             {
@@ -934,11 +1023,24 @@ namespace CustomMapMultiplayer
                 }
                 else entry = RegisterWorldObject(registered);
             }
-            if (entry == null || entry.Last != null && entry.Last.Revision >= state.Revision) return true;
+            if (entry == null || state.Life < entry.Life || entry.Last != null &&
+                (entry.Last.Life > state.Life || entry.Last.Life == state.Life && entry.Last.Revision >= state.Revision)) return true;
             var obj = entry.Object;
+            if (obj != null && entry.RegistrationFrame >= 0) return false;
             if (obj != null && (!IsWorldObject(obj) || obj.IsMine || obj.GetType().Name != state.Type || obj.Owner.AsInt != state.Owner)) return true;
+            if (entry.Last != null && (entry.Last.Flags & WorldFlags.Removed) != 0 &&
+                (entry.Last.Type != state.Type || entry.Last.Owner != state.Owner ||
+                 state.Life == entry.Last.Life && (state.Flags & WorldFlags.Removed) == 0)) return true;
+            if (state.Life > entry.Life)
+            {
+                entry.Life = state.Life;
+                WorldRemovedObjects.Remove(state.Id); WorldRemovedObjects.Remove(state.Id.BaseID);
+                Registry.DestroyedMapObjects.Remove(state.Id);
+                entry.DoodadEffectRevision = 0;
+            }
             if (entry.SpearEnding && obj is PredabroSpear && (state.Flags & WorldFlags.Removed) == 0) return true;
             if (obj == null && (state.Flags & WorldFlags.Removed) == 0) return false;
+            if ((state.Flags & WorldFlags.Removed) == 0 && obj is TestVanDammeAnim && !ResolveWorldInseminator(state)) return false;
             if (WaitForWorldGibConfirmation(entry, state))
             {
                 entry.Last = state;
@@ -981,7 +1083,7 @@ namespace CustomMapMultiplayer
                             unit.destroyed = true;
                             Map.RemoveUnit(unit);
                         }
-                        UnityEngine.Object.Destroy(obj.gameObject);
+                        RemoveLateWorldObject(obj);
                     }
                     else if (!ApplyWorldObjectState(entry, state)) return false;
                 }
@@ -1093,6 +1195,7 @@ namespace CustomMapMultiplayer
             {
                 if ((state.Flags & WorldFlags.DoodadDead) != 0 && !doodad.isDead) doodad.Death();
                 if ((state.Flags & WorldFlags.Collapsed) != 0 && !doodad.collapsed) doodad.Collapse();
+                ApplyWorldDoodadState(doodad, state);
             }
             var block = obj as Block;
             if (block != null)
@@ -1187,12 +1290,18 @@ namespace CustomMapMultiplayer
         private static void ClearEntityFinalStateSynchronizationState()
         {
             WorldEntries.Clear(); WorldCandidates.Clear(); WorldUnits.Clear(); WorldPending.Clear();
+            WorldRegistrations.Clear(); WorldRetiredObjects.Clear();
+            ClearWorldPersistentEffects();
             WorldMotionBatch.Clear(); WorldCriticalBatch.Clear();
             WorldRemovedObjects.Clear(); WorldPendingApplied.Clear(); WorldProjectileSpawns.Clear(); WorldPendingProjectiles.Clear();
             WorldProjectileVisualRandomStates.Clear(); _worldProjectileEffectsDepth = 0;
+            WorldGrenadeSpawns.Clear(); WorldPendingGrenades.Clear();
+            _worldGrenadeEffectsDepth = 0; _worldGrenadeReplicaUpdate = 0; _worldNetworkGrenadeSpawnDepth = 0;
+            _worldHitSoundUnit = null; _worldGrenadeSoundSource = null;
             _worldEpoch = 0; _worldServer = -1; _worldSeeded = false;
             _worldSendAt = 0f; _worldRequestAt = 0f;
             _worldDamageSource = null; _worldStatusSource = null;
+            _worldDirectSource = null; _worldReceivingHit = 0; _worldReceivingTarget = null; _worldCountdownMine = null;
             _worldHitMessagesPending = false;
             _worldHitSequence = 0;
             WorldPresentedHitEffects.Clear();

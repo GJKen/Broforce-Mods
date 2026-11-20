@@ -2,72 +2,30 @@
 
 > [English](README.en.md)
 
-这是一个面向 Steam 版 Broforce 的 Unity Mod Manager + Harmony Mod。默认复用官方 Steam Lobby/Steam P2P；可选的 `FRP 直连` 使用独立房间、PID 和游戏 RPC，但 Workshop 内容仍由 Steam 下载。
+让 Steam 版《Broforce》使用创意工坊地图联机更方便，并修复部分联机中的伤害、物件状态与显示问题。
 
-使用 Workshop 地图注入或 FRP 直连 时，所有参与联机的玩家必须安装相同构建的 Mod，并订阅、下载相同的 Workshop 地图；排查版本时以各端日志中的 `BUILD_INFO buildHash` 为准。加入方会读取房主发布的 Workshop ID、场景名和战役名，不再需要手工填写与房主相同的地图配置。
+<a id="当前状态"></a>
 
-## 当前状态
+当前版本为实验性 **0.5.1**，已有定向联机验证，但尚未完成所有角色、形态和机关的验证。
 
-当前版本为实验性 `0.5.1`，尚未达到稳定发布状态。
+当前构建标识、发行包信息和详细验证范围见[版本复核](docs/world-sync-coverage/recheck.md#基线和证据范围)。
 
-Predabro 普通/蓄力长矛及复用该 prefab 的 Aquabro 三叉戟使用本 Mod 内的独立 60 Hz 状态发送和远端平滑显示，不依赖 `BroforceBugFix`。长矛终点与结束特效修复已通过双端定向复测，用户于 2026-11-16 确认测试正常；实现与验收边界见[长矛同步记录](issues/ISSUES-2026-11-15-长矛60Hz同步整合与结束特效.md)。
+## 主要功能
 
-当前仓库发行包使用世界状态同步协议 14，构建 `9e006c3a60921da350796d2a077d88fd0e71c16b6f17373dae29a47ace0e0159`，DLL 487,424 字节。最新修复限制破箱预测的图像隐藏范围，保留独立人质及救援气泡的显示，127 项回归检查通过，见[人质箱记录](issues/ISSUES-2026-11-17-人质箱破坏后人质隐形.md)。协议 14 补充固定机枪座驾驶员离座状态，修复远端残留驾驶员图像和开火资格的分歧，见[机枪座记录](issues/ISSUES-2026-11-17-固定机枪座驾驶员离座分歧.md)。保留协议 13 的燃烧时长、燃烧伤害、油污和油桶引爆计时同步；联机各端需使用同一构建。下表信息来自仓库 DLL 与 ZIP，现场部署及实机验收以各问题记录中的具体构建和范围为准。
-
-此前协议 12 的长矛修复已完成双端加载确认，10 项定向检查及记录中的实机复测通过。房主攻击自有 Boss/车辆对象时的加入方受击反馈已补齐，112 项定向检查通过，双端实机回归待做。村民近战救援和早到快照分支短测通过，逐帧跟随仍待验收；三类车辆的 10 发敌方弹体已在加入方通过爆炸表现复测，完整车辆 AI 战斗和长期游玩未覆盖。详见[获救村民记录](issues/ISSUES-2026-11-14-获救村民位置分歧.md)与[导弹爆炸记录](issues/ISSUES-2026-11-14-敌方导弹爆炸缺失与地形蓝闪.md)。装甲、盾兵及 Boss 命中反馈的逐项样本和未覆盖范围见[命中反馈记录](issues/ISSUES-2026-11-13-箱内道具释放分歧与命中反馈延迟.md)。原版蛇脱离空目标异常由 BroforceBugFix 独立修复，最初目标引用丢失原因仍未确认。
-
-| 项目 | 状态 |
+| 功能 | 玩起来有什么不同 |
 | --- | --- |
-| 当前仓库发行包构建 | `buildHash=9e006c3a60921da350796d2a077d88fd0e71c16b6f17373dae29a47ace0e0159` |
-| DLL SHA-256 | `9CE36DD610CE41BEEC501EBAD9D4E0D7F1C19C27F1CC2FBC340A7560AD7D2469` |
-| DLL 程序集版本 | `0.5.1.0` |
-| Steam 联机 | 默认路径；已验证官方大厅进入同一张 Workshop 地图及彩色延迟名单 |
-| FRP 直连 | 默认关闭；三机基础联机已验证，代码支持房主加最多三台远端 |
-
-### 已验证
-
-- Steam 房主身份查询同帧缓存已从 BroforceBugFix 精简整合，用户先后实测确认房主稳定高帧、加入方联机帧率正常；保留原版敌人更新范围，详见 [身份查询性能记录](issues/ISSUES-2026-11-11-Steam房主身份重复查询.md)。
-- 官方与 Workshop 的“按开枪键加入游戏”提示仅在本端旁观时显示，重新加入后隐藏；支持实际参与控制器与主控制器不同，详见[联机加入提示记录](issues/ISSUES-2026-11-09-联机加入提示按本端旁观状态显示.md)。
-- 双端进入、晚加入、当前地图的退出/重入，以及双方独立角色和控制，详见 [Workshop 与游戏状态](docs/WORKSHOP.md)。
-- Steam 与 FRP 直连 的 Esc 彩色延迟名单和动态房主名；FRP 的三机基础联机、静态 `1` 人房满员提示及 Host/Client 配置自动应用，详见 [网络与房间](docs/NETWORKING.md) 和 [FRP Direct 实施与验收记录](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
-- Workshop 地图身份由房主发布，加入方自动采用；缺少订阅时显示提示并停止加载；注入可热关闭并恢复官方地图，详见 [Workshop 与游戏状态](docs/WORKSHOP.md)、[Workshop 缺图加载记录](issues/archive/ISSUES-2026-09-04-Workshop缺图仍进入加载动画.md) 和 [关闭 Workshop 注入记录](issues/archive/ISSUES-2026-08-28-关闭Workshop注入后恢复官方地图.md)。
-- Workshop 加载会优先复用 Steam 已安装目录或旧版 UGC 本地缓存；缓存不可读时才回退到 Steam 下载，并抑制同一张地图加载期间的重复请求，详见 [Workshop 与游戏状态](docs/WORKSHOP.md)。
-- Workshop 的入场横幅、Esc 返回大厅和主菜单动画；标准弹药箱的确定性、远端扫描抑制和重复拾取防护已在 FRP 双端验证，官方 Steam 大厅和更多地图仍需复测，详见 [网络与房间](docs/NETWORKING.md) 和 [Workshop 与游戏状态](docs/WORKSHOP.md)。
-- 高密集战斗长测中，Host 掉帧已明显减轻；当前结论为观察到改善，仍需统一图形设置、交换 Host 并完成 p50/p95/p99 对照后再正式验收，详见 [Host 性能问题记录](issues/ISSUES-2026-08-30-联机房主低帧率与Host专属扫描性能问题.md)。
-- Esc 菜单中的“立即进入 AFK”按钮支持存活及死亡玩家，只影响当前客户端的本地角色，且不会自动重新加入。存活时 AFK 后返回正常恢复角色；死亡后在同一关返回仍保持 0 生命、无角色及原角色死亡头像，等待正常救援或下一回合。存活与死亡提示统一并跟随 Mod 语言，快速连续返回不再被已完成请求的 10 秒保护窗口阻挡。上述行为已通过当前 Steam Workshop 地图的双端回归；普通网络掉线仍按原有流程自动恢复，详见 [AFK 行为](docs/AFK.md) 和[死亡后主动 AFK 问题记录](issues/ISSUES-2026-10-26-死亡后主动AFK与返回状态.md)。
-- 联机聊天已接入中文输入法、中文符号、数字和原生编辑操作，并提供 500 个 UTF-16 字符上限、长消息 viewport、视觉行 Up/Down、输入框右下角字数显示和输入框激活时的当前键盘角色操作拦截；上述功能均已通过窄范围真实键盘测试，Esc 后再次呼出和 Enter 发送问题已修复，完整输入矩阵与聊天历史专项仍待补充，详见[聊天输入专题](docs/CHAT.md)。
-- Swap Bros 2.1.5 的 `Always spawn as chosen bro` 兼容已通过离线和 Steam 联机测试；运行时选角查询使用 `Swap_Bros_Mod.Main.GetSelectedBroHeroType(Int32)`，首次生成和重生最终均使用锁定角色，详见 [Swap Bros 问题记录](<issues/ISSUES-2026-09-07-Swap Bros Always spawn as chosen bro与联机角色生成冲突.md>)。
-- 房主和加入方分别进入酸液时，实际接触者均能正常死亡，出生区玩家不会被连带杀死。投掷酸液命中死亡也已通过用户实机验收，详见 [酸液池 issue](issues/archive/ISSUES-2026-08-30-Workshop联机酸液池导致双方一起死亡.md) 和 [投掷酸液 issue](issues/ISSUES-2026-09-07-投掷酸液命中角色未正常死亡.md)。
-
-### 待复查
-
-#### 死亡与实体终态
-
-- **普通 Mook 死亡终态：** 已实现权威死亡事件和尸体终态提交，但仍有低概率状态不一致；晚加入死亡快照尚未实现。详见 [全联机死亡实体与尸体终态 issue](issues/ISSUES-2026-08-28-全联机死亡实体与尸体终态同步.md)。
-- **McBrover 火鸡主动引爆：** 残留实体仍可复现，概率已显著降低；根因和远端生命周期链路尚未闭环。详见 [McBrover issue](issues/ISSUES-2026-08-28-McBrover火鸡主动引爆后残留实体.md)。
-
-#### Workshop 关卡切换
-
-- **`3715087178` 关卡结束防重入：** 防重入补丁已完成构建和部署，尚待实机通关复测。重点确认重复 `LevelEndSuccess` 不再逐帧推进关卡号，并确认 Host 与 Client 最终进入一致的下一关或结算场景。详见 [关卡结束重入 issue](issues/ISSUES-2026-08-26-3715087178联机通关黑屏与关卡结束重入.md)。
-- **`3781818421` 第 4 关黑屏：** 第 3 关通关进入第 4 关时仍可能黑屏，和上面的 `3715087178` 防重入问题分开排查。详见 [重复重入与第 4 关黑屏 issue](issues/ISSUES-2026-08-22-重复退出重入加入方失败与3781818421进入第4关黑屏.md)。
-
-#### 联机覆盖范围
-
-- **官方 Steam 大厅和更多地图的道具同步：** FRP 双端已验证的标准弹药箱行为，尚未在官方 Steam 大厅和更多 Workshop 地图完成复测。
-- **高延迟与长期重入：** 仍缺少统一延迟条件和多轮退出/重入的稳定性证据。
-- **FRP Direct 扩展场景：** 四机、总人数 `2` 至 `4` 的容量边界、动态降额后的重入尚未验证；FRP Direct 不支持 Host migration，因此不把它列为待验收能力。
-
-#### 运行时异常与性能
-
-- **加入方箱子异常（独立问题）：** 历史 Steam 会话中，加入方日志曾在 `DoodadCrate.SetupBlockAtStart` 和 `DestroyBlockInternal` 记录 `NullReferenceException`，同时出现箱子坍塌特效持续重复；2026-08-31 的最新双端短测未复现。由于该轮没有直接触发箱体保护分支，仍需通过一次针对性的箱子打开或撞塌测试完成验收。现有证据只能确认加入方箱体处理异常，不能证明它导致 Host 战斗掉帧。详见 [加入方箱子问题记录](issues/ISSUES-2026-08-30-加入方箱子坍塌特效持续重复.md)。
-- **Host 战斗低帧率（独立问题）：** 高密度战斗长测中只观察到掉帧改善，统一图形设置、交换 Host 角色及 p50/p95/p99 对照尚未完成，因此仍待正式验收。箱子异常没有 Host 同步调用栈或直接因果证据，不并入本项判断。详见 [Host 性能问题记录](issues/ISSUES-2026-08-30-联机房主低帧率与Host专属扫描性能问题.md)。
-
-当前范围不包括活动 AI 持续同步、敌方弹体、钱币、金色奖励、普通 `Grenade` 地形伤害或历史动态世界实验。详细实现和证据见 [开发文档索引](docs/DEVELOPMENT.md) 与 [问题记录索引](issues/README.md)。
+| Steam 联机 | 使用游戏原有的 Steam 房间和邀请方式 |
+| 创意工坊地图 | 选择已订阅地图，支持搜索、收藏和最近联机地图 |
+| 自动跟随房主地图 | 加入方采用房主的地图设置，不用手抄地图 ID |
+| 联机信息与聊天 | Esc 菜单显示玩家延迟，聊天支持中文输入和长消息 |
+| 多人游戏选项 | 玩家重叠时优先近战，修正部分异常复活位置 |
+| AFK 旁观 | 可以主动暂离、返回，也可以单独设置自动 AFK |
+| FRP 直连 | 可选的另一种连接方式，默认关闭 |
 
 ## 安装与首次运行
 
 1. 所有玩家安装 `r2modman`，为 Broforce 创建或选择默认的 profile，并在其中安装 UMM。启动一次游戏确认 UMM 加载成功。
-2. 将 `Release\CustomMapMultiplayer.zip` 导入 r2modman > Settings > Profile > Import local mod。ZIP 内已经包含 `UMM\Mods\CustomMapMultiplayer` 下的 DLL 和 `Info.json`。
+2. 将本项目的 [CustomMapMultiplayer.zip](Release/CustomMapMultiplayer.zip) 导入 r2modman > Settings > Profile > Import local mod。ZIP 内已经包含 `UMM\Mods\CustomMapMultiplayer` 下的 DLL 和 `Info.json`。
 3. 配置 Workshop 地图和注入选项：
    - 双方提前订阅并下载相同的 Workshop 地图，在左侧独立的 `Workshop 地图配置` 页面中开启 Workshop 地图注入。
    - 房主可以手工填写数字 Workshop ID，也可以点击“选择已订阅地图”进入地图选择页；战役名可留空，场景名默认 `Test Evan2`，使用其它场景时再修改。
@@ -81,110 +39,77 @@ Predabro 普通/蓄力长矛及复用该 prefab 的 Aquabro 三叉戟使用本 M
 
 4. 任意一端使用街机模式创建线上大厅，加入方找到房间后直接加入即可。
 
-### UMM 设置面板
+## UMM 设置面板
 
-实际 UMM 设置页采用左侧竖向功能列表、右侧显示当前功能内容的布局：
+UMM 左侧列表用于切换页面，右侧显示对应选项。
 
-- `Workshop 地图配置`：Workshop 地图注入、手工 Workshop ID、已订阅地图选择、搜索、筛选、收藏和最近联机地图；高级区域保留战役名和场景设置。
-- `多人游戏选项`：玩家重叠时优先执行近战、Workshop 复活位置修复和自动 AFK 旁观模式开关；主动 AFK 按钮位于游戏内 Esc 菜单。
-- `FRP 直连`：直连开关、Host/Client 角色、端口、人数上限和连接参数。
-- `语言`：直接点击“跟随系统”“English”或“中文”按钮切换界面语言。
-- `Diagnostic Logs`：诊断会话标识、日志预设和诊断分类。
+- **Workshop 地图配置**：开启地图注入、选择地图、搜索、收藏和查看最近联机地图。
+- **多人游戏选项**：设置重叠玩家的近战优先、Workshop 复活位置修复和自动 AFK。
+- **FRP 直连**：选择房主或加入方，并填写直连参数。
+- **语言**：选择“跟随系统”“English”或“中文”。
+- **Diagnostic Logs**：诊断会话标识、日志预设和诊断分类。
 
-`umm-settings-preview.html` 只是静态预览；实际 UMM 界面以 `src/Plugin.cs` 和 `src/SettingsUiText.cs` 为准。
+近战优先默认启用：两名玩家重叠时，按近战会使用当前角色的近战动作，而不是自动变成击掌。关闭后恢复原版行为。
 
-### 常用设置
+复活位置修复针对部分异常的直接入场位置，保留原生检查点、救援、笼子、运输和降落伞等出生方式。
 
-- `Workshop 地图配置` 中的 Workshop 地图注入开关关闭时会立即保存并清理注入状态，但不会强制中断或切走当前场景。退出当前房间并从菜单重新创建官方房间后，后续选图使用游戏原生战役流程；不需要删除已保存的 Workshop ID。
-- `多人游戏选项` 中的 AFK 开关由每台客户端独立控制。未勾选时显示“已启用自动 AFK 旁观模式”；勾选后显示“已禁用自动 AFK 旁观模式”。要保护双方角色，双方必须分别勾选；它不拦截手动退出、断线或正常死亡。
-- `多人游戏选项` 中的“玩家重叠时优先执行近战”默认启用。启用后，玩家重叠时按近战会执行当前角色的近战动作，不再被原生击掌替代；关闭后恢复原生自动击掌行为。
-- `多人游戏选项` 中的“Workshop 复活位置修复”默认启用。它只在有效的 Workshop 联机注入场景中记录首次稳定的直接地图出生点，并在后续 `DropInDuringGame` 复活位置异常时使用该备份；运输、降落伞、检查点、救援和笼子出生仍保持原生行为。关闭后不执行这项位置修复，设置可在运行中切换。
-- Esc 菜单中的“立即进入 AFK”按钮会让当前客户端实际拥有的本地玩家立即进入原生 AFK 旁观流程，与自动 AFK 开关相互独立。房间至少需要两名参与者；角色死亡、生命耗尽或暂时没有角色对象时仍可主动 AFK。按钮按本地所有权和当前输入控制器确定目标；多本地槽位无法唯一确定时不执行。存活与死亡使用相同的底部标题提示，跟随 Mod 语言显示“已进入旁观AFK模式”或“Entered AFK spectator mode”。主动 AFK 不触发自动 `RequestJoinGame`，需要显式返回；存活 AFK 返回正常恢复角色，死亡 AFK 在同一关返回则保留 0 生命、无角色及原死亡头像，不能借此复活。加入成功后释放已完成请求，不额外等待 10 秒；尚在进行中的重复请求保护保留。普通网络掉线仍保持自动重入，详见 [AFK 行为](docs/AFK.md)。
-- `Diagnostic session ID` 用于关联双方同一轮日志；两端填写相同值。`Diagnostic label` 只影响日志文件名，不参与联机行为。
-- 诊断日志预设（基础、加入/重新加入、AFK/失败、Workshop、完整）和九个诊断分类只影响日志输出，不改变联机行为。双方排查同一问题时应尽量选择相同类别。
+### AFK
 
-### 测试与日志
+游戏内 Esc 菜单提供“立即进入 AFK”按钮，房间至少有两名参与者时可用；它只影响本端玩家，不会自动返回游戏。
 
-每轮测试结束后，收集所有参与端同一会话的诊断日志，并尽量同时保存 UMM 和游戏日志。通过 UMM 中的“打开诊断日志目录”获取 Mod 日志，不在公开文档记录用户目录、共享路径或用户名。只有单端日志时，结论必须明确证据缺口，不能单独断定网络根因。
+存活时暂离，主动返回后正常恢复角色；死亡后在同一关返回，仍保持死亡和原头像，需要等待正常救援或下一回合，不会借此复活。
 
-### 酸液问题排查
+自动 AFK 由每位玩家独立设置。如果希望闲置时不自动进入旁观，双方都要在自己的客户端关闭自动 AFK。这个设置与主动暂离按钮互不影响。
 
-排查酸液池导致的异常死亡时，重点对齐双方同一会话的 `PLAYER_ACID` 事件：它记录 `CoverInAcid`、`CoverInAcidRPC` 和 `PlayerHasDiedRPC` 前后对应的玩家槽位、RPC 请求槽位、角色 NID、`IsMine`、坐标、`acidMeltTimer` 和 `hasBeenCoverInAcid`，并通过低频 `authority-gate` 标明 `host-check`、`client-request`、`authority-wait` 或 `native-fallback` 决策。
+更多说明见 [AFK 行为](docs/AFK.md)。
 
-## FRP 直连 联机
+## 已修复的部分问题
 
-FRP 直连 总开关默认关闭。
+已有样本支持的修复包括：
 
-创建房间前请选择 `Host`，加入房间请选择 `Client`。Client 点击创建房间时会保留建房菜单并提示切换角色。
+- 部分跨端攻击没有正确扣血、重复扣血，以及伤害与碎尸先后顺序异常。
+- 地雷漏爆、错爆和倒计时被提前打断。
+- 部分手雷和命中特效缺失，场景物件受损后的外观或碰撞状态不一致。
+- 中途加入后，部分持续异常状态和仍在场的技能效果没有正确恢复。
+- 人质箱破坏后人质隐形、固定机枪座驾驶员离座状态分歧，以及长矛终点和结束特效问题。
 
-`Host`/`Client` 角色仍由用户明确选择。切换角色会立即保存并自动切换连接：Host 只使用本地 UDP 监听端口，完全忽略已保存的 Client 公网地址；Client 只使用 FRP 公网 `host:port`，完全忽略 Host 的本地监听端口。两套配置分别保留，切回原角色时无需重新填写。设置页不再提供手动 Apply 按钮；总开关和角色立即生效，端口、地址和密码在停止输入后自动保存并重连。心跳、超时检测和普通断线重试均由传输层自动处理。
+上述修复各有对应的验证范围。具体样本和边界见 [问题记录索引](issues/README.md) 与 [世界同步复核](docs/world-sync-coverage/recheck.md)。
 
-### 房主
+## 已知限制
 
-```text
-FRP Direct role: Host
-Local UDP listen port: 27045
-FRP room player limit: 点击 1、2、3、4 中的一个按钮，立即生效
-FRP room password: 所有参与方约定的临时密码，或留空
-```
+部分技能、独立形态、攻击方向和实际机关组合尚未验证，部分弹体及技能后续效果也缺少完整验证；未测试不等于一定存在故障。
 
-人数按钮设置整个房间的角色上限：`1` 只允许房主，`2` 允许房主加一名加入方，`3` 允许房主加两名加入方，`4` 允许房主加三名加入方。该设置不会突破 Broforce 原生四人上限。房主可以在已经进入地图后打开 UMM 并直接切换人数，无需重启 FRP；新上限立即用于后续加入，已经在房间里的玩家不会被踢出。例如当前有三人时改为 `1`，三人仍可继续游戏，但退出的玩家不能重新加入，直到上限再次调高。
+限定样本中观察到 Desperabro 伙伴演奏结束与位置的分歧，以及 BroveHeart 技能控制状态分歧，尚未确定是本 Mod 的问题。自定义角色适配不属于本轮覆盖，Aquabro 已有实现和历史验证继续保留。
 
-正常启动后应显示 `Listening on UDP 27045`；`frpc` 将公网 UDP 端口转发到 `127.0.0.1:27045`。修改当前角色使用的连接参数会自动重启连接，因此应在开始或结束联机时调整。
+历史切关、黑屏和加入异常记录仍保留，需按后续实际遇到的情况判断，不能视为当前版本必现。这里不承诺全角色、全机关或长时间联机都没有问题。
 
-### 加入方
+## FRP 直连
 
-```text
-FRP Direct role: Client
-FRP server endpoint: 服务商提供的完整 host:port（IPv6 使用 [地址]:端口）
-FRP room password: 与房主一致
-```
+当官方联机延迟巨大时, 可考虑使用**FRP直连**联机
 
-所有参与方使用同一标准构建且密码一致时，Client 状态应为 `Handshake complete; heartbeat active`，Host 会显示已认证客户端数量。协议版本、`buildHash` 或密码不一致会拒绝握手且不会自动降级。密码会保存在本机 UMM 设置文件中，但不会写入日志或通过网络明文发送；请使用临时密码，不要复用其它账号密码。FRP token 只属于 `frpc`，不要填入 Mod。
+使用直连时，房主选择 **Host**，加入方选择 **Client**。需要可用的服务端 UDP 转发，并正确设置连接地址、端口和房间密码；地图仍须通过 Steam 订阅和下载。
 
-按 `Esc` 打开原生在线玩家名单时，FRP 玩家显示为 `xxxms | 玩家名`：`0-80ms` 为绿色、`81-150ms` 为黄色、`151ms` 以上为红色，首个 RTT 样本到达前显示灰色 `--ms`。房主显示为 `HOST | 房主名`，房主名使用 4 秒一轮的动态彩色渐变。这里的延迟表示每台机器到房主的往返时间；多人房间由房主把各连接的测量结果同步给加入方。
+FRP 已验证三机基础联机，四机与完整人数边界尚未验证。**FRP 不支持房主迁移**：房主退出会结束房间，这项限制不适用于普通 Steam 房间。
 
-握手完成后，房主照常创建线上大厅，各加入方在在线大厅列表中选择唯一的 FRP 房间；所有玩家进入 `p1-p4` 后分别占位，再由房主进入 Workshop 地图。房间按房主当前选择的 `1` 至 `4` 人上限接受加入方；达到上限后的加入请求会被拒绝。地图内降低上限只关闭后续空位，不移除现有成员；提高上限会立即重新开放空位。客户端之间的 RPC 由房主定向中继。房主加两台加入方的三机基础联机及静态 `1` 人房满员提示已经通过用户实测；四机、`2` 至 `4` 人容量边界和动态降额重入仍需专项验收。FRP 当前不支持主机迁移；用户对照测试确认房主退出后加入方直接返回主菜单，没有复现本 issue 的 Steam 黑屏。完整协议和历史失败记录见 [FRP Direct 验收记录](issues/archive/ISSUES-2026-08-24-FRP内网穿透联机方案.md)。
+配置步骤见 [网络与房间](docs/NETWORKING.md)。
 
-FRP 房间列表显示人数已满时，加入方点击房间会直接在屏幕顶部看到“房主设置的房间人数已达上限，暂时无法加入。”；若点击时仍有空位、请求到达房主时才满员，房主返回的 `room_full` 也会显示同一提示。提示会在最后一次触发 5 秒后自动消失；反复点击不会叠加，只会重新开始 5 秒计时。未订阅房主地图的提示仍保持常驻，不受该计时影响。
+## 常见问题
 
-## 构建
+**加入不了房间或进不了地图怎么办？**
 
-项目面向 .NET Framework 3.5。构建或部署前必须读取项目根目录的 `LocalBroforcePath.props`：
+先确认双方使用相同构建的 Mod、订阅并下载了同一张地图，再检查是否出现缺少订阅的提示。地图加载过程中不要反复点击加入；仍有问题时记录双方停在哪个画面、做了哪些操作。
 
-- `BroforceManagedPath`：本机 Broforce `Managed` 目录。
-- `UnityModManagerPath`：本机 UMM 核心目录。
-- `TestDeployModPath`：本机测试机部署目录；值为空表示明确关闭额外测试部署。内网测试机 IP 会变化时，请在 UNC 路径中使用 Windows 主机名，不要写固定 IP。
+**怎样回到官方地图？**
 
-该文件包含本机专用路径，只用于执行构建或部署，不得写入公开文件、提交信息、日志摘录或对外回复。首次使用时，复制 `LocalBroforcePath.props.example` 为 `LocalBroforcePath.props` 并填写本机路径，然后从项目根目录运行：
+关闭 Workshop 地图注入和 FRP 直连，退出当前房间，再重新创建官方街机线上房间。关闭开关不会立即把正在游玩的地图切走。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1
-```
+**在哪里找日志？**
 
-标准脚本会读取并保留 `Release\UMM\Mods\CustomMapMultiplayer\Info.json`，生成 `Release\CustomMapMultiplayer.zip` 并部署到本机 UMM 目录，同时计算并嵌入 SHA-256 `buildHash`。部署时会同步覆盖 DLL 和 `Info.json`，使名称、版本和入口与当前构建一致；DLL 程序集版本从该 `Info.json` 的版本自动生成。可选测试部署目录仅从未提交的 `LocalBroforcePath.props` 读取；不要把测试机地址、共享路径或用户名写入仓库。UNC 测试部署目标会先按主机名检查 SMB（TCP 445），目标机器不通时自动跳过远端部署；目标机器可达但目录创建或 DLL 复制失败时，构建仍视为失败，不要继续双端测试。不要用未经标准脚本验证的 IDE/手工构建代替；这类构建会记录 `UNBUILT`。
+在 UMM 的“Diagnostic Logs”页面打开诊断日志目录。反馈问题时说明地图、双方角色、房主和加入方各自看到的情况，并提供同一次复现的双方日志以及如何复现。
 
-部署前脚本会自动终止本机和可达测试端的 `Broforce.exe`、`Broforce_beta.exe`，确认退出后再更新文件；无需 AI、MCP 或手动关闭游戏，部署后不自动启动。远端进程控制使用当前 Windows 账户的 WMI 权限，机器名从 UNC 部署路径读取；停止失败时不继续部署。只构建且保留双端游戏运行时，使用 `-SkipDeploy`。详细说明见[构建与部署](docs/BUILD.md)。
+## 进一步阅读
 
-## 项目结构与文档
-
-| 路径 | 说明 |
-| --- | --- |
-| `src/` | Mod 源码目录；源码职责和模块关系见[架构与代码职责](docs/ARCHITECTURE.md) |
-| `CustomMapMultiplayer.csproj` | C# 工程文件 |
-| `BuildAndDeploy.ps1` | .NET 3.5 构建和部署脚本 |
-| `Release/` | r2modman 安装包与 UMM 插件文件 |
-| `README.md` | 默认中文说明文档 |
-| `README.en.md` | 英文说明文档 |
-| `Release/UMM/Mods/CustomMapMultiplayer/Info.json` | UMM 清单和构建元数据源文件 |
-| `LocalBroforcePath.props.example` | 本机路径配置示例 |
-| `docs/DEVELOPMENT.md` | [开发文档索引](docs/DEVELOPMENT.md) |
-| `issues/` | [问题记录、结论和验收入口](issues/README.md) |
-| `docs/evidence/` | 当前问题的运行验证附件和截图 |
-| `docs/CHAT.md` | 联机聊天输入、viewport 和历史消息显示 |
-| `umm-settings-preview.html` | UMM 设置界面预览 |
-
-### 其它文档
-
-- [BroforceMods Wiki](https://github.com/alexneargarder/BroforceMods/wiki)
-- [Viewing Broforce's Code](https://github.com/alexneargarder/BroforceMods/wiki/Viewing-Broforce's-Code)
+- [Workshop 地图与联机](docs/WORKSHOP.md) · [网络与房间](docs/NETWORKING.md)
+- [AFK 暂离](docs/AFK.md) · [中文聊天](docs/CHAT.md)
+- [问题记录](issues/README.md) · [世界同步修复与验证范围](docs/world-sync-coverage/recheck.md)
+- [构建与部署](docs/BUILD.md) · [开发文档](docs/DEVELOPMENT.md)

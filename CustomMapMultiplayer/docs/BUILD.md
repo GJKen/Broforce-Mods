@@ -6,7 +6,7 @@
 
 构建或部署前必须读取项目根目录的 `LocalBroforcePath.props`：
 
-1. `BroforceManagedPath` 是本机 Broforce `Broforce_beta_Data/Managed` 目录，其中必须含 `UnityEngine.TextRenderingModule.dll`、`UnityEngine.UI.dll` 和 `UnityEngine.PhysicsModule.dll`；聊天 viewport 和字数显示使用前两者，源码中的碰撞器类型使用后者。上述 DLL 是游戏运行库，不复制到 UMM 插件目录或安装包。
+1. `BroforceManagedPath` 是本机 Broforce `Broforce_beta_Data/Managed` 目录，其中必须含 `UnityEngine.TextRenderingModule.dll`、`UnityEngine.UI.dll`、`UnityEngine.PhysicsModule.dll` 和 `UnityEngine.AudioModule.dll`；聊天 viewport 和字数显示使用前两者，碰撞器使用 PhysicsModule，实际音频片段同步使用 AudioModule。上述 DLL 是游戏运行库，不复制到 UMM 插件目录或安装包。
 2. `UnityModManagerPath` 是含 `UnityModManager.dll` 和 `0Harmony.dll` 的本机 UMM 核心目录。
 3. `TestDeployModPath` 是本机测试机部署目录；值为空表示明确关闭额外测试部署。对于会变动 IP 的内网测试机，应在 UNC 路径中填写 Windows 主机名，不要填写固定 IP。
 4. 该文件包含本机专用路径，只允许用于执行构建或部署，不得写入公开文件、提交信息、日志摘录或对外回复。
@@ -39,7 +39,7 @@ powershell -ExecutionPolicy Bypass -File .\BuildAndDeploy.ps1 -Configuration Rel
 
 `CustomMapMultiplayer.csproj` 的 `OutputPath` 也指向 `Release\UMM\Mods\CustomMapMultiplayer`；`bin\Debug` 旧文件不得用于测试。IDE/MSBuild 只有正确读取本机 props 并执行构建后目标时才可替代脚本。
 
-聊天功能依赖 `UnityEngine.UI.dll` 的 `UnityEngine.UI.Text`、`RectTransform` 和文本布局 API，碰撞器相关代码依赖 `UnityEngine.PhysicsModule.dll`。这些程序集必须同时出现在项目引用和标准构建脚本的必需文件、编译引用列表中；它们由 Broforce 从 `Broforce_beta_Data/Managed` 加载，不属于 Mod 安装包。缺失时应视为构建失败，不要使用缺少运行库的游戏安装或旧 DLL 进行验收。
+聊天功能依赖 `UnityEngine.UI.dll` 的 `UnityEngine.UI.Text`、`RectTransform` 和文本布局 API，碰撞器相关代码依赖 `UnityEngine.PhysicsModule.dll`，实际 `AudioClip` 的命中声音传播依赖 `UnityEngine.AudioModule.dll`。这些程序集必须同时出现在项目引用和标准构建脚本的必需文件、编译引用列表中；它们由 Broforce 从 `Broforce_beta_Data/Managed` 加载，不属于 Mod 安装包。缺失时应视为构建失败，不要使用缺少运行库的游戏安装或旧 DLL 进行验收。
 
 Steam 房主查询缓存额外引用游戏自带的 `Assembly-CSharp-firstpass.dll`，用于 `Steamworks` 类型与回调泵；项目及脚本同步引用，不复制该游戏运行库。
 
