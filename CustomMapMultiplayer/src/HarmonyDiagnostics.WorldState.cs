@@ -257,6 +257,8 @@ namespace CustomMapMultiplayer
             PatchWorldHitPresentation();
             PatchWorldDoodads();
             PatchWorldPersistentStatus();
+            PatchMariachiSynchronization();
+            PatchBroveHeartSynchronization();
             PatchWorldMethod(AccessTools.Method(typeof(RPCController), "SendRPC", null, null), "WorldBossReplayRpcPrefix", null);
             PatchWorldMethod(typeof(RPCController).GetMethod("CreateRPC", BindingFlags.Public | BindingFlags.Static),
                 "WorldBlockRpcPrefix", null);

@@ -72,6 +72,8 @@ Fixes supported by recorded samples include:
 - Selected missing grenade and hit effects, and inconsistent damaged scenery appearance or collision state.
 - Selected persistent statuses and surviving skill effects not being restored correctly on late join.
 - Invisible captives after cage destruction, gun-emplacement driver-ejection differences, and spear endpoint and terminal-effect issues.
+- Desperabro's companions not ending their performance or updating their positions correctly for other players.
+- BroveHeart's skill failing to activate for other players, including when using the last charge.
 
 Each fix has a specific verification scope. See the [issue index](issues/README.en.md) and [world-sync review](docs/world-sync-coverage/recheck.md) for samples and limits.
 
@@ -79,7 +81,7 @@ Each fix has a specific verification scope. See the [issue index](issues/README.
 
 Some skills, independent forms, attack directions, and mechanism combinations remain unverified. Some projectiles and follow-up skill effects also lack complete verification; untested cases are not necessarily defects.
 
-Limited samples showed differences in Desperabro companion serenade termination and position, and BroveHeart skill-control state. Their cause has not been established as a fault in this Mod. Custom-character adaptation was outside this round; Aquabro's existing implementation and historical acceptance remain.
+Custom-character adaptation was outside this round; Aquabro's existing implementation and historical acceptance remain.
 
 Historical level-transition, black-screen, and joining issues retain their records. They should be assessed against actual subsequent incidents, rather than assumed to reproduce in the current version. Complete coverage of every character, mechanism, or long session is not claimed.
 

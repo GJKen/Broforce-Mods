@@ -112,6 +112,8 @@
       <Compile Include="src\HarmonyDiagnostics.WorldSpecialHits.cs" />
     <Compile Include="src\HarmonyDiagnostics.WorldActors.cs" />
     <Compile Include="src\HarmonyDiagnostics.DemolitionBro.cs" />
+    <Compile Include="src\HarmonyDiagnostics.Desperabro.cs" />
+    <Compile Include="src\HarmonyDiagnostics.BroveHeart.cs" />
     <Compile Include="src\HarmonyDiagnostics.McBrover.cs" />
     <Compile Include="src\HarmonyDiagnostics.NativeMapSafety.cs" />
     <Compile Include="src\HarmonyDiagnostics.SteamHost.cs" />
