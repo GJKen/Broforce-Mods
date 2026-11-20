@@ -3,7 +3,7 @@
   "author": "GJKen",
   "version_number": "0.5.1",
   "website_url": "https://github.com/GJKen/Broforce-Mods/blob/main/CustomMapMultiplayer",
-  "description": "For multiplayer gameplay, all parties must have this mod installed and be subscribed to the same map.Please visit GitHub for a detailed usage guide.The multiplayer mode still suffers from some long-standing official bugs. This mod includes built-in fixes to ensure a stable gaming experience. If you encounter any other bugs, please provide clear reproduction logs and submit them via GitHub.",
+  "description": "Play Steam Workshop maps online with friends. Includes a map browser, multiplayer synchronization fixes, improved chat, AFK mode, and optional FRP Direct.",
   "dependencies": [
     "UMM-UMM-1.1.0",
     "RocketLib-RocketLib-2.4.3"
