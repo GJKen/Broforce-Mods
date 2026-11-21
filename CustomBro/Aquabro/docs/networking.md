@@ -2,11 +2,15 @@
 
 This is a character-specific integration example for the shared RocketLib and BroMaker networking changes. The implementation was generated with AI; testing covers selected offline cases and limited two-player sessions, not every multiplayer scenario.
 
+Updated 2026-11-21. The [current deployment and validation summary](../当前角色实际应用状态.md) records the shipped DLL, matching peer deployments and remaining work. Dated issue records retain the evidence and limits of each repair.
+
 ## Dependencies
 
 Use matching framework builds on every peer. These source changes depend on the networking work in [RocketLib PR #1](https://github.com/Gorzontrok/RocketLib/pull/1) and [BroMaker PR #29](https://github.com/Gorzontrok/Bro-Maker/pull/29). Existing published framework packages may not contain those changes. Both peers also need the same Aquabro code and resources.
 
 The repository records compatible framework revisions through its RocketLibMultiplayer and BroMakerMultiplayer submodules. BroMaker's PR branch contains the same public framework sources as the recorded BroMaker revision; it excludes historical local test reports.
+
+The additional 60 Hz trident state and smoothing path is integrated into CustomMapMultiplayer. Its final dual-peer flight-continuity acceptance remains pending; see the [trident issue](../issues/2026-11-15-三叉戟飞行联机断续.md).
 
 ## Code to review
 
@@ -25,20 +29,28 @@ Other character authors can reuse the public framework interfaces, but must adap
 
 ## Validation and limits
 
-The checked-in offline tests cover extracted production methods with controlled dependencies:
+### Current evidence
 
-- [Test-Charge.ps1](../tests/Test-Charge.ps1): charge and interruption timing, immediate animation events and spawning, rejection of stale remote input as an attack trigger, owner-only firing, visual handling, and melee timing.
-- [Test-TridentLifetime.ps1](../tests/Test-TridentLifetime.ps1): movement budgets, expiry, wall contact, and remote waiting for the owner's impact.
-- [Test-WaterBlastZones.ps1](../tests/Test-WaterBlastZones.ps1): splash contacts and damage boundaries, owner/NID checks, and duplicate-impact suppression.
+The three 2026-11-21 size-reduction rounds passed the recorded offline regressions, comparisons between old and new game processes, and targeted two-player checks. The latest round used matching DLLs on the local host and the 5700G client; see the [third-round report](精简批量补充验证-2026-11-21.md).
 
-These tests do not simulate real transport or certify shared damage. The 2026-11-13 attack-animation update passed its offline checks and compiled for .NET 3.5, but only the local machine was updated. Dual-peer animation timing, late-join charge recovery, and multiplayer damage remain unverified; see the [issue record](../issues/2026-11-13-普攻与蓄力攻击动画联机延迟.md). Full skill coverage, cross-map behavior, and three-player sessions also remain outside the verified scope.
+| Area | Confirmed scope |
+| --- | --- |
+| Normal and charged tridents | Both peers threw at the expected speeds, observed the expected projectile and splash counts, and retained owner-only firing and charged-blast resolution. |
+| Four skills | Targeted casts from both peers covered visuals, damage and suction authority, the seven-column shared damage budget, shark steering and breach events, ammo, HUD selection and effect cleanup. |
+| Shark movement repair | The 2026-11-17 owner/observer descent probes agreed and preserved pause; the user accepted the dual-peer gameplay result. The initial Inspector authentication failure was resolved during that repair. See the [shark record](../issues/2026-11-17-鲨鱼潜行远端移动顿挫.md). |
+| Maelstrom ownership and route | Offline ownership/route cases and actual transport checks are recorded in the [maelstrom issue](../issues/2026-11-16-漩涡敌人状态联机分歧.md); the 2026-11-21 report includes casts from both peers. |
 
-Publishing source does not update the bundled DLL or either test machine. Build matching dependencies and the character before testing the current source.
+### Regression entry points
 
-The 2026-11-16 maelstrom regression separates caster ownership from victim ownership, including live/corpse and normal/heavy/subclass cases. It also checks immediate cast/state messages, repeated casts, stale and late updates, conflicting remote terrain and wall removal at 30/60/120 FPS. The compiled skill test executable supports `--maelstrom-network` for these targeted checks; the full four-skill suite includes them. See the [maelstrom issue record](../issues/2026-11-16-漩涡敌人状态联机分歧.md) for deployment and actual transport validation.
+The checked-in offline tests exercise production code with controlled dependencies. They support the recorded cases; the game-session evidence above establishes actual transport coverage.
 
-The 2026-11-17 shark regression covers continuous remote movement at 30/60/120 FPS in both directions, delayed/dropped/stale samples, conflicting input and terrain, pause, bounded prediction, stopping/reversing, and exact/early/duplicate/timeout breaches. The compiled skill test executable supports `--shark-network`; the full suite includes it. Offline checks and the .NET 3.5 build passed. Both Inspector endpoints rejected authentication, so actual dual-peer smoothness remains unverified; see the [shark movement record](../issues/2026-11-17-鲨鱼潜行远端移动顿挫.md).
+- [Test-Charge.ps1](../tests/Test-Charge.ps1): charge, interruptions, immediate animation/spawn events, rejection of stale remote input as an attack trigger, owner-only firing and melee timing.
+- [Test-TridentLifetime.ps1](../tests/Test-TridentLifetime.ps1): movement budgets, expiry, wall contact and remote waiting for the owner's impact.
+- [Test-WaterBlastZones.ps1](../tests/Test-WaterBlastZones.ps1): splash contacts, damage boundaries, owner/NID checks and duplicate-impact suppression.
+- [Test-Spring.ps1](../tests/Test-Spring.ps1): the complete four-skill suite. Its compiled executable also supports `--maelstrom-network` and `--shark-network` for the targeted ownership, route and movement cases described in the issue records.
 
-The same-day descent follow-up gives the owner and observer the same render-height transition while preserving authoritative floor contact. Only horizontal velocity is extrapolated; vertical presentation converges toward the received floor height without overshoot. The camera shares the rendered transform, and moving-platform displacement carries the owner's render height directly. Added tests cover both peers at 15/30/60/120 FPS, small and very large drops, pause and convergence. The complete suite now passes 64 groups. MCP authentication was restored using the user-provided token; the initial authentication failure above is historical.
+Environment requirements, the remaining regression entry points and probe limits are maintained in the [test guide](../tests/Readme.md).
 
-Both restarted peers loaded MVID `60dc6cff-c2cb-478b-a0c1-beff459a346d`. Controlled production-visual probes on the owner and observer produced matching heights during a 96 px descent and preserved pause. The user subsequently confirmed the dual-peer gameplay test passed; this repair is accepted. See the issue record for the precise probe scope and historical candidates.
+### Remaining scope
+
+Precise attack-animation latency, late-join charge recovery and the final trident flight-continuity gameplay check remain open. The targeted results also leave all-map coverage, full Boss fights, three-player sessions and extreme latency/loss matrices unverified. The [attack-animation record](../issues/2026-11-13-普攻与蓄力攻击动画联机延迟.md) distinguishes its initial local-only deployment from the later two-peer projectile checks.

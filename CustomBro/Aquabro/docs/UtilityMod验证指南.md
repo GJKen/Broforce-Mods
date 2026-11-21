@@ -79,7 +79,7 @@
 
 ## MCP 辅助核对与本次证据
 
-本地脚本 [Verify-UtilityMaelstromPlacement.cs](../tests/Verify-UtilityMaelstromPlacement.cs) 使用同一个 `Utility_Mod.Main.SpawnUnit` 入口生成敌人。需先暂停并使用 Aquabro；执行后等待状态 `DONE 132`，表示 66 项、双朝向结束。`issuesOnly=true` 只复查七项虫、钻地车与村民，结束为 `DONE 18`；`wormFixOnly=true` 验证六项可受伤虫类，结束为 `DONE 12`，并额外检查主体位置离开头部、部位关闭和墙体阻挡。
+以下记录历史现场脚本 `tests/Verify-UtilityMaelstromPlacement.cs` 的执行方式；该脚本未随仓库提供。它使用同一个 `Utility_Mod.Main.SpawnUnit` 入口生成敌人，在暂停的 Aquabro 现场执行。状态 `DONE 132` 表示 66 项、双朝向结束；`issuesOnly=true` 只复查七项虫、钻地车与村民，结束为 `DONE 18`；`wormFixOnly=true` 验证六项可受伤虫类，结束为 `DONE 12`，并额外检查主体位置离开头部、部位关闭和墙体阻挡。
 
 脚本等待四个 Unity 帧，让原版 `Start` 完成；仅禁止临时敌人的屏外禁用，不修改其血量、无敌或敌我。它调用当前 DLL 的找目标和实际释放方法，核对两者位置是否一致，然后删除临时敌人、漩涡和地面，恢复人物位置、面向、次数及施法字段。少量原因对照会临时把虫加入名单或把钻地车抬到地表，记录在独立字段中，不能将这些结果算作正式代码通过。
 

@@ -8,7 +8,7 @@
 
 ## 血水源稿
 
-[血水](血水/Readme.md) 保存四份分层 Aseprite 稿及渐变预览。使用当前地狱关卡原生血池色阶，接触后用 1.5 秒完成单次 RGB 渐变；猎杀只改变水花。`export_skill_effects.lua` 的 `blood=true` 参数导出六张配套 PNG，校验原稿 alpha 和鲨鱼本体像素，沿用原有图集布局与入水校准。
+[血水](血水/Readme.md) 保存四份分层 Aseprite 稿及渐变预览。使用地狱关卡原生血池色阶，接触后用 0.85 秒完成单次 RGB 渐变；猎杀只改变水花。渐变及暂停规则见[血水说明](血水/Readme.md)。`export_skill_effects.lua` 的 `blood=true` 参数导出六张配套 PNG，校验原稿 alpha 和鲨鱼本体像素，沿用原有图集布局与入水校准。
 
 ## 正式输入与输出
 
