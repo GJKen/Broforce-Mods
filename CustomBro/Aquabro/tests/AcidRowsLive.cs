@@ -36,7 +36,7 @@ public static class AcidRowsLive
             using (FileStream stream = File.Create(output))
             foreach (int kind in new int[] {0,2,3}) foreach (float facing in new float[] {-1f,1f})
             {
-                effect = Activator.CreateInstance(visual, F, null, new object[] {owner,kind,6000f,6000f,facing,5f,0f,.85f}, null);
+                effect = Activator.CreateInstance(visual, F, null, new object[] {owner,kind,6000f,6000f,facing,5f,0f,.85f,null}, null);
                 object water = Get(effect,"waterBarrier"), acid = Get(water,"acid");
                 Call(water,"Absorb",new object()); Call(water,"Absorb",new object());
                 int count = kind == 0 ? 16 : kind == 2 ? 32 : 28;

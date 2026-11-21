@@ -20,12 +20,12 @@ $method += "`n" + (Read-Method 'private static float GetTridentSweepStartX(')
 $method += "`n" + (Read-Method 'private static bool FindChargedWaterContact(')
 $method += "`n" + (Read-Method 'private static bool FindChargedWaterContactRect(')
 $method += "`n" + (Read-Method 'private static HashSet<object> ApplyWaterImpactContacts(')
-$method += "`n" + (Read-Method 'private static bool FindTridentTerrainContact(')
 $method += "`n" + (Read-Method 'private static bool FindTridentTerrainContactExcept(')
 $method += "`n" + (Read-Method 'private static void ResolveWaterHit(')
 $method += "`n" + (Read-Method 'private static bool WaterSceneContactVisible(')
 $method += "`n" + (Read-Method 'private static void DamageWaterDoodads(')
 $method += "`n" + (Read-Method 'private static bool WaterHitUnits(') + "`n" + (Read-Method 'private static bool WaterHitGround(')
+$method += "`n" + (Read-Method 'private static Vector2 WaterImpactForce(')
 $effectMethods = @(
     Read-Method 'public void BeginBlast('
     Read-Method 'private void Update()'
@@ -175,7 +175,7 @@ class AquabroWaterEffect {
  private float elapsed,impactXI;
  private int size,frames;
  private Aquabro impactOwner;
- private readonly HashSet<object> affectedUnits=new HashSet<object>();
+ private HashSet<object> affectedUnits;
  private Transform transform=new Transform();
  public float BlastX {get {return transform.position.x;}}
  private SpriteSM waterSprite=new SpriteSM();

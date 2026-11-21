@@ -54,9 +54,6 @@ namespace AquabroMod
             List<DamageRelay> relays, bool routeOpen, DamageType type)
         { Contact = contact; Key = key; this.receiver = receiver; this.relays = relays; this.routeOpen = routeOpen; requestedType = type; }
 
-        internal static CollisionDamageTarget Find(Collider contact)
-        { return Find(contact, DamageType.Explosion); }
-
         // Skills share one budget for a cage's body and its individual bars.
         // Props remain separate from terrain so delayed explosions cannot stop a wave.
         internal static CollisionDamageTarget FindSkill(Collider contact)
@@ -74,7 +71,7 @@ namespace AquabroMod
             if (prop == null) prop = contact.GetComponent<Cage>();
             if (prop == null && contact.GetComponent<CageBar>() != null)
                 prop = contact.GetComponentInParent<Cage>();
-            return prop == null ? Find(contact) :
+            return prop == null ? Find(contact, DamageType.Explosion) :
                 new CollisionDamageTarget(contact, prop, contact.gameObject, null, true, DamageType.Explosion);
         }
 
@@ -177,7 +174,7 @@ namespace AquabroMod
                 !Active(relay.ignoreDamageWhileColliderActive) && !Active(relay.ignoreDamageWhileOtherColliderActive));
         }
 
-        private static bool Active(Collider collider)
+        internal static bool Active(Collider collider)
         { return collider != null && collider.enabled && collider.gameObject.activeInHierarchy; }
 
         internal bool CanDamage(int playerNum, DamageType type)
@@ -261,7 +258,7 @@ namespace AquabroMod
             List<Collider> ignored = new List<Collider>();
             foreach (Collider contact in Physics.OverlapSphere(new Vector3(x, y, 0f), range * .5f,
                 Map.groundAndDamageableObjects))
-                if (contact != null && (contact.isTrigger || contact.GetComponent<DamageRelay>() != null || Find(contact) != null)) ignored.Add(contact);
+                if (contact != null && (contact.isTrigger || contact.GetComponent<DamageRelay>() != null || Find(contact, DamageType.Explosion) != null)) ignored.Add(contact);
             return ignored.ToArray();
         }
     }

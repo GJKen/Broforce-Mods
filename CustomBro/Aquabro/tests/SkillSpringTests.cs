@@ -68,20 +68,20 @@ public static class SkillSpringTests
         {
             for (int kind = 0; kind < 4; kind++)
             {
-                left = new AquabroSkillVisual(first, kind, 0, 0, 1, 5, 0, 1);
+                left = new AquabroSkillVisual(first, kind, 0, 0, 1, 5, 0, 1, null);
                 AquabroSkillVisual.RefreshBloodDepth();
                 Check(pool.sprite.offset.z == -16, "Hidden skill moves blood");
                 left.Tick(.01f); AquabroSkillVisual.RefreshBloodDepth();
                 Check(pool.sprite.offset.z > -3 && pool.sprite.offset.z < -1, "Blood stays in front of skill");
                 Check(pool.sprite.offset.x == 3 && pool.sprite.offset.y == 4, "Blood XY offset changed");
-                right = new AquabroSkillVisual(second, kind, 0, 0, -1, 5, 0, 1);
+                right = new AquabroSkillVisual(second, kind, 0, 0, -1, 5, 0, 1, null);
                 right.Tick(.01f); AquabroSkillVisual.RefreshBloodDepth();
                 left.Dispose(); left = null;
                 Check(pool.sprite.offset.z != -16, "One owner restores blood used by another");
                 right.Dispose(); right = null;
                 Check(pool.sprite.offset.z == -16, "Last skill did not restore original blood depth");
             }
-            left = new AquabroSkillVisual(first, 0, 0, 0, 1, 5, 0, 1);
+            left = new AquabroSkillVisual(first, 0, 0, 0, 1, 5, 0, 1, null);
             left.Tick(.01f); AquabroSkillVisual.RefreshBloodDepth();
             pool.sprite.meshRender.bounds = new Bounds(9000, 9000);
             AquabroSkillVisual.RefreshBloodDepth();
@@ -110,7 +110,7 @@ public static class SkillSpringTests
         Aquabro owner = new Aquabro();
         foreach (int kind in new int[] { 0, 2, 3 }) foreach (float facing in new float[] { -1f, 1f })
         {
-            WaterProjectileBarrier water = new WaterProjectileBarrier(owner, kind, 0, 0, facing, 1);
+            WaterProjectileBarrier water = new WaterProjectileBarrier(owner, kind, 0, 0, facing, 1, null, null);
             water.SetFrame(4);
             SkillContactMask mask = new SkillContactMask(kind, 0, 0, facing, 1, 4);
             Vector3 contact = new Vector3(); bool found = false;
@@ -152,7 +152,7 @@ public static class SkillSpringTests
                     }
                     png.Save(System.IO.Path.Combine(fixture, "skill-" + Aquabro.SkillAssets[kind] + suffix + ".png"), System.Drawing.Imaging.ImageFormat.Png);
                 }
-                AquabroSkillVisual visual = new AquabroSkillVisual(owner, kind, 8000, 8000, 1, 5, 0, 1);
+                AquabroSkillVisual visual = new AquabroSkillVisual(owner, kind, 8000, 8000, 1, 5, 0, 1, null);
                 WaterBloodState blood = (WaterBloodState)typeof(AquabroSkillVisual).GetField("blood", Private).GetValue(visual);
                 blood.Touched = true; visual.Tick(.425f);
                 Texture2D texture = (Texture2D)typeof(AquabroSkillVisual).GetField("acidTexture", Private).GetValue(visual);
@@ -181,8 +181,8 @@ public static class SkillSpringTests
                 visual.Dispose();
             }
             SpringDamageState shared = new SpringDamageState();
-            AquabroSkillVisual left = new AquabroSkillVisual(owner,3,8000,8000,1,5,0,1,null,shared);
-            AquabroSkillVisual right = new AquabroSkillVisual(owner,3,9000,8000,1,5,.1f,1,null,shared);
+            AquabroSkillVisual left = new AquabroSkillVisual(owner,3,8000,8000,1,5,0,1,shared);
+            AquabroSkillVisual right = new AquabroSkillVisual(owner,3,9000,8000,1,5,.1f,1,shared);
             Check(object.ReferenceEquals(typeof(AquabroSkillVisual).GetField("blood",Private).GetValue(left),
                 typeof(AquabroSkillVisual).GetField("blood",Private).GetValue(right)), "Spring columns do not share blood state");
             left.Dispose(); right.Dispose();
@@ -192,18 +192,28 @@ public static class SkillSpringTests
     }
     private static void CheckAcid()
     {
+        var fresh = new WaterAcidState();
+        var sourcesField = typeof(WaterAcidState).GetField("sources", BindingFlags.NonPublic | BindingFlags.Instance);
+        Check(sourcesField.GetValue(fresh) == null, "Clean water allocated acid sources");
+        fresh.Absorb(null); fresh.AdvanceColor(.15f, .15f);
+        Check(sourcesField.GetValue(fresh) == null && fresh.Stage == 0, "Null source or color tick allocated");
+        object firstAcidSource = new object(); fresh.Absorb(firstAcidSource);
+        object sources = sourcesField.GetValue(fresh);
+        fresh.Absorb(firstAcidSource); fresh.Absorb(new object()); fresh.Absorb(new object());
+        Check(fresh.Stage == 2 && ((HashSet<object>)sources).Count == 2 &&
+            object.ReferenceEquals(sources, sourcesField.GetValue(fresh)), "Acid sources changed dedup, cap or reuse");
         Check(!Aquabro.RollsCorrosion(0,0), "Clean water corrodes");
         Check(Aquabro.RollsCorrosion(1,.49999) && !Aquabro.RollsCorrosion(1,.5), "Stage one probability boundary");
         Check(Aquabro.RollsCorrosion(2,.99999), "Stage two probability");
         Aquabro owner=new Aquabro();
-        WaterProjectileBarrier water=new WaterProjectileBarrier(owner,0,0,0,1,1);
+        WaterProjectileBarrier water=new WaterProjectileBarrier(owner,0,0,0,1,1, null, null);
         object blob=new object();water.Absorb(blob);water.Absorb(blob);
         Check(water.AcidStage==1,"Same acid source counted twice");
         water.Absorb(new object());water.Absorb(new object());Check(water.AcidStage==2,"Stage cap");
         water.Dispose();
         for (int kind=0;kind<4;kind++)
         {
-            water=new WaterProjectileBarrier(owner,kind,0,0,1,1);water.SetFrame(4);
+            water=new WaterProjectileBarrier(owner,kind,0,0,1,1, null, null);water.SetFrame(4);
             SkillContactMask mask=new SkillContactMask(kind,0,0,1,1,4);
             float px=0,py=0;bool found=false;
             for(int yy=1;yy<112&&!found;yy++)for(int xx=-64;xx<64;xx++)
@@ -246,7 +256,7 @@ public static class SkillSpringTests
                 png.Save(System.IO.Path.Combine(fixture,"skill-"+(kind==3?"abyssal-spring":"tidal-wave")+(stage==0?"":"-acid-"+stage)+".png"),System.Drawing.Imaging.ImageFormat.Png);
             }
         }
-        AquabroSkillVisual visual=new AquabroSkillVisual(owner,0,0,0,1,2,0,1);
+        AquabroSkillVisual visual=new AquabroSkillVisual(owner,0,0,0,1,2,0,1, null);
         WaterProjectileBarrier visualWater=(WaterProjectileBarrier)typeof(AquabroSkillVisual).GetField("waterBarrier",Private).GetValue(visual);
         visualWater.Absorb(new object());
         visual.Tick(.15f);
@@ -266,7 +276,7 @@ public static class SkillSpringTests
         updateColor.Invoke(visual,new object[]{nextFrame,0f});
         Check(mixed.UploadCount==uploads+1 && mixed.GetPixels32()[2].r==20+nextFrame,"Animation frame did not invalidate color upload");
         visual.Dispose();
-        visual=new AquabroSkillVisual(owner,0,0,0,1,2,0,1);
+        visual=new AquabroSkillVisual(owner,0,0,0,1,2,0,1, null);
         visualWater=(WaterProjectileBarrier)typeof(AquabroSkillVisual).GetField("waterBarrier",Private).GetValue(visual);
         visualWater.Absorb(new object());visual.Tick(.3f);
         mixed=(Texture2D)typeof(AquabroSkillVisual).GetField("acidTexture",Private).GetValue(visual);
@@ -283,7 +293,7 @@ public static class SkillSpringTests
         visual.Dispose();
         CheckSpringSharedAcid(fixture);
         System.IO.Directory.Delete(fixture,true);owner.Info.path="";
-        AquabroSkillVisual sharkVisual=new AquabroSkillVisual(owner,1,0,0,1,4,0,1);
+        AquabroSkillVisual sharkVisual=new AquabroSkillVisual(owner,1,0,0,1,4,0,1, null);
         Check(typeof(AquabroSkillVisual).GetField("waterBarrier",Private).GetValue(sharkVisual)==null,"Shark still creates water barrier");
         sharkVisual.Tick(.1f);Check(typeof(AquabroSkillVisual).GetField("acidTexture",Private).GetValue(sharkVisual)==null,"Shark creates acid texture");sharkVisual.Dispose();
         CheckNativeAcid();
@@ -311,7 +321,7 @@ public static class SkillSpringTests
             SlimeGroundCover slime=new SlimeGroundCover();slime.direction=direction;
             slime.transform.position=new Vector3(point.x-nx*8,point.y-ny*8,0);
             if(register!=null)register.Invoke(null,new object[]{slime});
-            WaterProjectileBarrier water=new WaterProjectileBarrier(owner,kind,0,0,facing,scale);water.SetFrame(frame);
+            WaterProjectileBarrier water=new WaterProjectileBarrier(owner,kind,0,0,facing,scale, null, null);water.SetFrame(frame);
             try
             {
                 Collider wall=new Collider(point.x*.5f,50,true);
@@ -462,8 +472,8 @@ public static class SkillSpringTests
         Reset();owner=new Aquabro();owner.Info.path=fixture;
         columns=(List<AquabroSkillVisual>)typeof(Aquabro).GetField("skillVisuals",Private).GetValue(owner);
         SpringDamageState shared=new SpringDamageState();shared.Acid.Absorb(new object());
-        AquabroSkillVisual left=new AquabroSkillVisual(owner,3,-1000,0,-1,1.4f,0,1,null,shared);
-        AquabroSkillVisual right=new AquabroSkillVisual(owner,3,1000,0,1,1.4f,0,1,null,shared);
+        AquabroSkillVisual left=new AquabroSkillVisual(owner,3,-1000,0,-1,1.4f,0,1,shared);
+        AquabroSkillVisual right=new AquabroSkillVisual(owner,3,1000,0,1,1.4f,0,1,shared);
         columns.Add(left);columns.Add(right);
         typeof(AquabroSkillVisual).GetField("elapsed",Private).SetValue(left,.499f);
         typeof(AquabroSkillVisual).GetField("elapsed",Private).SetValue(right,.499f);
@@ -483,8 +493,8 @@ public static class SkillSpringTests
         typeof(Aquabro).GetMethod("ClearSkillPreview",Private).Invoke(owner,null);Reset();
         // The same pool touching several columns only grants one stage.
         shared=new SpringDamageState();
-        WaterProjectileBarrier a=new WaterProjectileBarrier(owner,3,0,0,1,1,shared.Acid);
-        WaterProjectileBarrier b=new WaterProjectileBarrier(owner,3,0,0,1,1,shared.Acid);
+        WaterProjectileBarrier a=new WaterProjectileBarrier(owner,3,0,0,1,1,shared.Acid, null);
+        WaterProjectileBarrier b=new WaterProjectileBarrier(owner,3,0,0,1,1,shared.Acid, null);
         a.SetFrame(10);b.SetFrame(10);pool=new DoodadAcidPool();pool.X=px;pool.Y=py;
         DoodadBloodPool.bloodDoodads.Add(pool);a.AbsorbPools();b.AbsorbPools();
         Check(a.AcidStage==1 && b.AcidStage==1,"One acid pool upgraded shared cast twice");
@@ -528,7 +538,7 @@ public static class SkillSpringTests
         while (owner.SelectedSkill != 0) owner.SetGestureAnimation(GestureElement.Gestures.Flex);
         owner.SpecialAmmo = 2;
         var effects = (List<AquabroSkillVisual>)typeof(Aquabro).GetField("skillVisuals", Private).GetValue(owner);
-        var wave = new AquabroSkillVisual(owner, 0, 0, 0, 1, 2, 0, .85f); effects.Add(wave);
+        var wave = new AquabroSkillVisual(owner, 0, 0, 0, 1, 2, 0, .85f, null); effects.Add(wave);
         owner.CurrentAcidStage = 2;
         Mook coated = new Mook(); coated.playerNum = -1;
         typeof(Aquabro).GetMethod("DamageSkillUnit", Private).Invoke(owner, new object[] { coated, 4, 70f, 650f, 1, true, 0f, 0f });
@@ -536,7 +546,7 @@ public static class SkillSpringTests
         Check(owner.SelectedSkill == 1 && owner.SpecialAmmo == 2 && effects.Contains(wave),
             "Switch refunded ammo or removed existing wave");
         Check(coated.HasBeenCoveredInAcid(), "Switch removed native acid state");
-        var shark = new AquabroSkillVisual(owner, 1, 0, 0, 1, 12, 0, 1); effects.Add(shark);
+        var shark = new AquabroSkillVisual(owner, 1, 0, 0, 1, 12, 0, 1, null); effects.Add(shark);
         typeof(Aquabro).GetField("activeShark", Private).SetValue(owner, shark);
         owner.SetGestureAnimation(GestureElement.Gestures.Flex);
         Check(owner.SelectedSkill == 1 && owner.SpecialAmmo == 2, "Remote steering allowed gesture switch");
@@ -620,11 +630,11 @@ public static class SkillSpringTests
 
         Reset(); Target(point.x, point.y);
         hits = new SpringDamageState();
-        AquabroSkillVisual effect = new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, .14f, .65f, null, hits);
+        AquabroSkillVisual effect = new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, .14f, .65f, hits);
         Check(effect.Tick(.1f) && Map.TotalHits == 0, "Delayed column damages before appearing");
         effect.Tick(.55f);
         Check(Map.TotalHits == 1 && SpriteSM.LastFrame == 10, "Visible frame and damage disagree");
-        AquabroSkillVisual overlap = new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, 0, .65f, null, hits);
+        AquabroSkillVisual overlap = new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, 0, .65f, hits);
         overlap.Tick(.51f); Check(Map.TotalHits == 1, "Overlapping columns multiply cast damage");
         Reset();
         effect.Tick(.85f); Target(0, 10); effect.Tick(.02f);
@@ -1010,7 +1020,7 @@ public static class SkillSpringTests
         foreach (float facing in new float[] { -1, 1 })
         {
             Reset();
-            AquabroSkillVisual wave = new AquabroSkillVisual(owner, 0, 0, 0, facing, 2f, 0, .85f);
+            AquabroSkillVisual wave = new AquabroSkillVisual(owner, 0, 0, 0, facing, 2f, 0, .85f, null);
             for (int i = 0; i < 15; i++)
             {
                 Check(wave.Tick(.1f), "Wave ended before full travel");
@@ -1035,16 +1045,16 @@ public static class SkillSpringTests
         Collider crate = new Collider(point.x, point.y, false);
         Physics.Contacts = new Collider[] { crate };
         Map.destroyableDoodads.Add(new Doodad(point.x,point.y));
-        Check(owner.SkillWaveContact(0, 0, 1, 1, 5, hits, objects), "Breakable terrain stopped wave");
+        Check(owner.SkillWaveContact(0, 0, 1, 1, 5, hits, objects, null, 0f), "Breakable terrain stopped wave");
         Check(!crate.enabled && MapController.ObjectHits == 1 && Map.TotalHits == 1 && Map.Hits[enemy] == 26,
             "Wave failed to break terrain/items or damage enemy");
-        owner.SkillWaveContact(0, 0, 1, 1, 5, hits, objects);
+        owner.SkillWaveContact(0, 0, 1, 1, 5, hits, objects, null, 0f);
         Check(Map.TotalHits == 1 && MapController.ObjectHits == 1 && Map.DoodadHits > 0, "Wave repeats damage or misses doodads");
         Collider wall = new Collider(point.x, point.y + 12, true);
         Physics.Contacts = new Collider[] { wall };
-        Check(!owner.SkillWaveContact(0, 0, 1, 1, 5, hits, objects) && wall.enabled, "Indestructible wall did not stop wave");
+        Check(!owner.SkillWaveContact(0, 0, 1, 1, 5, hits, objects, null, 0f) && wall.enabled, "Indestructible wall did not stop wave");
         Physics.Contacts = new Collider[0];
-        WaterProjectileBarrier water = new WaterProjectileBarrier(owner, 0, 0, 0, 1, 1);
+        WaterProjectileBarrier water = new WaterProjectileBarrier(owner, 0, 0, 0, 1, 1, null, null);
         water.SetFrame(5);
         water.MoveTo(100, 0);
         Projectile slow = new Projectile(); slow.X = 50; slow.Y = point.y;
@@ -1111,17 +1121,17 @@ public static class SkillSpringTests
                 // terrain hit or stop the wave before the unit damage pass.
                 Collider body=new Collider((right+.5f-64)*scale*facing,(112-edgeY-.5f)*scale,true);
                 body.ParentComponent=target;Physics.Contacts=new Collider[]{body};
-                bool passed = owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects);
+                bool passed = owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects, null, 0f);
                 Check(passed,"Water wall was blocked by a body unit: "+target.GetType().Name);
                 Check(target.health==initialHealth-26 && Map.Hits[target]==26 && Map.TotalHits==1 && MapController.ObjectHits==0,
                     "Body contact did not deal exactly 26 damage");
                 if (target is MookGrenadier)
                     Check(((MookGrenadier)target).StunCalls==0 && EffectsController.WhiteFlashCalls==0,
                         "Killed grenadier received an extra hit reaction");
-                owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects);
+                owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects, null, 0f);
                 Check(Map.TotalHits==1,"Wave repeated enemy damage");
                 target.health=200;Map.Hits.Clear();Map.TotalHits=0;hits.Clear();
-                owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects);
+                owner.SkillWaveContact(0,0,facing,scale,frame,hits,objects, null, 0f);
                 Check(target.health==174,"High-health enemy bypasses fixed wave damage");
                 foreach(int blockedCase in new int[]{0,1,2,3,4,5})
                 {
@@ -1130,7 +1140,7 @@ public static class SkillSpringTests
                     owner.IsMine=blockedCase!=2;Physics.Blocked=blockedCase==3;
                     if(blockedCase==4)target.Y=-30;
                     int before=Map.TotalHits;
-                    owner.SkillWaveContact(0,0,facing,scale,blockedCase==5?6:frame,new HashSet<object>(),objects);
+                    owner.SkillWaveContact(0,0,facing,scale,blockedCase==5?6:frame,new HashSet<object>(),objects, null, 0f);
                     Check(Map.TotalHits==before,"Wave ignores immunity/ally/ownership/wall/waterline/dissolve filter");
                 }
                 owner.IsMine=true;Physics.Blocked=false;
@@ -1192,11 +1202,11 @@ public static class SkillSpringTests
                 Physics.Contacts=new Collider[] {near,far};
                 Map.destroyableDoodads.Add(nearItem);Map.destroyableDoodads.Add(farItem);
                 Aquabro owner=new Aquabro();
-                owner.SkillWaveContact(0,0,facing,scale,frame,new HashSet<object>(),new HashSet<GameObject>());
+                owner.SkillWaveContact(0,0,facing,scale,frame,new HashSet<object>(),new HashSet<GameObject>(), null, 0f);
                 Check(!near.enabled && far.enabled && nearItem.Damaged && !farItem.Damaged && MapController.ObjectHits==1,
                     "Terrain/item five-pixel boundary failed: frame "+frame+" scale "+scale+" facing "+facing);
                 near.enabled=true;nearItem.Damaged=false;MapController.ObjectHits=0;
-                owner.SkillWaveContact(0,0,facing,scale,6,new HashSet<object>(),new HashSet<GameObject>());
+                owner.SkillWaveContact(0,0,facing,scale,6,new HashSet<object>(),new HashSet<GameObject>(), null, 0f);
                 Check(near.enabled && !nearItem.Damaged && MapController.ObjectHits==0,"Dissolve damages terrain/items");
             }
         }
@@ -1218,7 +1228,7 @@ public static class SkillSpringTests
             bounds.center=new Vector3(0,waterline-8f,0);floor.bounds=bounds;
             Doodad below=new Doodad(0,waterline-1f);Map.destroyableDoodads.Add(below);
             Physics.Contacts=new Collider[] {floor};
-            Check(owner.SkillWaveContact(0,waterline,facing,scale,frame,new HashSet<object>(),new HashSet<GameObject>()),
+            Check(owner.SkillWaveContact(0,waterline,facing,scale,frame,new HashSet<object>(),new HashSet<GameObject>(), null, 0f),
                 "Supporting floor stopped wave");
             Check(floor.enabled && MapController.ObjectHits==0 && !below.Damaged,"Wave destroyed supporting floor/below-waterline object");
         }
@@ -1250,7 +1260,7 @@ public static class SkillSpringTests
             trailing.bounds = trailingBounds;
             Physics.Contacts = new Collider[] { trailing };
             Check(owner.SkillWaveContact(0f, 0f, facing, 1f, frame,
-                new HashSet<object>(), new HashSet<GameObject>()),
+                new HashSet<object>(), new HashSet<GameObject>(), null, 0f),
                 "Trailing terrain pinned wave at facing " + facing);
 
             Reset();
@@ -1263,7 +1273,7 @@ public static class SkillSpringTests
             leading.bounds = leadingBounds;
             Physics.Contacts = new Collider[] { leading };
             Check(!owner.SkillWaveContact(0f, 0f, facing, 1f, frame,
-                new HashSet<object>(), new HashSet<GameObject>()),
+                new HashSet<object>(), new HashSet<GameObject>(), null, 0f),
                 "Leading terrain failed to stop wave at facing " + facing);
         }
         Reset();
@@ -1307,7 +1317,7 @@ public static class SkillSpringTests
         for (int frame = 17; frame < 28; frame++)
         {
             Reset();
-            AquabroSkillVisual effect = new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, 0, 1);
+            AquabroSkillVisual effect = new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, 0, 1, null);
             // Put a new enemy and both shot types on a visible pixel of this frame.
             int px = 64, py = 100;
             bool found = false;
@@ -1367,7 +1377,7 @@ public static class SkillSpringTests
         owner.X=owner.Y=0;
         foreach (int kind in new int[] { 2,3 })
         {
-            WaterProjectileBarrier water=new WaterProjectileBarrier(owner,kind,0,0,1,.9f);
+            WaterProjectileBarrier water=new WaterProjectileBarrier(owner,kind,0,0,1,.9f, null, null);
             Projectile pending=new Projectile(); pending.X=0;pending.Y=25;
             Check(!WaterProjectileBarrier.TryBlock(pending,.02f),"Delayed water blocks before visible");
             water.SetFrame(10);

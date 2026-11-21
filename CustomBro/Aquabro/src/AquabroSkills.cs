@@ -10,8 +10,14 @@ namespace AquabroMod
     // Preview selection is per player slot and survives respawn.
     public partial class Aquabro
     {
+        internal static void RefreshTexture(SpriteSM target)
+        {
+            target.RecalcTexture();
+            target.CalcUVs();
+            target.UpdateUVs();
+        }
+
         private static readonly int[] SkillSelections = new int[4];
-        private static readonly string[] SkillNames = { "怒海狂潮", "深海猎杀", "深海漩涡", "深海涌泉" };
         internal static readonly string[] SkillAssets = { "tidal-wave", "shark-hunt", "maelstrom", "abyssal-spring" };
         private readonly List<AquabroSkillVisual> skillVisuals = new List<AquabroSkillVisual>();
         private static int tidalSequence;
@@ -150,7 +156,7 @@ namespace AquabroMod
                 !usingSpecial && !usingPockettedSpecial && !doingMelee && !IsIncapacitated() && !ControllingShark)
             {
                 int slot = Mathf.Clamp(playerNum, 0, 3);
-                SkillSelections[slot] = (SkillSelections[slot] + 1) % SkillNames.Length;
+                SkillSelections[slot] = (SkillSelections[slot] + 1) % SkillAssets.Length;
                 chargeTime = throwDelay = 0f;
                 if (!Connect.IsOffline)
                     Networking.Networking.RPC<int>(PID.TargetOthers, false, false,
@@ -163,7 +169,7 @@ namespace AquabroMod
         [AllowedRPC]
         private void ReceiveSkillSelection(int skill)
         {
-            if (IsMine || skill < 0 || skill >= SkillNames.Length) return;
+            if (IsMine || skill < 0 || skill >= SkillAssets.Length) return;
             SkillSelections[Mathf.Clamp(playerNum, 0, 3)] = skill;
             RefreshSkillHud();
         }
@@ -228,12 +234,12 @@ namespace AquabroMod
                 if (tidalId == 0) return;
                 foreach (AquabroSkillVisual effect in skillVisuals)
                     if (effect.TidalNetworkId == tidalId) return;
-                AddSkillVisual(0, x, y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f).TidalNetworkId = tidalId;
+                AddSkillVisual(0, x, y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f, null).TidalNetworkId = tidalId;
             }
             else if (skill == 1)
             {
                 if (activeShark != null) return;
-                activeShark = new AquabroSkillVisual(this, 1, x, y, facing, SharkControlDuration(), 0f, 1f);
+                activeShark = new AquabroSkillVisual(this, 1, x, y, facing, SharkControlDuration(), 0f, 1f, null);
                 activeShark.SharkNetworkId = tidalId;
                 skillVisuals.Add(activeShark);
                 if (pendingSharkState)
@@ -253,7 +259,7 @@ namespace AquabroMod
                 if (tidalId == 0) return;
                 foreach (AquabroSkillVisual effect in skillVisuals)
                     if (effect.MaelstromNetworkId == tidalId) return;
-                AddSkillVisual(2, x, y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f).MaelstromNetworkId = tidalId;
+                AddSkillVisual(2, x, y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f, null).MaelstromNetworkId = tidalId;
             }
             else
                 StartSpringColumns(x, y);
@@ -385,7 +391,7 @@ namespace AquabroMod
             switch (castingSkill)
             {
                 case 0:
-                    AquabroSkillVisual wave = AddSkillVisual(0, X, Y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f);
+                    AquabroSkillVisual wave = AddSkillVisual(0, X, Y, facing, AquabroSkillVisual.TidalLifetime, 0f, 0.85f, null);
                     wave.TidalNetworkId = ++tidalSequence;
                     BroadcastSkillCast(0, X, Y, facing, wave.TidalNetworkId);
                     break;
@@ -393,7 +399,7 @@ namespace AquabroMod
                     sharkDropInput = false;
                     float sharkY;
                     if (!FindSharkFloor(X, Y, false, out sharkY)) sharkY = Y;
-                    activeShark = new AquabroSkillVisual(this, 1, X, sharkY, facing, SharkControlDuration(), 0f, 1f);
+                    activeShark = new AquabroSkillVisual(this, 1, X, sharkY, facing, SharkControlDuration(), 0f, 1f, null);
                     activeShark.SharkNetworkId = ++sharkSequence;
                     skillVisuals.Add(activeShark);
                     BroadcastSkillCast(1, X, sharkY, facing, activeShark.SharkNetworkId);
@@ -414,13 +420,13 @@ namespace AquabroMod
                     break;
                 case 2:
                     Vector2 center = FindMaelstromDestination(facing);
-                    AquabroSkillVisual vortex = AddSkillVisual(2, center.x, center.y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f);
+                    AquabroSkillVisual vortex = AddSkillVisual(2, center.x, center.y, facing, AquabroSkillVisual.MaelstromLifetime, 0f, 0.85f, null);
                     vortex.MaelstromNetworkId = ++maelstromSequence;
                     BroadcastSkillCast(2, center.x, center.y, facing, vortex.MaelstromNetworkId);
                     vortex.BroadcastMaelstromState();
                     break;
                 case 3:
-                    StartSpringColumns();
+                    StartSpringColumns(X, Y);
                     BroadcastSkillCast(3, X, Y, facing, 0);
                     break;
             }
@@ -445,33 +451,25 @@ namespace AquabroMod
                 ChangeFrame();
             }
         }
-
-        private void StartSpringColumns()
-        { StartSpringColumns(X, Y); }
-
         private void StartSpringColumns(float originX, float originY)
         {
-            HashSet<object> sharedHits = new HashSet<object>();
             SpringDamageState sharedSpring = new SpringDamageState();
             for (int i = -3; i <= 3; i++)
             {
                 Vector2 pos;
                 if (!FindSpringColumn(originX, originY, originX + i * 30f, out pos)) continue;
                 AddSkillVisual(3, pos.x, pos.y, i < 0 ? -1f : 1f, 1.4f,
-                    Mathf.Abs(i) * 0.14f, Mathf.Abs(i) == 3 ? 0.9f : 0.65f, sharedHits, sharedSpring);
+                    Mathf.Abs(i) * 0.14f, Mathf.Abs(i) == 3 ? 0.9f : 0.65f, sharedSpring);
             }
             SortOfFollow.Shake(0.25f, new Vector3(originX, originY, 0f));
         }
-
-        private bool FindSpringColumn(float destinationX, out Vector2 position)
-        { return FindSpringColumn(X, Y, destinationX, out position); }
 
         private bool FindSpringColumn(float originX, float originY, float destinationX, out Vector2 position)
         {
             float x = originX, y = originY;
             RaycastHit floor, wall;
             // Preserve the centre's original 12px-up / 55px-down ground search.
-            if (RaycastSpringTerrain(new Vector3(x, y + 12f, 0f), Vector3.down, 55f, out floor)) y = floor.point.y;
+            if (RaycastSkillTerrain(new Vector3(x, y + 12f, 0f), Vector3.down, 55f, Map.groundLayerStrict, true, out floor)) y = floor.point.y;
             float distance = destinationX - x;
             int steps = System.Math.Max(1, (int)System.Math.Ceiling(Mathf.Abs(distance) / 4f));
             float step = distance / steps;
@@ -484,9 +482,8 @@ namespace AquabroMod
                 float probeY = y + 18f;
                 // A one-tile lip is traversable terrain, not a wall cancelling
                 // all three columns. Follow its top, but stop at taller faces.
-                if (RaycastSpringTerrain(new Vector3(x, probeY, 0f), direction,
-                    stepLength, out wall)) return false;
-                if (RaycastSpringTerrain(new Vector3(next, probeY, 0f), Vector3.down, 61f, out floor))
+                if (RaycastSkillTerrain(new Vector3(x, probeY, 0f), direction, stepLength, Map.groundLayerStrict, true, out wall)) return false;
+                if (RaycastSkillTerrain(new Vector3(next, probeY, 0f), Vector3.down, 61f, Map.groundLayerStrict, true, out floor))
                 {
                     if (floor.point.y > y + 16f) return false;
                     y = floor.point.y;
@@ -511,11 +508,8 @@ namespace AquabroMod
 
         internal bool SkillLineOfSight(float x, float y, Unit target)
         {
-            return SkillContactVisible(x, y, target.X, target.Y + 6f, false);
+            return SkillContactVisible(x, y, target.X, target.Y + 6f, false, null);
         }
-
-        private static bool SkillContactVisible(float x, float y, float hitX, float hitY, bool ignoreProps)
-        { return SkillContactVisible(x, y, hitX, hitY, ignoreProps, null); }
 
         // Water may overlap a wall visually, but cannot act through that wall.
         // Use the full segment even for contacts closer than eight pixels.
@@ -529,7 +523,7 @@ namespace AquabroMod
                 Mathf.Max(0f, length - .01f), Map.groundLayer))
             {
                 Collider contact = hit.collider;
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy ||
+                if (!CollisionDamageTarget.Active(contact) ||
                     contact.isTrigger || contact == receiver ||
                     (receiver != null && contact.gameObject == receiver.gameObject) ||
                     contact.GetComponentInParent<Unit>() != null || contact.GetComponent<DamageRelay>() != null ||
@@ -611,16 +605,6 @@ namespace AquabroMod
         }
 
         private HashSet<object> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
-            int damage, float forceX, float forceY, bool radial, HashSet<object> alreadyHit)
-        {
-            return SkillDamageRelays(kind, x, y, facing, scale, frame, damage, forceX, forceY, radial, alreadyHit, null, 0f);
-        }
-
-        private HashSet<object> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
-            int damage, float forceX, float forceY, bool radial, HashSet<object> alreadyHit, SpringDamageState spring, float castTime)
-        { return SkillDamageRelays(kind, x, y, facing, scale, frame, damage, forceX, forceY, radial, alreadyHit, spring, castTime, null); }
-
-        private HashSet<object> SkillDamageRelays(int kind, float x, float y, float facing, float scale, int frame,
             int damage, float forceX, float forceY, bool radial, HashSet<object> alreadyHit, SpringDamageState spring, float castTime,
             WaveDamageState wave)
         {
@@ -631,7 +615,7 @@ namespace AquabroMod
             foreach (Collider contact in Physics.OverlapSphere(new Vector3(x, y + 48f * scale, 0f),
                 96f * scale + 5f, Map.groundLayer | Map.groundAndDamageableObjects))
             {
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
+                if (!CollisionDamageTarget.Active(contact) || contact.isTrigger) continue;
                 CollisionDamageTarget receiver = CollisionDamageTarget.FindSkill(contact);
                 if (receiver == null) continue;
                 Unit target = receiver.UnitTarget;
@@ -669,31 +653,10 @@ namespace AquabroMod
             return partTargets;
         }
 
-        internal void SkillBlast(float x, float y, float radius, int damage, float forceX, float forceY, HashSet<object> alreadyHit, bool radial)
-        {
-            if (!IsMine) return;
-            foreach (Unit target in Map.GetUnitsInRange(radius + 16f, radius + 16f, x, y, true))
-            {
-                if (!ValidSkillDamageTarget(target)) continue;
-                float dx = target.X - x, dy = target.Y + 6f - y;
-                if (dx * dx + dy * dy > radius * radius || !SkillLineOfSight(x, y, target) ||
-                    (alreadyHit != null && !alreadyHit.Add(target))) continue;
-                int direction = dx < 0f ? -1 : 1;
-                DamageSkillUnit(target, damage, radial ? direction * Mathf.Abs(forceX) : forceX,
-                    forceY, direction, true, x, y);
-            }
-            Map.HitProjectiles(playerNum, 12, DamageType.Explosion, radius, x, y, forceX, forceY, 0.25f);
-        }
-
-        private AquabroSkillVisual AddSkillVisual(int kind, float x, float y, float facing, float lifetime, float delay, float scale)
-        {
-            return AddSkillVisual(kind, x, y, facing, lifetime, delay, scale, null, null);
-        }
-
         private AquabroSkillVisual AddSkillVisual(int kind, float x, float y, float facing, float lifetime, float delay, float scale,
-            HashSet<object> sharedHits, SpringDamageState sharedSpring)
+            SpringDamageState sharedSpring)
         {
-            AquabroSkillVisual effect = new AquabroSkillVisual(this, kind, x, y, facing, lifetime, delay, scale, sharedHits, sharedSpring);
+            AquabroSkillVisual effect = new AquabroSkillVisual(this, kind, x, y, facing, lifetime, delay, scale, sharedSpring);
             skillVisuals.Add(effect);
             return effect;
         }
@@ -705,7 +668,7 @@ namespace AquabroMod
             // The build exports this mask from the very same composite as the PNG.
             HashSet<object> pulseHits = new HashSet<object>();
             HashSet<object> partTargets = SkillDamageRelays(3, x, y, facing, scale, frame,
-                4, 70f, 650f, true, pulseHits, spring, castTime);
+                4, 70f, 650f, true, pulseHits, spring, castTime, null);
             SkillDamageUnits(new SkillContactMask(3, x, y, facing, scale, frame),
                 4, 70f, 650f, true, pulseHits, partTargets, spring, castTime);
         }
@@ -728,7 +691,7 @@ namespace AquabroMod
             foreach (Collider contact in Physics.OverlapSphere(new Vector3(X, Y + 6f, 0f),
                 216f, Map.groundLayer | Map.groundAndDamageableObjects))
             {
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
+                if (!CollisionDamageTarget.Active(contact) || contact.isTrigger) continue;
                 CollisionDamageTarget receiver = CollisionDamageTarget.FindSkill(contact);
                 Unit target = receiver == null ? null : receiver.UnitTarget;
                 if (!(target is AlienMinibossSandWorm) || target.playerNum >= 0 || !ValidSkillTarget(target) ||
@@ -746,9 +709,9 @@ namespace AquabroMod
             Vector3 forward = fallback - origin;
             Vector3 forwardDirection = forward.normalized;
             RaycastHit hit;
-            if (RaycastSharkTerrain(origin, forwardDirection, forward.magnitude, out hit))
+            if (RaycastSkillTerrain(origin, forwardDirection, forward.magnitude, Map.groundLayerStrict, false, out hit))
                 fallback = new Vector3(hit.point.x - forwardDirection.x * 8f, fallback.y, 0f);
-            float ground = RaycastSharkTerrain(fallback, Vector3.down, 80f, out hit) ? hit.point.y : Y + 2f;
+            float ground = RaycastSkillTerrain(fallback, Vector3.down, 80f, Map.groundLayerStrict, false, out hit) ? hit.point.y : Y + 2f;
             return new Vector2(fallback.x, ground);
         }
 
@@ -763,8 +726,8 @@ namespace AquabroMod
             Vector3 diff = new Vector3(targetX, targetY + 14f, 0f) - origin;
             float length = diff.magnitude;
             RaycastHit wall, floor;
-            if (length > 1f && RaycastSharkTerrain(origin, diff.normalized, length, out wall)) return;
-            if (!RaycastSharkTerrain(new Vector3(targetX, targetY + 2f, 0f), Vector3.down, 80f, out floor)) return;
+            if (length > 1f && RaycastSkillTerrain(origin, diff.normalized, length, Map.groundLayerStrict, false, out wall)) return;
+            if (!RaycastSkillTerrain(new Vector3(targetX, targetY + 2f, 0f), Vector3.down, 80f, Map.groundLayerStrict, false, out floor)) return;
             bestScore = score; best = new Vector2(targetX, floor.point.y);
         }
 
@@ -773,8 +736,7 @@ namespace AquabroMod
             Vector3 diff = new Vector3(target.X - x, target.Y + 6f - y, 0f);
             float length = diff.magnitude;
             RaycastHit hit;
-            return length < 8f || !RaycastSharkTerrain(new Vector3(x, y, 0f),
-                diff.normalized, length - 4f, out hit);
+            return length < 8f || !RaycastSkillTerrain(new Vector3(x, y, 0f), diff.normalized, length - 4f, Map.groundLayerStrict, false, out hit);
         }
 
         private bool MaelstromTouchesTarget(float x, float y, float facing, float scale, int frame,
@@ -793,10 +755,6 @@ namespace AquabroMod
             // exposed upper rim just because the old ray began near the floor.
             return MaelstromLineOfSight(x, target.Y + 6f, target);
         }
-
-        internal void SkillMaelstromPull(float x, float y, float facing, float scale, int frame,
-            float delta, bool pulse, HashSet<object> caught)
-        { SkillMaelstromPullAtTime(x, y, facing, scale, frame, delta, pulse, caught, 0f); }
 
         internal static Vector2 MaelstromAttractor(Unit target, float x, float y, float scale, float age)
         {
@@ -819,7 +777,7 @@ namespace AquabroMod
             pulse &= IsMine;
             HashSet<object> pulseHits = pulse ? new HashSet<object>() : null;
             HashSet<object> partTargets = pulse ? SkillDamageRelays(2, x, y, facing, scale, frame,
-                AquabroSkillVisual.MaelstromPulseDamage, 0f, 0f, false, pulseHits) : null;
+                AquabroSkillVisual.MaelstromPulseDamage, 0f, 0f, false, pulseHits, null, 0f, null) : null;
             float range = 64f * scale + 64f;
             foreach (Unit target in Map.GetUnitsInRange(range, range, x, y + 48f * scale, true))
             {
@@ -865,7 +823,7 @@ namespace AquabroMod
         {
             if (!IsMine) return;
             HashSet<object> partTargets = SkillDamageRelays(2, x, y, facing, scale, frame,
-                AquabroSkillVisual.MaelstromFinishDamage, 220f, 500f, true, alreadyHit);
+                AquabroSkillVisual.MaelstromFinishDamage, 220f, 500f, true, alreadyHit, null, 0f, null);
             float range = 64f * scale + 64f;
             foreach (Unit target in Map.GetUnitsInRange(range, range, x, y + 48f * scale, true))
             {
@@ -876,18 +834,6 @@ namespace AquabroMod
                     direction * 220f, 500f, direction, true, x, target.Y + 6f);
             }
         }
-
-        private static bool RaycastSharkTerrain(Vector3 origin, Vector3 direction, float distance, out RaycastHit nearest)
-        {
-            return RaycastSharkTerrain(origin, direction, distance, Map.groundLayerStrict, out nearest);
-        }
-
-        private static bool RaycastSharkTerrain(Vector3 origin, Vector3 direction, float distance, int layers, out RaycastHit nearest)
-        { return RaycastSkillTerrain(origin, direction, distance, layers, false, out nearest); }
-
-        private static bool RaycastSpringTerrain(Vector3 origin, Vector3 direction, float distance, out RaycastHit nearest)
-        { return RaycastSkillTerrain(origin, direction, distance, Map.groundLayerStrict, true, out nearest); }
-
         private static bool RaycastSkillTerrain(Vector3 origin, Vector3 direction, float distance, int layers,
             bool ignoreCages, out RaycastHit nearest)
         {
@@ -910,7 +856,7 @@ namespace AquabroMod
         private static bool IsSkillTerrain(Collider contact, bool ignoreCages)
         {
             // Spring plans all columns before any of them can break a cage.
-            return contact != null && contact.enabled && contact.gameObject.activeInHierarchy && !contact.isTrigger &&
+            return CollisionDamageTarget.Active(contact) && !contact.isTrigger &&
                 contact.GetComponentInParent<Unit>() == null && contact.GetComponent<DamageRelay>() == null &&
                 contact.GetComponentInParent<FallingBlock>() == null &&
                 (contact.GetComponentInParent<Doodad>() == null || contact.GetComponentInParent<Elevator>() != null) &&
@@ -923,8 +869,7 @@ namespace AquabroMod
             RaycastHit floor;
             // Standing boss surfaces use LargeObjects, just like the hero's
             // ground mask. Keep horizontal walls and maelstrom queries strict.
-            bool found = RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down,
-                float.PositiveInfinity, Map.groundLayer, out floor);
+            bool found = RaycastSkillTerrain(new Vector3(x, y + 2f, 0f), Vector3.down, float.PositiveInfinity, Map.groundLayer, false, out floor);
             floorY = found ? floor.point.y : y;
             // Ladder tops and bodies support the shark at its current height.
             // Only down input bypasses this support; solid floors still block it.
@@ -937,7 +882,7 @@ namespace AquabroMod
         internal Collider FindSharkElevatorSupport(float x, float y)
         {
             RaycastHit floor;
-            return RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down, 4f, Map.groundLayer, out floor) &&
+            return RaycastSkillTerrain(new Vector3(x, y + 2f, 0f), Vector3.down, 4f, Map.groundLayer, false, out floor) &&
                 Mathf.Abs(floor.point.y - y) <= 2f && floor.collider.GetComponentInParent<Elevator>() != null ?
                 floor.collider : null;
         }
@@ -953,8 +898,7 @@ namespace AquabroMod
             {
                 float next = x + distance / steps;
                 RaycastHit wall;
-                if (direction != 0f && RaycastSharkTerrain(new Vector3(x, y + 4f, 0f), new Vector3(direction, 0f, 0f),
-                    Mathf.Abs(next - x) + 4f, out wall))
+                if (direction != 0f && RaycastSkillTerrain(new Vector3(x, y + 4f, 0f), new Vector3(direction, 0f, 0f), Mathf.Abs(next - x) + 4f, Map.groundLayerStrict, false, out wall))
                     next = direction > 0f ? Mathf.Max(x, Mathf.Min(next, wall.point.x - 4f)) :
                         Mathf.Min(x, Mathf.Max(next, wall.point.x + 4f));
                 float floorY;
@@ -968,8 +912,7 @@ namespace AquabroMod
         {
             if (!SharkFlightBlocked(destinationX, y, facing, scale, frame, hitObjects)) x = destinationX;
             RaycastHit contact;
-            if (destinationY < y && RaycastSharkTerrain(new Vector3(x, y + 2f, 0f), Vector3.down,
-                y - destinationY + 2f, Map.groundLayer, out contact))
+            if (destinationY < y && RaycastSkillTerrain(new Vector3(x, y + 2f, 0f), Vector3.down, y - destinationY + 2f, Map.groundLayer, false, out contact))
             {
                 y = contact.point.y;
                 return true;
@@ -1017,8 +960,7 @@ namespace AquabroMod
                 {
                     float height = probe == 0 ? 12f : 56f;
                     RaycastHit hit;
-                    if (RaycastSharkTerrain(new Vector3(x, y + height, 0f), rayDirection,
-                        travel + 8f, out hit)) travel = Mathf.Min(travel, Mathf.Max(0f, hit.distance - 8f));
+                    if (RaycastSkillTerrain(new Vector3(x, y + height, 0f), rayDirection, travel + 8f, Map.groundLayerStrict, false, out hit)) travel = Mathf.Min(travel, Mathf.Max(0f, hit.distance - 8f));
                 }
                 x += direction * travel;
                 if (travel < stepLength) break;
@@ -1029,7 +971,7 @@ namespace AquabroMod
         internal void SkillSharkBlast(float x, float y, float facing, float scale, int frame, HashSet<object> alreadyHit)
         {
             if (!IsMine || !AquabroSkillVisual.IsSharkDamageFrame(frame)) return;
-            HashSet<object> partTargets = SkillDamageRelays(1, x, y, facing, scale, frame, 28, facing * 180f, 420f, false, alreadyHit);
+            HashSet<object> partTargets = SkillDamageRelays(1, x, y, facing, scale, frame, 28, facing * 180f, 420f, false, alreadyHit, null, 0f, null);
             SkillDamageUnits(new SkillContactMask(1, x, y, facing, scale, frame),
                 28, facing * 180f, 420f, false, alreadyHit, partTargets, null, 0f);
         }
@@ -1054,7 +996,7 @@ namespace AquabroMod
             foreach (Collider contact in Physics.OverlapSphere(new Vector3(x, y + 48f * scale, 0f),
                 82f * scale + 5f, Map.groundAndDamageableObjects))
             {
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
+                if (!CollisionDamageTarget.Active(contact) || contact.isTrigger) continue;
                 DamageRelay relay = contact.GetComponent<DamageRelay>();
                 if (contact.GetComponentInParent<Unit>() != null || (relay != null && relay.doodad == null) ||
                     CollisionDamageTarget.FindSkill(contact) != null) continue;
@@ -1081,10 +1023,6 @@ namespace AquabroMod
         }
 
         internal bool SkillWaveContact(float x, float y, float facing, float scale, int frame,
-            HashSet<object> alreadyHit, HashSet<GameObject> hitObjects)
-        { return SkillWaveContact(x, y, facing, scale, frame, alreadyHit, hitObjects, null, 0f); }
-
-        internal bool SkillWaveContact(float x, float y, float facing, float scale, int frame,
             HashSet<object> alreadyHit, HashSet<GameObject> hitObjects, WaveDamageState wave, float castTime)
         {
             if (!IsMine || frame < 0 || frame >= AquabroSkillVisual.TidalDissolveStartFrame) return true;
@@ -1098,7 +1036,7 @@ namespace AquabroMod
             { return (a.bounds.center.x * facing).CompareTo(b.bounds.center.x * facing); });
             foreach (Collider contact in contacts)
             {
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger) continue;
+                if (!CollisionDamageTarget.Active(contact) || contact.isTrigger) continue;
                 CollisionDamageTarget boss = CollisionDamageTarget.FindSkill(contact);
                 if (boss != null && boss.StopsWave && mask.IntersectsRect(contact.bounds) &&
                     WaveLeadingEdgeIntersects(contact.bounds, x, facing))
@@ -1123,7 +1061,7 @@ namespace AquabroMod
                         ValueOrchestrator.GetModifiedDamage(24, playerNum), DamageType.Crush,
                         facing * 420f, 80f, bounds.center.x, bounds.center.y);
                 // A surviving wall stops the wave. Floor contact alone does not.
-                if (contact != null && contact.enabled && contact.gameObject.activeInHierarchy &&
+                if (CollisionDamageTarget.Active(contact) &&
                     bounds.max.y > y + 8f && WaveLeadingEdgeIntersects(bounds, x, facing)) blocked = true;
             }
             // Doodads use the same five-pixel boundary, without a separate area blast.
@@ -1287,7 +1225,7 @@ namespace AquabroMod
         private readonly Texture2D[] bloodTextures = new Texture2D[2];
         private readonly Material[] bloodMaterials = new Material[2];
         private readonly Color32[][] cleanPixels = new Color32[2][], bloodPixels = new Color32[2][];
-        private readonly Color32[] framePixels = new Color32[128 * 128];
+        private Color32[] framePixels;
         private int uploadedFrame = -1;
         private float uploadedColor = -1f;
         internal SharkSplashVisual(Aquabro owner, float x, float y, float facing, float scale, int first, int end, WaterBloodState blood)
@@ -1303,7 +1241,7 @@ namespace AquabroMod
                 SpriteSM sprite = sprites[i] = objects[i].AddComponent<SpriteSM>();
                 sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, file);
                 sprite.SetPixelDimensions(128, 128); sprite.SetSize(128f * scale, 128f * scale);
-                sprite.SetLowerLeftPixel(first * 128, 128); sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+                sprite.SetLowerLeftPixel(first * 128, 128); Aquabro.RefreshTexture(sprite);
             }
             Update(0f);
         }
@@ -1325,13 +1263,14 @@ namespace AquabroMod
                         string part = "-water-" + (i == 0 ? "back" : "front") + ".png";
                         cleanPixels[i] = AquabroSkillVisual.LoadWaterPixels(owner, "skill-shark-hunt" + part, 28);
                         bloodPixels[i] = AquabroSkillVisual.LoadWaterPixels(owner, "skill-shark-hunt-blood" + part, 28);
+                        if (framePixels == null) framePixels = new Color32[128 * 128];
                         bloodTextures[i] = new Texture2D(128, 128, TextureFormat.ARGB32, false);
                         bloodTextures[i].filterMode = FilterMode.Point;
                         bloodTextures[i].wrapMode = TextureWrapMode.Clamp;
                         bloodMaterials[i] = new Material(sprites[i].meshRender.sharedMaterial);
                         bloodMaterials[i].mainTexture = bloodTextures[i];
                         sprites[i].meshRender.material = bloodMaterials[i];
-                        sprites[i].RecalcTexture(); sprites[i].CalcUVs(); sprites[i].UpdateUVs();
+                        Aquabro.RefreshTexture(sprites[i]);
                     }
                     if (frame != uploadedFrame || blood.ColorLevel != uploadedColor)
                     {
@@ -1457,8 +1396,8 @@ namespace AquabroMod
         private float maelstromLeftX, maelstromRightX;
         private float maelstromRouteStartX, maelstromRouteStartTime;
         private int maelstromRouteLeg;
-        private readonly HashSet<object> maelstromCaught = new HashSet<object>();
-        private readonly HashSet<GameObject> hitObjects = new HashSet<GameObject>();
+        private readonly HashSet<object> maelstromCaught;
+        private readonly HashSet<GameObject> hitObjects;
         private readonly WaterProjectileBarrier waterBarrier;
         private readonly WaterBloodState blood;
         private SharkSplashVisual sharkLaunchWater;
@@ -1501,10 +1440,11 @@ namespace AquabroMod
             elapsed = state.z;
             tidalBlocked = blocked;
         }
-        private readonly WaveDamageState waveDamage = new WaveDamageState();
+        private readonly WaveDamageState waveDamage;
         private static readonly int[] Counts = {16,28,32,28};
         private float sharkBreachElapsed = -1f, sharkInput, sharkVelocityX, sharkVelocityY;
-        private Vector3 sharkNetworkPosition, sharkNetworkVelocity;
+        private Vector3 sharkNetworkPosition;
+        private float sharkNetworkVelocity;
         private float sharkNetworkAge = -1f, sharkPredictionTime;
         private float sharkRenderY;
         private float sharkLandingElapsed = -1f;
@@ -1523,7 +1463,7 @@ namespace AquabroMod
             if (!SharkControlled || age <= sharkNetworkAge) return;
             float interval = age - Mathf.Max(0f, sharkNetworkAge);
             if (interval > 0f)
-                sharkNetworkVelocity = new Vector3((state.x - sharkNetworkPosition.x) / interval, 0f, 0f);
+                sharkNetworkVelocity = (state.x - sharkNetworkPosition.x) / interval;
             sharkNetworkPosition = state;
             sharkNetworkAge = age;
             sharkPredictionTime = 0f;
@@ -1536,7 +1476,7 @@ namespace AquabroMod
             // Bound prediction so a lost stream cannot move the shark indefinitely.
             sharkPredictionTime = Mathf.Min(.1f, sharkPredictionTime + delta);
             float blend = 1f - (float)System.Math.Exp(-delta / .05f);
-            x += (sharkNetworkPosition.x + sharkNetworkVelocity.x * sharkPredictionTime - x) * blend;
+            x += (sharkNetworkPosition.x + sharkNetworkVelocity * sharkPredictionTime - x) * blend;
             y = sharkNetworkPosition.y;
         }
         internal void BreachSharkAt(Vector3 state)
@@ -1554,22 +1494,19 @@ namespace AquabroMod
             sharkVelocityY = SharkLaunchSpeed;
             sharkLaunchWater = new SharkSplashVisual(owner, x, y, facing, scale, 6, 19, blood);
             sprite.meshRender.material = ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt-body.png");
-            sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+            Aquabro.RefreshTexture(sprite);
             owner.ReleaseSharkControl(this);
             owner.BroadcastSharkBreach();
         }
 
-        public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay, float scale)
-            : this(owner, kind, x, y, facing, lifetime, delay, scale, null) {}
-
-        public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay, float scale, HashSet<object> sharedHits)
-            : this(owner, kind, x, y, facing, lifetime, delay, scale, sharedHits, null) {}
-
         public AquabroSkillVisual(Aquabro owner, int kind, float x, float y, float facing, float lifetime, float delay,
-            float scale, HashSet<object> sharedHits, SpringDamageState sharedSpring)
+            float scale, SpringDamageState sharedSpring)
         {
-            hitUnits = sharedHits ?? new HashSet<object>();
-            springDamage = sharedSpring ?? new SpringDamageState();
+            hitUnits = kind == 3 ? null : new HashSet<object>();
+            springDamage = kind == 3 ? sharedSpring ?? new SpringDamageState() : null;
+            waveDamage = kind == 0 ? new WaveDamageState() : null;
+            maelstromCaught = kind == 2 ? new HashSet<object>() : null;
+            hitObjects = kind == 0 || kind == 1 ? new HashSet<GameObject>() : null;
             blood = kind == 3 ? springDamage.Blood : new WaterBloodState();
             castDelay = delay;
             this.owner = owner; this.kind = kind; this.x = x; this.y = y;
@@ -1593,7 +1530,7 @@ namespace AquabroMod
             sprite.SetPixelDimensions(128,128);
             sprite.SetSize(128f * scale, 128f * scale);
             sprite.SetLowerLeftPixel(0,128);
-            sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+            Aquabro.RefreshTexture(sprite);
             obj.transform.position = new Vector3(x, y + 48f * scale, VisualDepth);
             if (kind != 1) waterBarrier=new WaterProjectileBarrier(owner,kind,x,y,facing,scale,
                 kind == 3 ? springDamage.Acid : null, blood);
@@ -1719,7 +1656,7 @@ namespace AquabroMod
                 acidMaterial = new Material(sprite.meshRender.sharedMaterial);
                 acidMaterial.mainTexture = acidTexture;
                 sprite.meshRender.material = acidMaterial;
-                sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+                Aquabro.RefreshTexture(sprite);
             }
             // Once the gradient settles, repeated game ticks can show the same
             // animation frame. Rebuild/upload only when either input changes.
@@ -1793,7 +1730,7 @@ namespace AquabroMod
                         // preserving the interleaved tail/water/head layers.
                         // This whole frame stays fixed at the impact surface.
                         sprite.meshRender.material = acidMaterial ?? ResourcesController.GetMaterial(owner.Info.path, "skill-shark-hunt.png");
-                        sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+                        Aquabro.RefreshTexture(sprite);
                     }
                 }
                 int frame = SharkBreachFrame();

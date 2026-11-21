@@ -99,7 +99,7 @@ public static class MaskDeflateTests
     [IO.File]::WriteAllText($test, $source)
     & $settings.AsepritePath -b --script-param "root=$project" --script-param "output=$temporary" --script $script | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Mask encoder fixtures failed' }
-    & (Join-Path $env:WINDIR 'Microsoft.NET/Framework/v3.5/csc.exe') /nologo /target:exe /optimize+ /debug- "/out:$executable" $test (Join-Path $project 'src/PixelMask.cs')
+    & (Join-Path $env:WINDIR 'Microsoft.NET/Framework/v3.5/csc.exe') /nologo /target:exe /optimize+ /debug- "/out:$executable" $test (Join-Path $project 'src/PixelMask.cs') (Join-Path $project 'tests/LegacyPixelMaskDecoder.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Mask codec regression compilation failed' }
     & $executable $temporary
     if ($LASTEXITCODE -ne 0) { throw 'Mask codec regression failed' }

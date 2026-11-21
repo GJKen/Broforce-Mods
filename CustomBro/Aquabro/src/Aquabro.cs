@@ -39,19 +39,16 @@ namespace AquabroMod
         private float elapsed;
         private Aquabro impactOwner;
         private float impactXI;
-        private readonly HashSet<object> affectedUnits = new HashSet<object>();
+        private HashSet<object> affectedUnits;
         // 普通水花沿用原稿节奏；水球爆裂17–22帧以每帧100ms放慢播放，共600ms。
-        private static readonly float[] ChargedFrameDurations = {
-            .1f, .1f, .1f, .1f, .1f, .1f
-        };
 
         private static int GetAnimationFrame(float time, bool charged)
         {
-            int count = charged ? ChargedFrameDurations.Length : 12;
+            int count = charged ? 6 : 12;
             float end = 0f;
             for (int f = 0; f < count; f++)
             {
-                end += charged ? ChargedFrameDurations[f] : (f < 4 ? .035f : .05f);
+                end += charged ? .1f : (f < 4 ? .035f : .05f);
                 if (time < end) return f;
             }
             return -1;
@@ -67,7 +64,7 @@ namespace AquabroMod
             sprite.SetPixelDimensions(size, size);
             sprite.SetSize(charged ? 72f : size, charged ? 72f : size);
             sprite.SetLowerLeftPixel(0, size);
-            sprite.RecalcTexture(); sprite.CalcUVs(); sprite.UpdateUVs();
+            Aquabro.RefreshTexture(sprite);
             AquabroWaterEffect effect = obj.AddComponent<AquabroWaterEffect>();
             effect.waterSprite = sprite; effect.size = size; effect.frames = frames;
             effect.charged = charged;
@@ -76,6 +73,7 @@ namespace AquabroMod
 
         public void BeginBlast(Aquabro owner, float shotXI, int directDamage, object directTarget)
         {
+            if (affectedUnits == null) affectedUnits = new HashSet<object>();
             impactOwner = owner;
             impactXI = shotXI;
             Aquabro.ApplyWaterImpactUnits(owner, true, transform.position.x, transform.position.y,
@@ -110,12 +108,6 @@ namespace AquabroMod
         private const float RunningChargeLoopDuration = 0.64f;
         private const float RunningChargeFrameDuration = 0.04f;
         // v7 起手两帧各 50ms；水流视觉循环共 533ms，收招为 66/50/66ms。
-        private static readonly float[] ChargeLoopDurations = {
-            0.034f, 0.033f, 0.033f, 0.033f,
-            0.034f, 0.033f, 0.033f, 0.033f,
-            0.034f, 0.033f, 0.033f, 0.033f,
-            0.034f, 0.033f, 0.033f, 0.033f
-        };
         private const float LadderFrameRate = 0.1f;
         private const float MeleeSpeedMultiplier = 1.4f;
         // The v2 knife reaches its furthest point on source frame 4. Trigger
@@ -200,9 +192,7 @@ namespace AquabroMod
             // foreground depth instead of inheriting the rear sprite's 10.82 offset.
             spearSprite.SetOffset(new Vector3(spearSprite.offset.x, spearSprite.offset.y, -0.6f));
             spearSprite.SetLowerLeftPixel(0f, 32f);
-            spearSprite.RecalcTexture();
-            spearSprite.CalcUVs();
-            spearSprite.UpdateUVs();
+            Aquabro.RefreshTexture(spearSprite);
         }
 
         private static bool AllowOriginalSpearTrail(BrocheteMachete __instance)
@@ -275,7 +265,7 @@ namespace AquabroMod
             else
             {
                 RaycastHit wall;
-                if (FindTridentTerrainContact(fromX, fromY, tipX, tipY, out wall))
+                if (FindTridentTerrainContactExcept(fromX, fromY, tipX, tipY, null, out wall))
                     WaterHitGround(__instance, wall);
             }
             return false;
@@ -297,7 +287,7 @@ namespace AquabroMod
             hitX = toX; hitY = toY;
             RaycastHit wall;
             float length = new Vector3(toX - fromX, toY - fromY, 0f).magnitude;
-            if (length > .00001f && FindTridentTerrainContact(fromX, fromY, toX, toY, out wall))
+            if (length > .00001f && FindTridentTerrainContactExcept(fromX, fromY, toX, toY, null, out wall))
                 nearest = wall.distance / length;
             if (Map.units == null) return null;
             foreach (Unit target in Map.units)
@@ -319,11 +309,6 @@ namespace AquabroMod
             }
             return closest;
         }
-
-        private static bool FindTridentTerrainContact(float fromX, float fromY, float toX, float toY,
-            out RaycastHit nearest)
-        { return FindTridentTerrainContactExcept(fromX, fromY, toX, toY, null, out nearest); }
-
         private static bool FindTridentTerrainContactExcept(float fromX, float fromY, float toX, float toY,
             Collider receiver, out RaycastHit nearest)
         {
@@ -337,13 +322,13 @@ namespace AquabroMod
                 length, Map.groundLayer | Map.groundAndDamageableObjects))
             {
                 Collider contact = hit.collider;
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger ||
+                if (!CollisionDamageTarget.Active(contact) || contact.isTrigger ||
                     contact.GetComponentInParent<Unit>() != null) continue;
                 DamageRelay relay = contact.GetComponent<DamageRelay>();
                 if (relay != null && relay.unit != null) continue;
                 if (contact == receiver) continue;
-                CollisionDamageTarget obstacle = CollisionDamageTarget.Find(contact);
-                CollisionDamageTarget target = CollisionDamageTarget.Find(receiver);
+                CollisionDamageTarget obstacle = CollisionDamageTarget.Find(contact, DamageType.Explosion);
+                CollisionDamageTarget target = CollisionDamageTarget.Find(receiver, DamageType.Explosion);
                 if (obstacle != null && target != null && obstacle.Key == target.Key) continue;
                 if (hit.distance >= distance) continue;
                 distance = hit.distance;
@@ -367,7 +352,7 @@ namespace AquabroMod
             Aquabro owner = __instance.firedBy as Aquabro;
             if (owner == null) return true;
             if (__instance.GetComponent<AquabroWaterImpact>() != null) return false;
-            if (CollisionDamageTarget.Find(raycastHit.collider) != null)
+            if (CollisionDamageTarget.Find(raycastHit.collider, DamageType.Explosion) != null)
             {
                 ResolveWaterImpact(__instance, owner, raycastHit.point.x + raycastHit.normal.x * .05f,
                     raycastHit.point.y + raycastHit.normal.y * .05f, raycastHit.collider);
@@ -409,11 +394,11 @@ namespace AquabroMod
             {
                 float fromX = GetTridentSweepStartX(owner.X, shot.X, Mathf.Sign(shot.xI), false, 0f);
                 RaycastHit wall;
-                if (FindTridentTerrainContact(fromX, shot.Y, x, y, out wall))
+                if (FindTridentTerrainContactExcept(fromX, shot.Y, x, y, null, out wall))
                 {
                     x = wall.point.x + wall.normal.x * .05f;
                     y = wall.point.y + wall.normal.y * .05f;
-                    if (CollisionDamageTarget.Find(wall.collider) != null) directContact = wall.collider;
+                    if (CollisionDamageTarget.Find(wall.collider, DamageType.Explosion) != null) directContact = wall.collider;
                 }
             }
             ResolveWaterImpact(shot, owner, x, y, directContact);
@@ -490,7 +475,7 @@ namespace AquabroMod
                 Mathf.Max(0f, length - .01f), Map.groundLayer | Map.groundAndDamageableObjects))
             {
                 Collider contact = hit.collider;
-                if (contact == null || !contact.enabled || !contact.gameObject.activeInHierarchy || contact.isTrigger ||
+                if (!CollisionDamageTarget.Active(contact) || contact.isTrigger ||
                     contact.GetComponentInParent<Unit>() != null) continue;
                 DamageRelay relay = contact.GetComponent<DamageRelay>();
                 if (relay != null && relay.unit != null) continue;
@@ -543,7 +528,7 @@ namespace AquabroMod
                 if (!charged || !contact)
                 {
                     RaycastHit wall;
-                    if (FindTridentTerrainContact(x, y, target.X, target.Y + 6f, out wall)) continue;
+                    if (FindTridentTerrainContactExcept(x, y, target.X, target.Y + 6f, null, out wall)) continue;
                 }
                 // 透明处或墙后不登记；剩余动画中接触可见水体仍有一次机会。
                 affected.Add(target);
@@ -552,13 +537,9 @@ namespace AquabroMod
                 // 戟尖直接碰撞独立于爆心距离；不能把确实命中的头部当成零伤害外圈。
                 if ((object)target == directTarget)
                     damage = System.Math.Max(directDamage, blastDamage);
-                float forceX = distance < 0.001f ? direction * 100f : dx / distance * 400f;
-                float forceY = (distance < 0.001f ? 0f : dy / distance * 400f) + 260f;
-                // 保证向上震飞，并越过普通士兵的上抛/翻滚阈值；不改 canTumble 等原版规则。
-                if (charged) forceY = Mathf.Max(forceY, Mathf.Max(260f, Mathf.Abs(forceX) + 40f));
-                else { forceX = direction * 110f; forceY = 90f; }
+                Vector2 force = WaterImpactForce(charged, dx, dy, distance, direction);
                 Map.KnockAndDamageUnit(owner, target, damage > 0 ? ValueOrchestrator.GetModifiedDamage(damage, owner.playerNum) : 0,
-                    charged ? DamageType.Explosion : DamageType.Melee, forceX, forceY, direction, true, x, y, true);
+                    charged ? DamageType.Explosion : DamageType.Melee, force.x, force.y, direction, true, x, y, true);
             }
         }
 
@@ -615,14 +596,21 @@ namespace AquabroMod
                     float ux = boss.UnitTarget.X - x, uy = boss.UnitTarget.Y + 6f - y;
                     float length = Mathf.Sqrt(ux * ux + uy * uy);
                     float direction = ux == 0f ? Mathf.Sign(shotXI) : Mathf.Sign(ux);
-                    forceX = charged ? (length < .001f ? direction * 100f : ux / length * 400f) : direction * 110f;
-                    forceY = charged ? Mathf.Max((length < .001f ? 0f : uy / length * 400f) + 260f,
-                        Mathf.Max(260f, Mathf.Abs(forceX) + 40f)) : 90f;
+                    Vector2 force = WaterImpactForce(charged, ux, uy, length, direction);
+                    forceX = force.x; forceY = force.y;
                 }
                 MapController.Damage_Networked(owner, contact.gameObject,
                     damage > 0 ? ValueOrchestrator.GetModifiedDamage(damage, owner.playerNum) : 0, type, forceX, forceY, hitX, hitY);
             }
             return partTargets;
+        }
+
+        private static Vector2 WaterImpactForce(bool charged, float dx, float dy, float distance, float direction)
+        {
+            if (!charged) return new Vector2(direction * 110f, 90f);
+            float forceX = distance < .001f ? direction * 100f : dx / distance * 400f;
+            float forceY = (distance < .001f ? 0f : dy / distance * 400f) + 260f;
+            return new Vector2(forceX, Mathf.Max(forceY, Mathf.Max(260f, Mathf.Abs(forceX) + 40f)));
         }
 
         private static bool FindChargedWaterContact(Unit target, int frame, float x, float y, out float distance)
@@ -698,16 +686,12 @@ namespace AquabroMod
             // Refresh after Awake's material swap, then again when Start runs.
             if (sprite != null)
             {
-                sprite.RecalcTexture();
-                sprite.CalcUVs();
-                sprite.UpdateUVs();
+                Aquabro.RefreshTexture(sprite);
             }
 
             if (gunSprite != null)
             {
-                gunSprite.RecalcTexture();
-                gunSprite.CalcUVs();
-                gunSprite.UpdateUVs();
+                Aquabro.RefreshTexture(gunSprite);
             }
         }
 
@@ -749,13 +733,14 @@ namespace AquabroMod
             base.RunAvatarFiring();
         }
 
+        private void ResetTridentTimers()
+        { chargeTime = throwDelay = throwCooldown = 0f; }
+
         protected override void RunFiring()
         {
             if (health <= 0)
             {
-                chargeTime = 0f;
-                throwDelay = 0f;
-                throwCooldown = 0f;
+                ResetTridentTimers();
                 return;
             }
 
@@ -767,9 +752,7 @@ namespace AquabroMod
             // 小刀键动作独占身体和武器姿态，持火不覆盖前刺。
             if (doingMelee)
             {
-                chargeTime = 0f;
-                throwDelay = 0f;
-                throwCooldown = 0f;
+                ResetTridentTimers();
                 // Advance the custom knife timeline independently of global
                 // time so only this animation runs at the requested speed.
                 meleeElapsed += Mathf.Max(t, 0f) * MeleeSpeedMultiplier;
@@ -804,9 +787,7 @@ namespace AquabroMod
                 usingSpecial3 || usingSpecial4 ||
                 currentGesture != GestureElement.Gestures.None)
             {
-                chargeTime = 0f;
-                throwDelay = 0f;
-                throwCooldown = 0f;
+                ResetTridentTimers();
                 return;
             }
 
@@ -898,10 +879,11 @@ namespace AquabroMod
 
             // 视觉循环在源稿两帧起手后开始；满蓄力独立按 0.5 秒判定。
             float loopTime = (elapsed - FullChargeDuration) % 0.533f;
-            for (int i = 0; i < ChargeLoopDurations.Length; i++)
+            for (int i = 0; i < 16; i++)
             {
-                if (loopTime < ChargeLoopDurations[i]) return 3 + i;
-                loopTime -= ChargeLoopDurations[i];
+                float duration = (i & 3) == 0 ? .034f : .033f;
+                if (loopTime < duration) return 3 + i;
+                loopTime -= duration;
             }
             return 3;
         }
@@ -1061,9 +1043,7 @@ namespace AquabroMod
             currentMeleeType = MeleeType.Custom;
             meleeElapsed = 0f;
             meleeAttackEmitted = false;
-            chargeTime = 0f;
-            throwDelay = 0f;
-            throwCooldown = 0f;
+            ResetTridentTimers();
             jumpingMelee = false;
             jumpTime = 0f;
             StartMeleeCommon();

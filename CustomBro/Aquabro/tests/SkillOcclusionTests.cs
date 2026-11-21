@@ -31,7 +31,7 @@ internal static class SkillOcclusionTests
             {
                 int frame=kind==2?22:4;
                 Vector2 p=WetPoint(kind,facing,scale,frame);
-                WaterProjectileBarrier water=new WaterProjectileBarrier(owner,kind,0,0,facing,scale);water.SetFrame(frame);
+                WaterProjectileBarrier water=new WaterProjectileBarrier(owner,kind,0,0,facing,scale, null, null);water.SetFrame(frame);
                 try
                 {
                     Collider wall=Wall(p.x*.5f);Physics.SceneTerrain=new Collider[]{wall};
@@ -46,7 +46,7 @@ internal static class SkillOcclusionTests
                 }
                 finally {water.Dispose();Physics.SceneTerrain=new Collider[0];}
                 // The projectile will hit a wall before reaching otherwise exposed water.
-                water=new WaterProjectileBarrier(owner,kind,0,0,facing,scale);water.SetFrame(frame);
+                water=new WaterProjectileBarrier(owner,kind,0,0,facing,scale, null, null);water.SetFrame(frame);
                 try
                 {
                     Projectile shot=new Projectile();shot.X=140*facing;shot.Y=p.y;shot.xI=-140*facing;

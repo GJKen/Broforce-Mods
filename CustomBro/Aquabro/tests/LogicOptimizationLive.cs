@@ -39,7 +39,7 @@ public static class LogicOptimizationLive
         {
             foreach (int kind in new int[] { 0, 2, 3 }) foreach (float facing in new float[] { -1f, 1f })
             {
-                effect = Activator.CreateInstance(visual, F, null, new object[] { owner, kind, 6000f, 6000f, facing, 5f, 0f, .85f }, null);
+                effect = Activator.CreateInstance(visual, F, null, new object[] { owner, kind, 6000f, 6000f, facing, 5f, 0f, .85f, null }, null);
                 object water = Get(effect, "waterBarrier");
                 Call(water, "Absorb", new object());
                 List<string> hashes = new List<string>();

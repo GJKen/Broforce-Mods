@@ -19,6 +19,7 @@ function Read-Method([string]$signature) {
 $methods = @(
     Read-Method 'private void SetupTridentPrefabs()'
     Read-Method 'protected override void RunFiring()'
+    Read-Method 'private void ResetTridentTimers()'
     Read-Method 'private void BroadcastTridentAnimation()'
     Read-Method 'private void ReceiveTridentAnimation('
     Read-Method 'private bool CanShowTridentPose()'
@@ -29,12 +30,13 @@ $methods = @(
     Read-Method 'private static int GetChargeAnimationFrame('
     Read-Method 'private static int GetRunningChargeAnimationFrame('
 ) -join "`r`n"
+$skillSource = [IO.File]::ReadAllText((Join-Path $projectRoot 'src/AquabroSkills.cs'), [Text.Encoding]::UTF8)
+$methods += "`r`n" + [regex]::Match($skillSource, 'internal static void RefreshTexture\(SpriteSM target\)\s*\{[^}]+\}').Value
 foreach ($removed in @('SpawnTridentLocally(', 'ReceiveTrident(', 'ReceiveTridentImpact(')) {
     if ($source.Contains($removed)) { throw "Unexpected obsolete Trident protocol: $removed" }
 }
 $constants = [regex]::Matches($source, 'private const float (FullChargeDuration|ThrowCooldown|ThrowAnimationDuration|MeleeSpeedMultiplier|MeleeHitTime|MeleeDuration|RunningChargeLoopDuration|RunningChargeFrameDuration) = [^;]+;')
 $constantText = ($constants | ForEach-Object { $_.Value }) -join "`r`n"
-$constantText += "`r`n" + [regex]::Match($source, 'private static readonly float\[\] ChargedFrameDurations = \{[^}]+\};').Value
 
 # 直接编译生产方法。外部对象仅记录发射调用，验证输入时序、原版 prefab 和参数。
 $harness = @'
@@ -203,7 +205,6 @@ class SimulationBase : MonoBehaviour {
 }
 class AquabroProbe : SimulationBase {
     __CONSTANTS__
-    static float[] ChargeLoopDurations = { .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f, .034f, .033f, .033f, .033f };
     static Projectile normalTridentPrefab, chargedTridentPrefab;
     static SoundHolder tridentSoundHolder;
     public float chargeTime, throwDelay, throwCooldown, meleeElapsed, counter, X = 100f, Y = 50f;

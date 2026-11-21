@@ -38,7 +38,7 @@ internal static class SkillMaelstromTests
                 Reset();
                 Mook target=Enemy((px+.5f-64)*scale*facing,(112-py-.5f)*scale-6);
                 HashSet<object> caught=new HashSet<object>();
-                owner.SkillMaelstromPull(0,0,facing,scale,frame,.016f,true,caught);
+                owner.SkillMaelstromPullAtTime(0,0,facing,scale,frame,.016f,true,caught, 0f);
                 Check(caught.Contains(target) && target.KnockCalls==1 && target.ForcedTumble && Map.Hits[target]==3,
                     "Visible maelstrom contact missed / non-tumbling enemy excluded, frame "+frame);
             }
@@ -47,7 +47,7 @@ internal static class SkillMaelstromTests
         Reset();Mook rim=Enemy(882.439f,568f);HashSet<object> snapshotCaught=new HashSet<object>();
         Physics.BlockedBelowY=568f;
         Check(!owner.SkillLineOfSight(842.0003f,528f,rim),"Snapshot does not reproduce old blocked low ray");
-        owner.SkillMaelstromPull(842.0003f,504f,-1,.85f,22,.016f,true,snapshotCaught);
+        owner.SkillMaelstromPullAtTime(842.0003f,504f,-1,.85f,22,.016f,true,snapshotCaught, 0f);
         Check(snapshotCaught.Contains(rim) && rim.xI<0 && Map.Hits[rim]==3,"Upper-platform rim contact still ignored");
         HashSet<object> finished=new HashSet<object>();
         owner.SkillMaelstromFinish(842.0003f,504f,-1,.85f,24,snapshotCaught,finished);
@@ -56,42 +56,42 @@ internal static class SkillMaelstromTests
         Check(Map.TotalHits==2,"Finisher damages same target twice");
 
         Reset();Mook outside=Enemy(60,0);HashSet<object> caughtSet=new HashSet<object>();
-        owner.SkillMaelstromPull(0,0,1,1,22,.016f,true,caughtSet);
+        owner.SkillMaelstromPullAtTime(0,0,1,1,22,.016f,true,caughtSet, 0f);
         Check(outside.KnockCalls==0 && Map.TotalHits==0,"Old circular area still affects dry space");
         // Once caught, passing between rotating sheets does not drop the victim.
         caughtSet.Add(outside);outside.X=55;outside.Y=20;
-        owner.SkillMaelstromPull(0,0,1,1,22,.016f,false,caughtSet);
+        owner.SkillMaelstromPullAtTime(0,0,1,1,22,.016f,false,caughtSet, 0f);
         Check(outside.KnockCalls==1 && outside.xI<0,"Captured enemy falls out through rotating water gap");
-        outside.X=200;owner.SkillMaelstromPull(0,0,1,1,22,.016f,false,caughtSet);
+        outside.X=200;owner.SkillMaelstromPullAtTime(0,0,1,1,22,.016f,false,caughtSet, 0f);
         Check(outside.KnockCalls==1,"Captured enemy pulled from outside effect");
-        outside.X=55;Physics.Blocked=true;owner.SkillMaelstromPull(0,0,1,1,22,.016f,true,caughtSet);
+        outside.X=55;Physics.Blocked=true;owner.SkillMaelstromPullAtTime(0,0,1,1,22,.016f,true,caughtSet, 0f);
         Check(outside.KnockCalls==1 && Map.TotalHits==0,"Captured target pulled/damaged through solid wall");
         Physics.Blocked=false;owner.IsMine=false;outside.IsMine=false;
-        owner.SkillMaelstromPull(0,0,1,1,22,.016f,true,caughtSet);
+        owner.SkillMaelstromPullAtTime(0,0,1,1,22,.016f,true,caughtSet, 0f);
         owner.SkillMaelstromFinish(0,0,1,1,24,caughtSet,new HashSet<object>());
         Check(outside.KnockCalls==1 && Map.TotalHits==0,"Remote owner applies pull/damage");owner.IsMine=true;outside.IsMine=true;
-        owner.SkillMaelstromPull(0,0,1,1,22,0,true,caughtSet);
+        owner.SkillMaelstromPullAtTime(0,0,1,1,22,0,true,caughtSet, 0f);
         Check(outside.KnockCalls==1,"Paused suction changes velocity");
         // Original 650px/s^2 vertical pull lost to the game's 1100px/s^2 gravity.
         for (int tick=0;tick<20;tick++)
         {
             outside.yI-=1100f/60f;
-            owner.SkillMaelstromPull(0,0,1,1,22,1f/60f,false,caughtSet);
+            owner.SkillMaelstromPullAtTime(0,0,1,1,22,1f/60f,false,caughtSet, 0f);
         }
         Check(outside.yI>0,"Suction cannot lift against original gravity");
         int calls=outside.KnockCalls;
         for (int frame=24;frame<32;frame++)
-            owner.SkillMaelstromPull(0,0,1,1,frame,.016f,true,caughtSet);
+            owner.SkillMaelstromPullAtTime(0,0,1,1,frame,.016f,true,caughtSet, 0f);
         Check(outside.KnockCalls==calls && Map.TotalHits==0,"Dissolve still pulls/damages");
 
         Reset();Mook lower=Enemy(0,-30);Mook dead=Enemy(0,20);dead.health=0;
         Mook immune=Enemy(0,20);immune.invulnerable=true;Mook ally=Enemy(0,20);ally.playerNum=owner.playerNum;
-        owner.SkillMaelstromPull(0,0,1,1,22,.016f,true,new HashSet<object>());
+        owner.SkillMaelstromPullAtTime(0,0,1,1,22,.016f,true,new HashSet<object>(), 0f);
         Check(lower.KnockCalls+immune.KnockCalls+ally.KnockCalls==0 && dead.KnockCalls==1 && Map.TotalHits==1 && Map.Hits[dead]==3,
             "Corpse missed or below-floor/immune/allied enemy affected");
 
         Reset();Enemy(0,20);
-        AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,-1,AquabroSkillVisual.MaelstromLifetime,0,.85f);
+        AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,-1,AquabroSkillVisual.MaelstromLifetime,0,.85f, null);
         ((HashSet<object>)typeof(AquabroSkillVisual).GetField("maelstromCaught",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(effect)).Add(Map.Targets[0]);
         effect.Tick(3.39f);int pulses=Map.TotalHits;
         Check(pulses==1,"Active vortex did not pulse");effect.Tick(.22f);
@@ -100,7 +100,7 @@ internal static class SkillMaelstromTests
         Check(Map.TotalHits==pulses+1,"Dissolve/pause repeats final damage");
         Check(!effect.Tick(.5f),"Vortex never cleans up");effect.Dispose();
 
-        WaterProjectileBarrier barrier=new WaterProjectileBarrier(owner,2,0,0,1,.85f);
+        WaterProjectileBarrier barrier=new WaterProjectileBarrier(owner,2,0,0,1,.85f, null, null);
         for (int frame=24;frame<32;frame++)
         {
             barrier.SetFrame(frame);Projectile shot=new Rocket();shot.X=0;shot.Y=20;
@@ -149,7 +149,7 @@ internal static class SkillMaelstromTests
         }
         Reset();Aquabro offline=new Aquabro();Mook unowned=Enemy(20,20);unowned.IsMine=false;
         Networking.Connect.IsOffline=true;HashSet<object> offlineCaught=new HashSet<object>();offlineCaught.Add(unowned);
-        offline.SkillMaelstromPull(0,0,1,.85f,22,.02f,false,offlineCaught);
+        offline.SkillMaelstromPullAtTime(0,0,1,.85f,22,.02f,false,offlineCaught, 0f);
         Check(unowned.KnockCalls==1,"Offline suction now depends on network owner");
         Networking.Connect.IsOffline=false;Reset();
         Console.WriteLine("PASS vortex authority: independent caster/victim ownership; normal/heavy/subclass; live/corpse; victim-only suction/stun; caster-only pulse/finisher; offline");
@@ -232,12 +232,12 @@ internal static class SkillMaelstromTests
             Check(corpse.KnockCalls==fps/2 && corpse.yI>0 && corpse.xI*facing<0,"Corpse not lifted/pulled inward");
             Check(corpse.health==-1 && corpse.actionState==ActionState.Dead && corpse.StunCalls==0,"Corpse revived/stunned by suction");
             int calls=corpse.KnockCalls;
-            corpse.X=200;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);
-            corpse.X=25*facing;Physics.Blocked=true;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);Physics.Blocked=false;
-            owner.SkillMaelstromPull(0,0,facing,.85f,22,0,false,caught);
-            owner.IsMine=false;corpse.IsMine=false;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);owner.IsMine=true;corpse.IsMine=true;
-            corpse.hasBeenCoverInAcid=true;owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);corpse.hasBeenCoverInAcid=false;
-            corpse.gameObject.SetActive(false);owner.SkillMaelstromPull(0,0,facing,.85f,22,.016f,false,caught);corpse.gameObject.SetActive(true);
+            corpse.X=200;owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,.016f,false,caught, 0f);
+            corpse.X=25*facing;Physics.Blocked=true;owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,.016f,false,caught, 0f);Physics.Blocked=false;
+            owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,0,false,caught, 0f);
+            owner.IsMine=false;corpse.IsMine=false;owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,.016f,false,caught, 0f);owner.IsMine=true;corpse.IsMine=true;
+            corpse.hasBeenCoverInAcid=true;owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,.016f,false,caught, 0f);corpse.hasBeenCoverInAcid=false;
+            corpse.gameObject.SetActive(false);owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,.016f,false,caught, 0f);corpse.gameObject.SetActive(true);
             Check(corpse.KnockCalls==calls,"Corpse pulled outside/wall/pause/remote/acid/inactive");
         }
         Reset();
@@ -255,7 +255,7 @@ internal static class SkillMaelstromTests
         foreach(bool visible in new bool[]{false,true})
         {
             Reset();BossDamageTestStubs.Reset();Physics.Contacts=new Collider[0];
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,facing,AquabroSkillVisual.MaelstromLifetime,0,scale);
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,facing,AquabroSkillVisual.MaelstromLifetime,0,scale, null);
             try
             {
                 effect.Tick(3.59f);
@@ -314,7 +314,7 @@ internal static class SkillMaelstromTests
             Reset();Physics.SharkTerrainEnabled=true;Physics.SharkWallX=wall;
             float left=wall<0 ? wall+8f : -48f;
             float right=wall>0 ? wall-8f : 48f;
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,facing,AquabroSkillVisual.MaelstromLifetime,0,.85f);
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,facing,AquabroSkillVisual.MaelstromLifetime,0,.85f, null);
             float previous=0,min=0,max=0;int heldFrames=0;
             for(int tick=1;tick<=fps*4;tick++)
             {
@@ -348,7 +348,7 @@ internal static class SkillMaelstromTests
         foreach(float removeAt in new float[]{.3f,1.3f,2.6f,3.59f})
         {
             Reset();Physics.SharkTerrainEnabled=true;Physics.SharkWallX=wall;
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,facing,AquabroSkillVisual.MaelstromLifetime,0,.85f);
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,facing,AquabroSkillVisual.MaelstromLifetime,0,.85f, null);
             try
             {
                 float time=0;
@@ -384,7 +384,7 @@ internal static class SkillMaelstromTests
         }
         // Dissolve must not discover newly opened space.
         Reset();Physics.SharkTerrainEnabled=true;Physics.SharkWallX=28;
-        AquabroSkillVisual dissolving=new AquabroSkillVisual(owner,2,0,0,1,AquabroSkillVisual.MaelstromLifetime,0,.85f);
+        AquabroSkillVisual dissolving=new AquabroSkillVisual(owner,2,0,0,1,AquabroSkillVisual.MaelstromLifetime,0,.85f, null);
         dissolving.Tick(3.61f);Physics.SharkWallX=float.PositiveInfinity;dissolving.Tick(.1f);
         Check(Math.Abs(dissolving.CameraTarget.position.x-20)<.01f,"Wall removal during dissolve restarts travel");
         dissolving.Dispose();Physics.SharkTerrainEnabled=false;Physics.SharkWallX=float.PositiveInfinity;Reset();
@@ -397,7 +397,7 @@ internal static class SkillMaelstromTests
         foreach (int fps in new int[]{30,50,60,120})
         {
             Reset();Unit vehicle=new Unit();vehicle.playerNum=-1;vehicle.Y=20;Map.Targets.Add(vehicle);
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,1,AquabroSkillVisual.MaelstromLifetime,0,.85f);
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,0,0,1,AquabroSkillVisual.MaelstromLifetime,0,.85f, null);
             var caught=(HashSet<object>)typeof(AquabroSkillVisual).GetField("maelstromCaught",flags).GetValue(effect);
             caught.Add(vehicle);
             float time=0,lastHit=-10,minX=0,maxX=0;int total=0,armouredTotal=0,pulses=0,finishers=0,previousHits=0;
@@ -429,7 +429,7 @@ internal static class SkillMaelstromTests
         foreach(float facing in new float[]{-1,1})
         {
             Reset();
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,100,0,facing,AquabroSkillVisual.MaelstromLifetime,0,.85f);
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,2,100,0,facing,AquabroSkillVisual.MaelstromLifetime,0,.85f, null);
             float[] times={.03f,.30f,.71f,.72f,.73f,1.44f,2.15f,2.16f,2.17f,3.58f,3.62f,4.1f};
             float[] positions={102f,120f,147.33333f,148f,147.33333f,100f,52.66667f,52f,52.66667f,146.66667f,148f,148f};
             float previous=0;
@@ -457,29 +457,29 @@ internal static class SkillMaelstromTests
             Reset();target.X=45;target.Y=0;target.playerNum=-1;Map.Targets.Add(target);
             target.fire=target.left=target.doingMelee=true;target.xI=-120;target.yI=80;
             HashSet<object> caught=new HashSet<object>();caught.Add(target);
-            owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
+            owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);
             Check(target.IsStunned && !target.fire && !target.left && !target.doingMelee,"Heavy remains able to act while captured");
             Check(target.xI< -120 && target.yI>80 && target.actionState==ActionState.Jumping,"Stun reset suction momentum/airborne state");
             target.stunTime=2;target.fire=target.right=true;int stunCalls=target.StunCalls;
-            owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
+            owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);
             Check(target.stunTime==2 && target.StunCalls==stunCalls && !target.fire && !target.right,"Existing longer stun shortened / input not cleared");
-            target.stunTime=0;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
+            target.stunTime=0;owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);
             Check(target.IsStunned && target.StunCalls==stunCalls+1,"Expired stun not renewed while captured");
             target.stunTime=0;target.fire=target.left=true;target.X=200;
-            owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
+            owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);
             Check(!target.IsStunned && target.fire && target.left,"Heavy controlled outside vortex bounds");
             target.X=25;Physics.Blocked=true;
-            owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);Physics.Blocked=false;
+            owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);Physics.Blocked=false;
             Check(!target.IsStunned && target.fire,"Control passes through wall");
-            owner.SkillMaelstromPull(0,0,1,.85f,22,0,false,caught);
-            owner.IsMine=false;target.IsMine=false;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);owner.IsMine=true;target.IsMine=true;
-            owner.SkillMaelstromPull(0,0,1,.85f,24,.016f,false,caught);
+            owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,0,false,caught, 0f);
+            owner.IsMine=false;target.IsMine=false;owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);owner.IsMine=true;target.IsMine=true;
+            owner.SkillMaelstromPullAtTime(0,0,1,.85f,24,.016f,false,caught, 0f);
             Check(!target.IsStunned && target.fire,"Pause/remote/dissolve applies control");
-            target.health=0;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
+            target.health=0;owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);
             Check(!target.IsStunned,"Dead heavy stunned");
-            target.health=100;target.invulnerable=true;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
+            target.health=100;target.invulnerable=true;owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);
             Check(!target.IsStunned,"Invulnerable heavy stunned");
-            target.invulnerable=false;target.playerNum=owner.playerNum;owner.SkillMaelstromPull(0,0,1,.85f,22,.016f,false,caught);
+            target.invulnerable=false;target.playerNum=owner.playerNum;owner.SkillMaelstromPullAtTime(0,0,1,.85f,22,.016f,false,caught, 0f);
             Check(!target.IsStunned,"Allied heavy stunned");
         }
         Reset();
@@ -498,7 +498,7 @@ internal static class SkillMaelstromTests
             for (int tick=0;tick<30;tick++)
             {
                 target.yI-=1100f/60f;normal.yI-=1100f/60f;
-                owner.SkillMaelstromPull(0,0,facing,.85f,22,1f/60f,false,caught);
+                owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,1f/60f,false,caught, 0f);
             }
             Check(target.yI>100f && target.xI*facing< -40f && normal.yI>100f && normal.xI*facing< -40f,
                 "Suction still defeated by gravity/resistance or no longer pulls inward");
@@ -508,7 +508,7 @@ internal static class SkillMaelstromTests
             Check(Math.Abs(target.xI-normal.xI)<.01f && Math.Abs(target.yI-normal.yI)<.01f && Math.Abs(target.yI-180f)<.01f,
                 "Heavy/normal impulse compensation differs for the same requested velocity");
             float vx=target.xI,vy=target.yI;owner.IsMine=false;target.IsMine=false;
-            owner.SkillMaelstromPull(0,0,facing,.85f,22,.1f,false,caught);owner.IsMine=true;target.IsMine=true;
+            owner.SkillMaelstromPullAtTime(0,0,facing,.85f,22,.1f,false,caught, 0f);owner.IsMine=true;target.IsMine=true;
             Check(vx==target.xI && vy==target.yI,"Remote compensation changes heavy velocity");
         }
         Reset();
@@ -658,7 +658,7 @@ internal static class SkillMaelstromTests
             Vector2 dest=owner.FindMaelstromDestination(1);
             Check(dest.x==110 && dest.y==0,"Prop blocked target cast or replaced real ground");
             HashSet<object> caught=new HashSet<object>();caught.Add(blocked);
-            owner.SkillMaelstromPull(100,0,1,.85f,22,.016f,false,caught);
+            owner.SkillMaelstromPullAtTime(100,0,1,.85f,22,.016f,false,caught, 0f);
             Check(blocked.KnockCalls>0,"Prop blocked suction");blocked.KnockCalls=0;
             Physics.SharkWallX=60;
             Check(owner.FindMaelstromDestination(1).x==52,"Ignored real wall behind prop");

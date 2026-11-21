@@ -30,13 +30,13 @@ internal static class BossSkillDamageTests
     }
     private static void Cast(Aquabro owner, int kind, float facing, float scale, HashSet<object> hits, SpringDamageState spring)
     {
-        if (kind == 0) owner.SkillWaveContact(0, 0, facing, scale, Frame(kind), hits, new HashSet<GameObject>());
+        if (kind == 0) owner.SkillWaveContact(0, 0, facing, scale, Frame(kind), hits, new HashSet<GameObject>(), null, 0f);
         if (kind == 1)
         {
             owner.SkillSharkObjects(0, 0, facing, scale, Frame(kind), new HashSet<GameObject>());
             owner.SkillSharkBlast(0, 0, facing, scale, Frame(kind), hits);
         }
-        if (kind == 2) owner.SkillMaelstromPull(0, 0, facing, scale, Frame(kind), .016f, true, new HashSet<object>());
+        if (kind == 2) owner.SkillMaelstromPullAtTime(0, 0, facing, scale, Frame(kind), .016f, true, new HashSet<object>(), 0f);
         if (kind == 3) owner.SkillSpringBlast(0, 0, facing, scale, Frame(kind), spring, 0);
     }
     internal static void Run()
@@ -155,7 +155,7 @@ internal static class BossSkillDamageTests
             Check(BossDamageTestStubs.Requests == 1, "Reopened boss lost hit or native relay semantics");
             if (family != 0)
             {
-                CollisionDamageTarget target = CollisionDamageTarget.Find(contact);
+                CollisionDamageTarget target = CollisionDamageTarget.Find(contact, DamageType.Explosion);
                 Check(!target.CanDamage(owner.playerNum, DamageType.Unholy), "Satan Unholy immunity bypassed");
             }
         }
@@ -182,7 +182,7 @@ internal static class BossSkillDamageTests
             Physics.Contacts = new Collider[] { part, other };
             SpringDamageState spring = new SpringDamageState(); List<AquabroSkillVisual> effects = new List<AquabroSkillVisual>();
             for (int column = 0; column < (kind == 3 ? 7 : 1); column++)
-                effects.Add(new AquabroSkillVisual(owner, kind, 0, 0, 1, kind == 3 ? 1.4f : 4.2f, column * .07f, 1, null, spring));
+                effects.Add(new AquabroSkillVisual(owner, kind, 0, 0, 1, kind == 3 ? 1.4f : 4.2f, column * .07f, 1, spring));
             for (int tick = 0; tick < fps * 4.3f; tick++)
                 foreach (AquabroSkillVisual effect in effects) { effect.Tick(1f / fps); effect.Tick(0); }
             Check(BossDamageTestStubs.Damage[receiver] == (kind == 3 ? 28 : 36) &&
@@ -230,7 +230,7 @@ internal static class BossSkillDamageTests
             a.bounds.center = new Vector3(facing * 46, 50, 0);
             Collider b = Part(boss, new Vector2(facing * 32, 48)); b.bounds = a.bounds;
             Physics.Contacts = new Collider[] { a, b };
-            AquabroSkillVisual wave = new AquabroSkillVisual(owner, 0, 0, 0, facing, 2f, 0, .85f);
+            AquabroSkillVisual wave = new AquabroSkillVisual(owner, 0, 0, 0, facing, 2f, 0, .85f, null);
             float stoppedX = 0; bool stopped = false; int previous = 0; float lastHit = -1;
             for (int frame = 0; frame < fps * 2 + 2; frame++)
             {
@@ -327,7 +327,7 @@ internal static class BossSkillDamageTests
                 else Check(damage==2 && (last<0 || time-last>=.1199f), "Body vehicle pulse duplicated");
                 total+=damage; last=time; victim.health-=damage;
             };
-            AquabroSkillVisual wave=new AquabroSkillVisual(new Aquabro(),0,0,0,facing,2f,0,.85f);
+            AquabroSkillVisual wave=new AquabroSkillVisual(new Aquabro(),0,0,0,facing,2f,0,.85f, null);
             System.Reflection.FieldInfo position=typeof(AquabroSkillVisual).GetField("x",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             bool blocked=false;
@@ -373,7 +373,7 @@ internal static class BossSkillDamageTests
             contact.bounds.min = new Vector3(facing > 0 ? 12 : -80, 1, 0);
             contact.bounds.max = new Vector3(facing > 0 ? 80 : -12, 100, 0);
             Physics.Contacts = new Collider[] { contact };
-            AquabroSkillVisual wave = new AquabroSkillVisual(new Aquabro(), 0, 0, 0, facing, 2f, 0, .85f);
+            AquabroSkillVisual wave = new AquabroSkillVisual(new Aquabro(), 0, 0, 0, facing, 2f, 0, .85f, null);
             System.Reflection.FieldInfo position = typeof(AquabroSkillVisual).GetField("x",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             for (int tick = 0; tick < fps / 2; tick++) wave.Tick(1f / fps);
@@ -467,7 +467,7 @@ internal static class BossSkillDamageTests
             relay.Relay=new DamageRelay {damageGameObject=receiver.gameObject};Physics.Contacts=new Collider[]{relay,receiver};
             SpringDamageState state=new SpringDamageState();List<AquabroSkillVisual> effects=new List<AquabroSkillVisual>();
             for(int column=0;column<(kind==3 ? 7 : 1);column++)
-                effects.Add(new AquabroSkillVisual(owner,kind,0,0,1,kind==3 ? 1.4f : 4.2f,column*.07f,1,null,state));
+                effects.Add(new AquabroSkillVisual(owner,kind,0,0,1,kind==3 ? 1.4f : 4.2f,column*.07f,1,state));
             for(int tick=0;tick<fps*4.3f;tick++)foreach(AquabroSkillVisual effect in effects){effect.Tick(1f/fps);effect.Tick(0);}
             Check(BossDamageTestStubs.Damage[receiver.gameObject]==(kind==3 ? 28 : 36),"Unlisted periodic receiver budget changed");
             foreach(AquabroSkillVisual effect in effects)effect.Dispose();

@@ -18,12 +18,12 @@ internal static class PixelMaskTests
         Check(!mask.Contains(0, 4.001f, 5f, 0f), "Transparent point hit");
         Check(mask.Contains(0, 7f, 9f, 5f), "Exact diagonal margin missed");
         Check(!mask.Contains(0, 7f, 9f, 4.999f), "Diagonal margin became a square");
-        Check(mask.IntersectsRect(0, 7f, 9f, 10f, 12f, 5f), "Rectangle corner margin missed");
-        Check(mask.IntersectsRect(0, 10f, 12f, 7f, 9f, 5f), "Reversed rectangle edges differ");
-        Check(!mask.IntersectsRect(0, 7f, 9f, 10f, 12f, 4.999f), "Rectangle margin too wide");
-        Check(mask.IntersectsRect(0, -20f, -20f, 20f, 20f, 0f), "Clipped rectangle lost pixel");
+        Check(mask.IntersectsRect(0, 7f, 9f, 10f, 12f, 5f, null), "Rectangle corner margin missed");
+        Check(mask.IntersectsRect(0, 10f, 12f, 7f, 9f, 5f, null), "Reversed rectangle edges differ");
+        Check(!mask.IntersectsRect(0, 7f, 9f, 10f, 12f, 4.999f, null), "Rectangle margin too wide");
+        Check(mask.IntersectsRect(0, -20f, -20f, 20f, 20f, 0f, null), "Clipped rectangle lost pixel");
         Check(!mask.Contains(-1, 3.5f, 4.5f, 100f) && !mask.Contains(2, 3.5f, 4.5f, 100f), "Invalid frame hit");
-        Check(!mask.IntersectsRect(1, -20f, -20f, 20f, 20f, 100f), "Empty frame hit");
+        Check(!mask.IntersectsRect(1, -20f, -20f, 20f, 20f, 100f, null), "Empty frame hit");
 
         PixelMask[] masks = { TidalWavePixelMask.Mask, SharkPixelMask.Mask, MaelstromPixelMask.Mask, SpringPixelMask.Mask };
         foreach (float facing in new float[] { -1f, 1f })

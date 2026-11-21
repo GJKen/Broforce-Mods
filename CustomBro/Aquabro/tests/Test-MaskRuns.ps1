@@ -110,7 +110,7 @@ public static class MaskRunTests
     [IO.File]::WriteAllText($test, $source)
     $fixtureProcess = Start-Process -FilePath $settings.AsepritePath -ArgumentList @('-b','--script-param',('"root=' + $project + '"'),'--script-param',('"output=' + $temporary + '"'),'--script',('"' + $script + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($fixtureProcess.ExitCode -ne 0) { throw 'Run encoder fixtures failed' }
-    & (Join-Path $env:WINDIR 'Microsoft.NET/Framework/v3.5/csc.exe') /nologo /target:exe /optimize+ /debug- "/out:$exe" $test (Join-Path $project 'src/PixelMask.cs')
+    & (Join-Path $env:WINDIR 'Microsoft.NET/Framework/v3.5/csc.exe') /nologo /target:exe /optimize+ /debug- "/out:$exe" $test (Join-Path $project 'src/PixelMask.cs') (Join-Path $project 'tests/LegacyPixelMaskDecoder.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Run codec regression compilation failed' }
     & $exe $temporary
     if ($LASTEXITCODE -ne 0) { throw 'Run codec regression failed' }

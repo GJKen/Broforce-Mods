@@ -22,9 +22,9 @@ public static class MaskInitObserverLive
         }
         if (assembly == null) throw new Exception("Aquabro PixelMask assembly not loaded");
         Type pixelMask = assembly.GetType("AquabroMod.PixelMask", true);
-        MethodInfo decode = pixelMask.GetMethod("DecodeFrames", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
-            null, new Type[] { typeof(int), typeof(int), typeof(int), typeof(string) }, null);
-        if (decode == null) throw new Exception("Packed DecodeFrames overload not found");
+        MethodInfo decode = pixelMask.GetMethod("DecodeContextFrames", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+            null, new Type[] { typeof(int), typeof(int), typeof(int), typeof(uint), typeof(string) }, null);
+        if (decode == null) throw new Exception("Context decoder not found");
 
         calls = 0;
         harmony = new Harmony(Owner);
@@ -32,10 +32,10 @@ public static class MaskInitObserverLive
         ScriptContext.Logger("OBSERVER_INSTALLED|mvid=" + assembly.ManifestModule.ModuleVersionId + "|path=" + assembly.Location);
     }
 
-    public static void Observe(int __0, int __1, int __2, string __3)
+    public static void Observe(int __0, int __1, int __2, uint __3, string __4)
     {
         calls++;
-        ScriptContext.Logger("DECODE|call=" + calls + "|frames=" + __0 + "|bytesPerFrame=" + __1 + "|compressedBytes=" + __2 + "|packedChars=" + __3.Length);
+        ScriptContext.Logger("DECODE|call=" + calls + "|frames=" + __0 + "|size=" + __1 + "|compressedBytes=" + __2 + "|packedChars=" + __4.Length);
     }
 
     public static int GetCalls()

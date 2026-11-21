@@ -34,7 +34,7 @@ internal static class SkillDamageTargetTests
     private static bool Cast(Aquabro owner, int kind, float facing, float scale, HashSet<object> hits, bool finish)
     {
         int frame = Frame(kind);
-        if (kind == 0) return owner.SkillWaveContact(0, 0, facing, scale, frame, hits, new HashSet<GameObject>());
+        if (kind == 0) return owner.SkillWaveContact(0, 0, facing, scale, frame, hits, new HashSet<GameObject>(), null, 0f);
         if (kind == 1)
         {
             owner.SkillSharkObjects(0, 0, facing, scale, frame, new HashSet<GameObject>());
@@ -43,7 +43,7 @@ internal static class SkillDamageTargetTests
         if (kind == 2)
         {
             if (finish) owner.SkillMaelstromFinish(0, 0, facing, scale, frame, new HashSet<object>(), hits);
-            else owner.SkillMaelstromPull(0, 0, facing, scale, frame, .016f, true, new HashSet<object>());
+            else owner.SkillMaelstromPullAtTime(0, 0, facing, scale, frame, .016f, true, new HashSet<object>(), 0f);
         }
         if (kind == 3) owner.SkillSpringBlast(0, 0, facing, scale, frame, spring, 0f);
         return true;
@@ -170,7 +170,7 @@ internal static class SkillDamageTargetTests
             SpringDamageState state = new SpringDamageState();
             List<AquabroSkillVisual> columns = new List<AquabroSkillVisual>();
             for (int column = 0; column < 7; column++)
-                columns.Add(new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, column * .07f, 1, null, state));
+                columns.Add(new AquabroSkillVisual(owner, 3, 0, 0, 1, 1.4f, column * .07f, 1, state));
             for (int tick = 1; tick <= fps * 2; tick++)
             {
                 clock = tick / (float)fps;

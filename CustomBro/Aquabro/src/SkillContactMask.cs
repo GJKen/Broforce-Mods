@@ -42,7 +42,7 @@ namespace AquabroMod
             float floor = Y + 1f;
             if (top <= floor) return false;
             bottom = Mathf.Max(bottom, floor);
-            return mask.IntersectsRect(frame, PixelX(left), PixelY(top), PixelX(right), PixelY(bottom), 5f / Scale);
+            return mask.IntersectsRect(frame, PixelX(left), PixelY(top), PixelX(right), PixelY(bottom), 5f / Scale, null);
         }
 
         internal bool IntersectsBody(Unit target)

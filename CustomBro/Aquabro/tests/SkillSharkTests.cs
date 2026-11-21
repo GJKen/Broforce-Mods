@@ -41,8 +41,8 @@ internal static class SkillSharkTests
         {
             Reset();Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkFloorY=0f;
             Aquabro owner=new Aquabro(),observer=new Aquabro();observer.IsMine=false;
-            AquabroSkillVisual local=new AquabroSkillVisual(owner,1,0,drop,1,8,0,1);
-            AquabroSkillVisual remote=new AquabroSkillVisual(observer,1,0,drop,1,8,0,1);
+            AquabroSkillVisual local=new AquabroSkillVisual(owner,1,0,drop,1,8,0,1, null);
+            AquabroSkillVisual remote=new AquabroSkillVisual(observer,1,0,drop,1,8,0,1, null);
             float previous=drop;
             for(int tick=1;tick<=fps;tick++)
             {
@@ -450,7 +450,7 @@ internal static class SkillSharkTests
         {
             Reset();Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkFloorY=0;
             Physics.SharkWallX=float.PositiveInfinity;
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1, null);
             effect.BreachShark();
             float time=0;
             while(time<.3f-.00001f){float dt=Math.Min(1f/fps,.3f-time);Check(effect.Tick(dt),"Flight ended before apex");time+=dt;}
@@ -463,7 +463,7 @@ internal static class SkillSharkTests
             Check(Value(effect,"x")==x,"Repeated press restarts flight after landing");effect.Dispose();
             Collider wall=TerrainBox(facing*20,0,1,200,true);
             Physics.SceneTerrain=new Collider[]{wall};
-            effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();effect.Tick(.5f);
+            effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1, null);effect.BreachShark();effect.Tick(.5f);
             Check(Math.Abs(Value(effect,"x"))<=12.01f,"Shark flight crosses wall");
             float blockedX=Value(effect,"x");
             Physics.SceneTerrain=new Collider[0];
@@ -479,7 +479,7 @@ internal static class SkillSharkTests
         foreach(float depth in new float[]{16,96,1024,1000000})
         {
             Reset();Physics.SharkTerrainEnabled=true;Physics.SharkFloor=true;Physics.SharkWallX=float.PositiveInfinity;Physics.SharkFloorY=0;
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1, null);effect.BreachShark();
             effect.Tick(.1f);float oldY=Value(effect,"y");Physics.SharkFloorY=-depth;
             effect.Tick(0);Check(Value(effect,"y")==oldY,"Paused flight drops");
             effect.Tick(1f/fps);
@@ -526,7 +526,7 @@ internal static class SkillSharkTests
             Collider floor=TerrainBox(0,-8,256,8,true);
             Collider ceiling=TerrainBox(0,64,256,8,true);
             Physics.SceneTerrain=Physics.Contacts=new Collider[]{floor,ceiling};
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1, null);effect.BreachShark();
             effect.Tick(1f/120f);
             Check(Value(effect,"y")>1.9f && Value(effect,"sharkVelocityY")>230,
                 "Invisible 56px ceiling probe stopped the 20px launch body");
@@ -557,7 +557,7 @@ internal static class SkillSharkTests
             for(int col=-3;col<=4;col++)for(int row=0;row<3;row++)
                 terrain.Add(TerrainBox(col*16,56+row*16,8,8,false));
             Physics.SceneTerrain=Physics.Contacts=terrain.ToArray();
-            effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1);effect.BreachShark();
+            effect=new AquabroSkillVisual(owner,1,0,0,facing,12,0,1, null);effect.BreachShark();
             time=0;
             while(time<.62f-.00001f)
             {
@@ -591,7 +591,7 @@ internal static class SkillSharkTests
             water.Update(.2f);
             Check(waterSprites[0].TestFrame==10 && waterSprites[1].TestFrame==10,"Splash no longer uses the complete atlas frame");
             water.Dispose();
-            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,-8,0,1,12,0,1);effect.BreachShark();
+            AquabroSkillVisual effect=new AquabroSkillVisual(owner,1,-8,0,1,12,0,1, null);effect.BreachShark();
             object launch=typeof(AquabroSkillVisual).GetField("sharkLaunchWater",Hidden).GetValue(effect);
             GameObject[] launchObjects=(GameObject[])launch.GetType().GetField("objects",Hidden).GetValue(launch);
             effect.Tick(.4f);Check(Value(effect,"x")>20 && Value(effect,"y")>30,"Shark did not fly over ledge from original launch height");
@@ -911,7 +911,7 @@ internal static class SkillSharkTests
         for (int y=0;y<128;y++) for (int x=0;x<128;x++)
         {
             if (SharkPixelMask.Mask.Contains(10,x+.5f,y+.5f,0)) {bx=x;by=y;}
-            if (composite.GetPixel(10*128+x,y).A>0 && !SharkPixelMask.Mask.IntersectsRect(10,x-.5f,y-.5f,x+1.5f,y+1.5f,5)) {wx=x;wy=y;}
+            if (composite.GetPixel(10*128+x,y).A>0 && !SharkPixelMask.Mask.IntersectsRect(10,x-.5f,y-.5f,x+1.5f,y+1.5f,5, null)) {wx=x;wy=y;}
         }
         Check(bx>=0 && wx>=0,"Need body/water object samples");
         foreach (float facing in new float[] {-1,1})

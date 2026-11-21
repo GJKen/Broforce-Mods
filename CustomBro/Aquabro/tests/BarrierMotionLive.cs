@@ -22,7 +22,7 @@ public static class BarrierMotionLive {
    for(int fixture=0;fixture<3;fixture++)for(int motion=0;motion<5;motion++) {
     collider.enabled=fixture!=0;collider.isTrigger=fixture==2;
     float mx=new float[]{0,4,-4,.00001f,48.125f}[motion],my=new float[]{0,-4,4,.00001f,-16.25f}[motion];
-    object water=Activator.CreateInstance(t,F,null,new object[]{hero,kind,10000f-mx,10000f-my,face,scale},null);
+    object water=Activator.CreateInstance(t,F,null,new object[]{hero,kind,10000f-mx,10000f-my,face,scale,null,null},null);
     try {
      t.GetMethod("MoveTo",F).Invoke(water,new object[]{10000f,10000f});
      var bits=new StringBuilder();

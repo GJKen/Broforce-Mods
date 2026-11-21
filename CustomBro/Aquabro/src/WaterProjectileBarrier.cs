@@ -29,10 +29,14 @@ namespace AquabroMod
     internal sealed class WaterAcidState
     {
         internal int Stage { get; private set; }
-        private readonly HashSet<object> sources = new HashSet<object>();
+        private HashSet<object> sources;
         private float colorLevel, colorTime;
         internal void Absorb(object source)
-        { if (source != null && Stage < 2 && sources.Add(source)) Stage++; }
+        {
+            if (source == null || Stage >= 2) return;
+            if (sources == null) sources = new HashSet<object>();
+            if (sources.Add(source)) Stage++;
+        }
         internal float AdvanceColor(float castTime, float delta)
         {
             float step = Mathf.Min(delta, Mathf.Max(0f, castTime - colorTime));
@@ -97,13 +101,6 @@ namespace AquabroMod
         private float x, y, previousX, previousY;
         private int frame;
         private bool visible;
-
-        internal WaterProjectileBarrier(Aquabro owner, int kind, float x, float y, float facing, float scale)
-            : this(owner, kind, x, y, facing, scale, null) {}
-
-        internal WaterProjectileBarrier(Aquabro owner, int kind, float x, float y, float facing, float scale,
-            WaterAcidState sharedAcid)
-            : this(owner, kind, x, y, facing, scale, sharedAcid, null) {}
 
         internal WaterProjectileBarrier(Aquabro owner, int kind, float x, float y, float facing, float scale,
             WaterAcidState sharedAcid, WaterBloodState sharedBlood)

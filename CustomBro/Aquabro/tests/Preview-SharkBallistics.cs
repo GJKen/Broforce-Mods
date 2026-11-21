@@ -18,7 +18,7 @@ public static class PreviewSharkBallistics
         Type visual = owner.GetType().Assembly.GetType("AquabroMod.AquabroSkillVisual");
         float x = Arg("x", owner.X), y = Arg("y", owner.Y);
         float facing = Arg("facing", 1f), age = Arg("age", .3f);
-        effect = Activator.CreateInstance(visual, F, null, new object[] { owner, 1, x, y, facing, 12f, 0f, 1f }, null);
+        effect = Activator.CreateInstance(visual, F, null, new object[] { owner, 1, x, y, facing, 12f, 0f, 1f, null }, null);
         visual.GetMethod("BreachShark", F).Invoke(effect, null);
         if (bool.Parse(ScriptContext.GetArg("entry", "false")))
         {

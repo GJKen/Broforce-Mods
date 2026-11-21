@@ -3,16 +3,22 @@ namespace AquabroMod
 {
     internal static class TridentAtlas
     {
-        internal static readonly int[] StandingLegs = { 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 612, 613, 614, 612 };
-        internal static readonly int[] RunningLegs = { 615, 616, 617, 618, 619, 620, 621, 622 };
-        internal static readonly int[] RunningBob = { 0, 0, -1, -1, 0, 0, -1, 0 };
-        internal static readonly int[] JumpingLegs = { 623, 624, 625, 626 };
-        internal static readonly int[] JumpingRecovery = { 96, 99, 105, 108 };
-        internal static readonly int[] LadderLegs = { 627, 628, 629, 630 };
-        internal static readonly int[] LadderBob = { 0, 1, 0, 1 };
-        internal static readonly int[] ZiplineLegs = { 632, 633, 634, 635, 636, 631 };
+        internal static readonly short[] StandingLegs = DecodeShort("\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0264\u0265\u0266\u0264");
+        internal static readonly short[] RunningLegs = DecodeShort("\u0267\u0268\u0269\u026a\u026b\u026c\u026d\u026e");
+        internal static readonly short[] RunningBob = DecodeShort("\u0000\u0000\uffff\uffff\u0000\u0000\uffff\u0000");
+        internal static readonly short[] JumpingLegs = DecodeShort("\u026f\u0270\u0271\u0272");
+        internal static readonly short[] JumpingRecovery = DecodeShort("\u0060\u0063\u0069\u006c");
+        internal static readonly short[] LadderLegs = DecodeShort("\u0273\u0274\u0275\u0276");
+        internal static readonly short[] LadderBob = DecodeShort("\u0000\u0001\u0000\u0001");
+        internal static readonly short[] ZiplineLegs = DecodeShort("\u0278\u0279\u027a\u027b\u027c\u0277");
+        private static short[] DecodeShort(string data)
+        {
+            short[] values = new short[data.Length];
+            for (int i = 0; i < values.Length; i++) values[i] = (short)data[i];
+            return values;
+        }
         // 普通待机、跑步、跳跃及落地：身体格、手臂/武器格、裁剪X、裁剪Y。
-        internal static readonly int[,] MovementFrames = {
+        internal static readonly byte[,] MovementFrames = {
             { 0, 36, 9, 2 },
             { 32, 37, 10, 5 },
             { 33, 38, 10, 5 },
@@ -47,113 +53,20 @@ namespace AquabroMod
             { 118, 59, 9, 0 },
             { 119, 58, 9, 0 },
         };
-        // 每组21个攻击阶段，依次为站立、跑步、跳跃、梯子、滑索；列为武器格、X、Y。
-        internal static readonly int[,] UpperFrames = {
-            { 160, 7, 12 },
-            { 162, 2, 12 },
-            { 164, 1, 10 },
-            { 166, 1, 10 },
-            { 168, 1, 10 },
-            { 170, 1, 11 },
-            { 172, 1, 11 },
-            { 174, 1, 11 },
-            { 176, 1, 10 },
-            { 178, 1, 11 },
-            { 180, 1, 10 },
-            { 182, 1, 10 },
-            { 184, 1, 10 },
-            { 186, 1, 10 },
-            { 188, 1, 10 },
-            { 190, 1, 10 },
-            { 192, 1, 10 },
-            { 194, 1, 10 },
-            { 196, 14, 14 },
-            { 198, 14, 12 },
-            { 200, 10, 2 },
-            { 160, 7, 12 },
-            { 162, 2, 12 },
-            { 202, 1, 11 },
-            { 204, 1, 11 },
-            { 206, 1, 11 },
-            { 208, 1, 12 },
-            { 210, 1, 11 },
-            { 212, 1, 11 },
-            { 214, 1, 10 },
-            { 216, 1, 11 },
-            { 218, 1, 11 },
-            { 220, 1, 11 },
-            { 222, 1, 11 },
-            { 224, 1, 11 },
-            { 226, 1, 10 },
-            { 228, 1, 10 },
-            { 230, 1, 10 },
-            { 232, 1, 10 },
-            { 196, 12, 15 },
-            { 198, 12, 13 },
-            { 200, 10, 3 },
-            { 160, 7, 11 },
-            { 162, 2, 11 },
-            { 202, 1, 9 },
-            { 204, 1, 9 },
-            { 206, 1, 9 },
-            { 208, 1, 10 },
-            { 210, 1, 10 },
-            { 212, 1, 10 },
-            { 214, 1, 9 },
-            { 216, 1, 10 },
-            { 218, 1, 9 },
-            { 220, 1, 9 },
-            { 222, 1, 9 },
-            { 224, 1, 9 },
-            { 226, 1, 9 },
-            { 228, 1, 9 },
-            { 230, 1, 9 },
-            { 232, 1, 9 },
-            { 196, 12, 13 },
-            { 198, 12, 11 },
-            { -1, 0, 0 },
-            { 160, 6, 11 },
-            { 162, 1, 11 },
-            { 164, 0, 9 },
-            { 166, 0, 9 },
-            { 168, 0, 9 },
-            { 170, 0, 10 },
-            { 172, 0, 10 },
-            { 174, 0, 10 },
-            { 176, 0, 9 },
-            { 178, 0, 10 },
-            { 180, 0, 9 },
-            { 182, 0, 9 },
-            { 184, 0, 9 },
-            { 186, 0, 9 },
-            { 188, 0, 9 },
-            { 190, 0, 9 },
-            { 192, 0, 9 },
-            { 194, 0, 9 },
-            { 196, 13, 13 },
-            { 198, 13, 11 },
-            { 200, 9, 1 },
-            { 234, 8, 8 },
-            { 236, 1, 8 },
-            { 238, 0, 8 },
-            { 240, 0, 8 },
-            { 242, 0, 8 },
-            { 244, 0, 8 },
-            { 246, 0, 8 },
-            { 248, 0, 8 },
-            { 250, 0, 8 },
-            { 252, 0, 8 },
-            { 254, 0, 8 },
-            { 256, 0, 8 },
-            { 258, 0, 8 },
-            { 260, 0, 8 },
-            { 262, 0, 8 },
-            { 264, 0, 8 },
-            { 266, 0, 8 },
-            { 268, 0, 8 },
-            { 270, 11, 8 },
-            { 272, 11, 8 },
-            { 234, 8, 8 },
-        };
+        // 每组21个攻击阶段；低8位保存武器格/2+1，0表示-1，高8位各4位保存X、Y。
+        internal static readonly short[,] UpperFrames = DecodeUpper("\u7c51\u2c52\u1a53\u1a54\u1a55\u1b56\u1b57\u1b58\u1a59\u1b5a\u1a5b\u1a5c\u1a5d\u1a5e\u1a5f\u1a60\u1a61\u1a62\uee63\uec64\ua265\u7c51\u2c52\u1b66\u1b67\u1b68\u1c69\u1b6a\u1b6b\u1a6c\u1b6d\u1b6e\u1b6f\u1b70\u1b71\u1a72\u1a73\u1a74\u1a75\ucf63\ucd64\ua365\u7b51\u2b52\u1966\u1967\u1968\u1a69\u1a6a\u1a6b\u196c\u1a6d\u196e\u196f\u1970\u1971\u1972\u1973\u1974\u1975\ucd63\ucb64\u0000\u6b51\u1b52\u0953\u0954\u0955\u0a56\u0a57\u0a58\u0959\u0a5a\u095b\u095c\u095d\u095e\u095f\u0960\u0961\u0962\udd63\udb64\u9165\u8876\u1877\u0878\u0879\u087a\u087b\u087c\u087d\u087e\u087f\u0880\u0881\u0882\u0883\u0884\u0885\u0886\u0887\ub888\ub889\u8876");
+
+        private static short[,] DecodeUpper(string data)
+        {
+            short[,] frames = new short[data.Length, 3];
+            for (int i = 0; i < data.Length; i++)
+            {
+                int value = data[i], cell = value & 255;
+                frames[i, 0] = (short)(cell == 0 ? -1 : (cell - 1) * 2);
+                frames[i, 1] = (short)(value >> 12);
+                frames[i, 2] = (short)((value >> 8) & 15);
+            }
+            return frames;
+        }
     }
 }

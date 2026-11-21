@@ -6,7 +6,7 @@ public static class SpringStepLive {
  public static void Main(){
  var hero=HeroController.players[0].character;
  if(hero.GetType().FullName!="AquabroMod.Aquabro" || !TestMod.Plugin.IsGamePaused)throw new Exception("Paused Aquabro required");
- var method=hero.GetType().GetMethod("FindSpringColumn",BindingFlags.Instance|BindingFlags.NonPublic);
+ var method=hero.GetType().GetMethod("FindSpringColumn",BindingFlags.Instance|BindingFlags.NonPublic,null,new Type[]{typeof(float),typeof(float),typeof(float),typeof(Vector2).MakeByRefType()},null);
  float oldX=hero.X,oldY=hero.Y;int total=0,accepted=0,rejected=0;
  ScriptContext.Logger("MVID="+hero.GetType().Assembly.ManifestModule.ModuleVersionId);
  ScriptContext.Logger("SCENE="+UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
@@ -22,7 +22,7 @@ public static class SpringStepLive {
  if(fixture==6){ground.transform.position=new Vector3(origin-dir*55,origin-4,0);ground.GetComponent<BoxCollider>().size=new Vector3(110,8,16);var lower=new GameObject("Spring probe lower floor");objects.Add(lower);lower.layer=ground.layer;lower.transform.position=new Vector3(origin+dir*55,origin-20,0);lower.AddComponent<BoxCollider>().size=new Vector3(110,8,16);}
  }
  foreach(float distance in new float[]{0,.000001f,.000009f,.00001f,.000011f,.001f,4,8,16,24,30,60,90}){
- object[] args={origin+dir*distance,new Vector2()};bool ok=(bool)method.Invoke(hero,args);Vector2 p=(Vector2)args[1];
+ object[] args={origin,origin,origin+dir*distance,new Vector2()};bool ok=(bool)method.Invoke(hero,args);Vector2 p=(Vector2)args[3];
  if(float.IsNaN(p.x)||float.IsNaN(p.y))throw new Exception("NaN");total++;if(ok)accepted++;else rejected++;
  ScriptContext.Logger("CASE|"+origin+"|"+dir+"|"+fixture+"|"+distance.ToString("R")+"|"+ok+"|"+p.x.ToString("R")+"|"+p.y.ToString("R"));
  }

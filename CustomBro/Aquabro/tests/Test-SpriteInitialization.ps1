@@ -1,4 +1,4 @@
-param([string]$SourcePath)
+﻿param([string]$SourcePath)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -14,6 +14,8 @@ function Read-ProductionMethod([string]$signature, [string]$nextSignature) {
 
 $awake = Read-ProductionMethod '        protected override void Awake()' '        private static void ApplyTridentVisual('
 $refresh = Read-ProductionMethod '        private void RefreshSpriteTextures()' '        private void SetupTridentPrefabs()'
+$skillSource = [IO.File]::ReadAllText((Join-Path $projectRoot 'src/AquabroSkills.cs'), [Text.Encoding]::UTF8)
+$refresh += "`r`n" + [regex]::Match($skillSource, 'internal static void RefreshTexture\(SpriteSM target\)\s*\{[^}]+\}').Value
 
 # 编译实际 Awake/刷新方法。模拟 BroMaker 在基类 Awake 换材质，角色被运输禁用且从未运行 Start。
 $harness = @'
@@ -43,6 +45,7 @@ class CustomHero
 class Harmony { public Harmony(string id) {} public void Patch(MethodInfo m, object prefix, object postfix, object transpiler, object finalizer) {} }
 class HarmonyMethod { public HarmonyMethod(MethodInfo m) {} }
 class Projectile { public void Fire() {} }
+class PredabroSpear : Projectile { private void RunProjectile() {} }
 class BrocheteMachete { protected void RunTrail() {} }
 static class WaterProjectileBarrier { public static void Install(Harmony harmony) {} }
 class Aquabro : CustomHero

@@ -13,9 +13,9 @@
 | [Test-Spring.ps1](Test-Spring.ps1) | **四技能综合回归**：地形、操控、伤害、Boss、拦弹、毒水、蒙版、HUD；不只测涌泉 |
 | [Test-SpriteInitialization.ps1](Test-SpriteInitialization.ps1) | 生成和直升机运输时身体／武器贴图初始化 |
 | [Test-FrameStep.ps1](Test-FrameStep.ps1) | 暂停、逐帧调试、移动平台与击掌加速的时间步 |
-| [Test-MaskDeflate.ps1](Test-MaskDeflate.ps1) | 构建编码器的14组确定性数据经生产DecodeFrames/.NET3.5逐字节还原，覆盖空/极短/随机/重叠/32KiB距离及固定/动态码表 |
-| [Test-MaskRuns.ps1](Test-MaskRuns.ps1) | 逐帧位游程经生产DecodeRunFrames/.NET3.5完整还原；11组全零/全一/交替/字节与帧边界/127与128变长整数/长游程/随机数据，以及8组截断、越界、溢出、零长和尾随数据拒绝 |
-| [Test-MaskContext.ps1](Test-MaskContext.ps1) | 当前32空间上下文区间编码经生产DecodeContextFrames/.NET3.5逐字节恢复；11组空/零/一/交替/行帧边界/斜线/计数折半/随机，以及9组截断、尾随、损坏、校验和和尺寸错误拒绝 |
+| [Test-MaskDeflate.ps1](Test-MaskDeflate.ps1) | 构建编码器的14组确定性数据经测试专用历史DecodeFrames/.NET3.5逐字节还原，覆盖空/极短/随机/重叠/32KiB距离及固定/动态码表 |
+| [Test-MaskRuns.ps1](Test-MaskRuns.ps1) | 逐帧位游程经测试专用历史DecodeRunFrames/.NET3.5完整还原；11组全零/全一/交替/字节与帧边界/127与128变长整数/长游程/随机数据，以及8组截断、越界、溢出、零长和尾随数据拒绝 |
+| [Test-MaskContext.ps1](Test-MaskContext.ps1) | 当前64个空间／时间上下文区间编码经生产DecodeContextFrames/.NET3.5逐字节恢复；11组空/零/一/交替/行帧边界/斜线/计数折半/随机，以及9组截断、尾随、损坏、校验和和尺寸错误拒绝 |
 
 ## 如何运行
 
@@ -34,7 +34,7 @@
 
 `./tests/Test-MaskRuns.ps1`使用相同配置和临时目录流程，验证构建期位游程编码与初始化时还原；不修改或放宽既有DEFLATE回归。完整五组PNG与蒙版仍由五个既有入口及实际游戏导出共同验收。
 
-`./tests/Test-MaskContext.ps1`验证当前正式空间上下文编码器，重复编码须相同、完整输出逐字节一致且各帧数组独立；损坏立即拒绝。旧DEFLATE及游程回归作为兼容入口保留。完整游戏冷初始化与导出另用MaskStorageLive及受保护MaskSnapshotLive；现场探针同时支持旧/新初始化入口，观察每组恰好一次还原。参见[第5轮证据与冷初始化耗时](../docs/自动精简-20261023-152127-0005.md)。
+`./tests/Test-MaskContext.ps1`验证当前正式空间上下文编码器，重复编码须相同、完整输出逐字节一致且各帧数组独立；损坏立即拒绝。旧DEFLATE及游程解码器迁入 `LegacyPixelMaskDecoder.cs`，仅编入相应历史回归，不进入正式 DLL。完整游戏冷初始化与导出另用MaskStorageLive及受保护MaskSnapshotLive；冷探针须在新进程首次使用蒙版前运行，观察每组恰好一次还原。参见[第5轮证据与冷初始化耗时](../docs/自动精简-20261023-152127-0005.md)。
 
 四技能综合测试另需 Aseprite 和 `0Harmony.dll`。可在 `LocalBuild.json` 中配置 `AsepritePath`、`ReferenceDirectory` 后运行 `./tests/Test-Spring.ps1`，也可直接传参：
 
@@ -83,6 +83,10 @@
 - **死亡酸液残留**：`CheckSlimeSources` 覆盖三种水体、双向／两种缩放、地板／墙／天花板四个附着面、隔墙后拆墙、血色／伤害／有效性筛选、来源去重和两级升级，不消耗残留。`Probe-SlimeWaterLive.cs` 默认只读现场；暂停时传 `verify=true`，用临时原生酸液检查 Setup 登记和实际 PNG 变绿，结束清理全部临时对象。
 
 ## 本地可选的现场诊断文件
+
+`AcidAllocationLive.cs` 在 TestMod 暂停的实际海王进程检查酸源集合：初始分配状态、空来源、来源去重、两级上限、集合引用复用、涌泉共用时钟及新施法隔离。可分别在旧、新 DLL 进程运行，初始分配状态允许按版本变化，其余机制必须一致；不创建场景对象，也不修改角色状态。本轮结果见[第三轮精简验证](../docs/精简批量补充验证-2026-11-21.md)。
+
+`SizeTrimLive.cs` 对实际加载的生产程序集检查完整动画采样、506 项图集值和四技能双向／30、60 FPS 完整周期。`WaterEffectAllocationLive.cs` 在暂停海王现场检查普通／蓄力水花的命中集合初始化、暂停不推进及重复蓄力结算复用引用，临时效果在 `finally` 清理；结果见[第二轮精简验证](../docs/精简补充验证-2026-11-21.md)。两者均使用当前保留的完整接口，不参与 DLL 构建。
 
 `MaskStorageLive.cs`在TestMod暂停的实际海王进程逐帧逐像素调用五种生产查询，检查无效边界、每组100,000次稳定调用与数组引用。新压缩路径用临时Harmony观察各组冷初始化恰好解码一次、重复初始化/查询不再解码，finally移除观察补丁；需要在新进程首次访问蒙版前运行。旧Mono没有线程分配计数API时会明确报告unsupported，不以堆大小冒充分配数据。完整导出仍使用受保护`tools/auto-optimize/MaskSnapshotLive.cs`及其output绝对路径参数，不能用采样指纹替代全部原始字节。结束卸载诊断、恢复暂停并关闭游戏；验证范围与限制见[DLL瘦身第1轮报告](../docs/自动精简-20261023-100531-0001.md)。
 

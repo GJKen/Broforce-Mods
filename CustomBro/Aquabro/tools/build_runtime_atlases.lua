@@ -466,20 +466,56 @@ zipSource:close()
 local layout=assert(io.open(app.params['layout'] or app.fs.joinPath(output,'TridentAtlas.cs'),'w'))
 layout:write('// 由 tools/build_runtime_atlases.lua 生成，与贴图一起重建。\nnamespace AquabroMod\n{\n    internal static class TridentAtlas\n    {\n')
 local function writeArray(name,array)
-  local values={};for _,v in ipairs(array) do values[#values+1]=tostring(v) end
-  layout:write('        internal static readonly int[] '..name..' = { '..table.concat(values,', ')..' };\n')
+  local values={}
+  for _,v in ipairs(array) do
+    assert(v==math.floor(v) and v>=-32768 and v<=32767,'Frame value exceeds short range')
+    values[#values+1]=string.format('\\u%04x',v & 0xffff)
+  end
+  layout:write('        internal static readonly short[] '..name..' = DecodeShort("'..table.concat(values)..'");\n')
 end
 writeArray('StandingLegs',standingLegs)
 writeArray('RunningLegs',runningLegs);writeArray('RunningBob',runningBob)
 writeArray('JumpingLegs',jumpingLegs);writeArray('JumpingRecovery',jumpingRecovery)
 writeArray('LadderLegs',ladderLegs);writeArray('LadderBob',ladderBob)
 writeArray('ZiplineLegs',ziplineLegs)
-layout:write('        // 普通待机、跑步、跳跃及落地：身体格、手臂/武器格、裁剪X、裁剪Y。\n        internal static readonly int[,] MovementFrames = {\n')
-for _,frame in ipairs(movementFrames) do layout:write('            { '..table.concat(frame,', ')..' },\n') end
+layout:write([[        private static short[] DecodeShort(string data)
+        {
+            short[] values = new short[data.Length];
+            for (int i = 0; i < values.Length; i++) values[i] = (short)data[i];
+            return values;
+        }
+]])
+layout:write('        // 普通待机、跑步、跳跃及落地：身体格、手臂/武器格、裁剪X、裁剪Y。\n        internal static readonly byte[,] MovementFrames = {\n')
+for _,frame in ipairs(movementFrames) do
+  for _,value in ipairs(frame) do assert(value>=0 and value<=255,'Movement frame exceeds byte range') end
+  layout:write('            { '..table.concat(frame,', ')..' },\n')
+end
 layout:write('        };\n')
-layout:write('        // 每组21个攻击阶段，依次为站立、跑步、跳跃、梯子、滑索；列为武器格、X、Y。\n        internal static readonly int[,] UpperFrames = {\n')
-for _,frame in ipairs(frames) do layout:write('            { '..table.concat(frame,', ')..' },\n') end
-layout:write('        };\n    }\n}\n');layout:close()
+local packed={}
+for _,frame in ipairs(frames) do
+  local cell,x,y=frame[1],frame[2],frame[3]
+  assert(cell==-1 or (cell>=0 and cell%2==0 and cell/2+1<=255),'Upper cell exceeds packed range')
+  assert(x>=0 and x<16 and y>=0 and y<16,'Upper offset exceeds packed range')
+  packed[#packed+1]=string.format('\\u%04x',(cell==-1 and 0 or cell/2+1)+y*256+x*4096)
+end
+layout:write('        // 每组21个攻击阶段；低8位保存武器格/2+1，0表示-1，高8位各4位保存X、Y。\n')
+layout:write('        internal static readonly short[,] UpperFrames = DecodeUpper("'..table.concat(packed)..'");\n\n')
+layout:write([[        private static short[,] DecodeUpper(string data)
+        {
+            short[,] frames = new short[data.Length, 3];
+            for (int i = 0; i < data.Length; i++)
+            {
+                int value = data[i], cell = value & 255;
+                frames[i, 0] = (short)(cell == 0 ? -1 : (cell - 1) * 2);
+                frames[i, 1] = (short)(value >> 12);
+                frames[i, 2] = (short)((value >> 8) & 15);
+            }
+            return frames;
+        }
+    }
+}
+]])
+layout:close()
 assert(#frames==105)
 local gunHeight=math.ceil((160+#upperImages*2)/32)*32
 assert(body:saveAs(app.fs.joinPath(output,'sprite.png')))

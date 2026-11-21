@@ -1,10 +1,10 @@
--- A frame-local spatial model; coding state spans frames, pixel storage does not.
+-- Spatial neighbours and the previous frame's same pixel predict each mask bit.
 -- 16-bit arithmetic intervals keep every product inside a signed 32-bit integer.
 local function contextMask(bytes,bytesPerFrame)
  local size=math.floor(math.sqrt(bytesPerFrame*8))
  assert(size>=8 and size%8==0 and size*size==bytesPerFrame*8 and #bytes%bytesPerFrame==0,'Invalid mask frame layout')
  local zeros,ones={},{}
- for i=1,32 do zeros[i]=1;ones[i]=1 end
+ for i=1,64 do zeros[i]=1;ones[i]=1 end
  local output,buffer,bits={},0,0
  local low,high,pending=0,65535,0
  local function bit(value)
@@ -23,6 +23,10 @@ local function contextMask(bytes,bytesPerFrame)
    local above=y>0 and ((pixel(index-size) << 1) | pixel(index-size+1)) or 0
    for x=0,size-1 do
     local context=((left & 3) << 3) | above
+    if first>1 then
+     local previous=(bytes[first-bytesPerFrame+(index >> 3)] >> (index & 7)) & 1
+     context=context | (previous << 5)
+    end
     local a,b=zeros[context+1],ones[context+1]
     local split=low+math.floor((high-low+1)*a/(a+b))-1
     local value=pixel(index)
