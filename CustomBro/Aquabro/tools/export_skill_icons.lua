@@ -14,12 +14,6 @@ for frame,name in ipairs(names) do
   if app.fs.normalizePath(output)~=app.fs.normalizePath(iconRoot) then
     image:saveAs(app.fs.joinPath(iconRoot,filename))
   end
-  if frame==1 then
-    image:saveAs(app.fs.joinPath(output,'special.png'))
-    if app.fs.normalizePath(output)~=app.fs.normalizePath(iconRoot) then
-      image:saveAs(app.fs.joinPath(iconRoot,'special.png'))
-    end
-  end
 end
 sprite:close()
 print('EXPORTED four skill HUD icons (16x16)')

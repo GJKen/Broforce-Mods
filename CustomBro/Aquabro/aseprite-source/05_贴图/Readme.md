@@ -19,6 +19,6 @@
 | 3 | 深海漩涡 | [special-maelstrom.png](special-maelstrom.png) |
 | 4 | 深海涌泉 | [special-abyssal-spring.png](special-abyssal-spring.png) |
 
-[export_skill_icons.lua](../../tools/export_skill_icons.lua) 将四帧分别导出，并用第 1 帧生成 [special.png](special.png) 作为默认图标；同时更新本目录 PNG 和构建输出目录。导出只读取现有源稿，不重新绘制或覆盖它。[BuildAssets.ps1](../../BuildAssets.ps1) 会等待头像／图标导出进程完成。
+[export_skill_icons.lua](../../tools/export_skill_icons.lua) 将四帧分别导出，默认图标直接使用第 1 帧的 [special-tidal-wave.png](special-tidal-wave.png)；同时更新本目录 PNG 和构建输出目录。导出只读取现有源稿，不重新绘制或覆盖它。[BuildAssets.ps1](../../BuildAssets.ps1) 会等待头像／图标导出进程完成。
 
 后续外形调整以正式稿为准，机制文档中的图标说明同时更新。

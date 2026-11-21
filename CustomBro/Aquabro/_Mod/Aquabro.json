@@ -4,7 +4,7 @@
   "parameters": {
     "BetterAnimation": true,
     "Avatar": "avatar.png",
-    "SpecialIcons": "special.png",
+    "SpecialIcons": "special-tidal-wave.png",
     "SpecialIconOffset": { "x": 3, "y": 0 },
     "Sprite": "sprite.png",
     "GunSprite": "gunSprite.png",
