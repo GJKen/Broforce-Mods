@@ -9,5 +9,6 @@ namespace BroforceBugFix
         public bool EnableLobbyJoinStreamFix = true;
         public bool EnableFaceHuggerDetachFix = true;
         public bool EnableAlienEggCleanupFix = true;
+        public bool EnableSandstormSetupFix = true;
     }
 }

@@ -12,10 +12,10 @@ namespace BroforceBugFix
             if (_harmony != null) return;
             var harmony = new Harmony(HarmonyId);
             harmony.Patch(AccessTools.Method(typeof(Map), "RemoveAlienEggExplosive", null, null),
-                new HarmonyMethod(AccessTools.Method(typeof(AlienEggCleanupFix), "Prefix", null, null)),
+                new HarmonyMethod(typeof(AlienEggCleanupFix), "Prefix", null),
                 null, null, null);
             harmony.Patch(AccessTools.Method(typeof(Map), "RemoveDisturbedWildLife", null, null),
-                new HarmonyMethod(AccessTools.Method(typeof(AlienEggCleanupFix), "ListenerPrefix", null, null)),
+                new HarmonyMethod(typeof(AlienEggCleanupFix), "ListenerPrefix", null),
                 null, null, null);
             _harmony = harmony;
             Plugin.Log("Alien egg cleanup fix enabled.");

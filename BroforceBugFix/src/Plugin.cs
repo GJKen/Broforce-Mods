@@ -22,10 +22,11 @@ namespace BroforceBugFix
             modEntry.OnToggle = OnToggle;
             modEntry.OnUnload = OnUnload;
             modEntry.OnGUI = OnGUI;
-            modEntry.OnSaveGUI = OnSaveGUI;
+            modEntry.OnSaveGUI = SaveSettings;
             try
             {
-                Settings = UnityModManager.ModSettings.Load<BugFixSettings>(modEntry);
+                Settings = UnityModManager.ModSettings.Load<BugFixSettings>(modEntry) ??
+                           new BugFixSettings();
             }
             catch (Exception exception)
             {
@@ -33,11 +34,6 @@ namespace BroforceBugFix
                 modEntry.Logger.LogException(
                     "Bug-fix settings load failed; defaults are active",
                     exception);
-            }
-
-            if (Settings == null)
-            {
-                Settings = new BugFixSettings();
             }
 
             Log("Broforce Bug Fix loaded.");
@@ -67,7 +63,7 @@ namespace BroforceBugFix
             try
             {
                 _modEnabled = false;
-                RemoveAllFixes();
+                ApplyConfiguredFixes();
                 SaveSettings(modEntry);
                 ModEntry = null;
                 Settings = null;
@@ -87,29 +83,20 @@ namespace BroforceBugFix
                 return;
             }
 
-            var previousMaster = Settings.EnableAllFixes;
-            var previousDoodadCrate = Settings.EnableDoodadCrateReentryFix;
-            var previousLobbyJoinStream = Settings.EnableLobbyJoinStreamFix;
-            var previousFaceHuggerDetach = Settings.EnableFaceHuggerDetachFix;
-            var previousAlienEggCleanup = Settings.EnableAlienEggCleanupFix;
-
-            Settings.EnableAllFixes = GUILayout.Toggle(
-                Settings.EnableAllFixes,
+            var changed = DrawToggle(ref Settings.EnableAllFixes,
                 "Enable all bug fixes");
             GUILayout.Space(6f);
             GUILayout.Label("Individual fixes");
-            Settings.EnableDoodadCrateReentryFix = GUILayout.Toggle(
-                Settings.EnableDoodadCrateReentryFix,
+            changed |= DrawToggle(ref Settings.EnableDoodadCrateReentryFix,
                 "Prevent recursive explosive-ammo crate collapse");
-            Settings.EnableLobbyJoinStreamFix = GUILayout.Toggle(
-                Settings.EnableLobbyJoinStreamFix,
+            changed |= DrawToggle(ref Settings.EnableLobbyJoinStreamFix,
                 "Clear a stalled previous room's network stream when joining");
-            Settings.EnableFaceHuggerDetachFix = GUILayout.Toggle(
-                Settings.EnableFaceHuggerDetachFix,
+            changed |= DrawToggle(ref Settings.EnableFaceHuggerDetachFix,
                 "Fix snake/facehugger detach errors and repeated bleeding");
-            Settings.EnableAlienEggCleanupFix = GUILayout.Toggle(
-                Settings.EnableAlienEggCleanupFix,
+            changed |= DrawToggle(ref Settings.EnableAlienEggCleanupFix,
                 "Fix alien egg cleanup after the map is unloaded");
+            changed |= DrawToggle(ref Settings.EnableSandstormSetupFix,
+                "Wait for map data before sandstorm setup");
 
             var doodadCrateActive = _modEnabled &&
                                     Settings.EnableAllFixes &&
@@ -118,11 +105,7 @@ namespace BroforceBugFix
                 "Explosive-ammo crate fix: " +
                 (doodadCrateActive ? "active" : "inactive"));
 
-            if (previousMaster != Settings.EnableAllFixes ||
-                previousDoodadCrate != Settings.EnableDoodadCrateReentryFix ||
-                previousLobbyJoinStream != Settings.EnableLobbyJoinStreamFix ||
-                previousFaceHuggerDetach != Settings.EnableFaceHuggerDetachFix ||
-                previousAlienEggCleanup != Settings.EnableAlienEggCleanupFix)
+            if (changed)
             {
                 try
                 {
@@ -137,52 +120,41 @@ namespace BroforceBugFix
             }
         }
 
-        private static void OnSaveGUI(UnityModManager.ModEntry modEntry)
+        private static bool DrawToggle(ref bool value, string label)
         {
-            SaveSettings(modEntry);
+            var previous = value;
+            value = GUILayout.Toggle(value, label);
+            return previous != value;
         }
 
         private static void ApplyConfiguredFixes()
         {
             var settings = Settings;
-            var enableDoodadCrateFix = _modEnabled &&
-                                       settings != null &&
-                                       settings.EnableAllFixes &&
-                                       settings.EnableDoodadCrateReentryFix;
-            if (enableDoodadCrateFix)
-            {
+            var enabled = _modEnabled && settings != null && settings.EnableAllFixes;
+            if (enabled && settings.EnableDoodadCrateReentryFix)
                 DoodadCrateReentryFix.Apply();
-            }
             else
-            {
                 DoodadCrateReentryFix.Remove();
-            }
 
-            if (_modEnabled && settings != null &&
-                settings.EnableAllFixes && settings.EnableLobbyJoinStreamFix)
+            if (enabled && settings.EnableLobbyJoinStreamFix)
                 LobbyJoinStreamFix.Apply();
             else
                 LobbyJoinStreamFix.Remove();
 
-            if (_modEnabled && settings != null &&
-                settings.EnableAllFixes && settings.EnableFaceHuggerDetachFix)
+            if (enabled && settings.EnableFaceHuggerDetachFix)
                 FaceHuggerDetachFix.Apply();
             else
                 FaceHuggerDetachFix.Remove();
 
-            if (_modEnabled && settings != null &&
-                settings.EnableAllFixes && settings.EnableAlienEggCleanupFix)
+            if (enabled && settings.EnableAlienEggCleanupFix)
                 AlienEggCleanupFix.Apply();
             else
                 AlienEggCleanupFix.Remove();
-        }
 
-        private static void RemoveAllFixes()
-        {
-            DoodadCrateReentryFix.Remove();
-            LobbyJoinStreamFix.Remove();
-            FaceHuggerDetachFix.Remove();
-            AlienEggCleanupFix.Remove();
+            if (enabled && settings.EnableSandstormSetupFix)
+                SandstormSetupFix.Apply();
+            else
+                SandstormSetupFix.Remove();
         }
 
         private static void SaveSettings(UnityModManager.ModEntry modEntry)

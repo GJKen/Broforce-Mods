@@ -1,5 +1,4 @@
 using HarmonyLib;
-using System.Reflection;
 using UnityEngine.SceneManagement;
 
 namespace BroforceBugFix
@@ -15,8 +14,7 @@ namespace BroforceBugFix
             _harmony = new Harmony(HarmonyId);
             _harmony.Patch(
                 typeof(ConnectionLayer).GetMethod("JoinLobby"), null,
-                new HarmonyMethod(typeof(LobbyJoinStreamFix).GetMethod(
-                    "JoinLobbyPostfix", BindingFlags.Static | BindingFlags.NonPublic)),
+                new HarmonyMethod(typeof(LobbyJoinStreamFix), "JoinLobbyPostfix", null),
                 null, null);
         }
 

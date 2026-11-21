@@ -2,8 +2,6 @@
   <PropertyGroup>
     <TargetFramework>net35</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <RootNamespace>BroforceBugFix</RootNamespace>
-    <AssemblyName>BroforceBugFix</AssemblyName>
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -45,12 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="src\Plugin.cs" />
-    <Compile Include="src\BugFixSettings.cs" />
-    <Compile Include="src\FaceHuggerDetachFix.cs" />
-    <Compile Include="src\AlienEggCleanupFix.cs" />
-    <Compile Include="src\DoodadCrateReentryFix.cs" />
-    <Compile Include="src\LobbyJoinStreamFix.cs" />
+    <Compile Include="src\*.cs" />
   </ItemGroup>
 
   <Target Name="DeployBroforceBugFix" AfterTargets="Build" Condition="'$(TargetPath)' != ''">

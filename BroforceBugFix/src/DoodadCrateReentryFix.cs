@@ -1,7 +1,6 @@
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace BroforceBugFix
@@ -11,7 +10,7 @@ namespace BroforceBugFix
         private const string HarmonyId = "GJKen.BroforceBugFix.DoodadCrateReentry";
         private static readonly object Sync = new object();
         private static readonly HashSet<DoodadCrate> CollapsingCrates =
-            new HashSet<DoodadCrate>(ReferenceComparer<DoodadCrate>.Instance);
+            new HashSet<DoodadCrate>(new ReferenceComparer());
 
         private static Harmony _harmony;
         private static int _suppressedReentryCount;
@@ -25,18 +24,12 @@ namespace BroforceBugFix
                     return;
                 }
 
-                var target = typeof(DoodadCrate).GetMethod(
-                    "ActuallyCollapse",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    new[] { typeof(float), typeof(float), typeof(bool) },
-                    null);
-                var prefix = typeof(DoodadCrateReentryFix).GetMethod(
-                    "ActuallyCollapsePrefix",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-                var finalizer = typeof(DoodadCrateReentryFix).GetMethod(
-                    "ActuallyCollapseFinalizer",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                var target = AccessTools.Method(typeof(DoodadCrate), "ActuallyCollapse",
+                    new[] { typeof(float), typeof(float), typeof(bool) }, null);
+                var prefix = AccessTools.Method(typeof(DoodadCrateReentryFix),
+                    "ActuallyCollapsePrefix", null, null);
+                var finalizer = AccessTools.Method(typeof(DoodadCrateReentryFix),
+                    "ActuallyCollapseFinalizer", null, null);
 
                 if (target == null || prefix == null || finalizer == null)
                 {
@@ -95,7 +88,7 @@ namespace BroforceBugFix
 
             lock (Sync)
             {
-                if (CollapsingCrates.Contains(__instance))
+                if (!CollapsingCrates.Add(__instance))
                 {
                     _suppressedReentryCount++;
                     Plugin.Warning(
@@ -105,7 +98,6 @@ namespace BroforceBugFix
                     return false;
                 }
 
-                CollapsingCrates.Add(__instance);
                 __state = true;
                 return true;
             }
@@ -127,18 +119,14 @@ namespace BroforceBugFix
             return __exception;
         }
 
-        private sealed class ReferenceComparer<T> : IEqualityComparer<T>
-            where T : class
+        private sealed class ReferenceComparer : IEqualityComparer<DoodadCrate>
         {
-            internal static readonly ReferenceComparer<T> Instance =
-                new ReferenceComparer<T>();
-
-            public bool Equals(T x, T y)
+            public bool Equals(DoodadCrate x, DoodadCrate y)
             {
                 return ReferenceEquals(x, y);
             }
 
-            public int GetHashCode(T value)
+            public int GetHashCode(DoodadCrate value)
             {
                 return RuntimeHelpers.GetHashCode(value);
             }

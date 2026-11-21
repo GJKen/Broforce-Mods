@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 
@@ -15,7 +14,7 @@ namespace BroforceBugFix
             if (_harmony != null) return;
             var harmony = new Harmony(HarmonyId);
             harmony.Patch(AccessTools.Method(typeof(AlienFaceHugger), "DisconnectFaceHugger", null, null),
-                null, null, new HarmonyMethod(AccessTools.Method(typeof(FaceHuggerDetachFix), "Transpile", null, null)), null);
+                null, null, new HarmonyMethod(typeof(FaceHuggerDetachFix), "Transpile", null), null);
             _harmony = harmony;
             Plugin.Log("Facehugger detach fix enabled.");
         }
