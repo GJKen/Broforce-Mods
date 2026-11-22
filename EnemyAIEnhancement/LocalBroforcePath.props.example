@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <BroforceManagedPath>E:\SteamLibrary\steamapps\common\Broforce\Broforce_beta_Data\Managed</BroforceManagedPath>
+    <UnityModManagerPath>E:\SteamLibrary\steamapps\common\Broforce\r2mod\Broforce\profiles\Broforce\UMM\Core</UnityModManagerPath>
+    <!-- Optional: an existing second machine's UMM Mods directory. -->
+    <TestDeployModsPath></TestDeployModsPath>
+  </PropertyGroup>
+</Project>

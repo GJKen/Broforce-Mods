@@ -1,0 +1,9 @@
+{
+  "Id": "EnemyAIEnhancement",
+  "DisplayName": "Enemy AI Enhancement",
+  "Author": "GJKen",
+  "Version": "0.19.4",
+  "ManagerVersion": "0.27.0",
+  "AssemblyName": "EnemyAIEnhancement.dll",
+  "EntryMethod": "EnemyAIEnhancement.Plugin.Load"
+}

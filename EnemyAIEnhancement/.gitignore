@@ -1,0 +1,7 @@
+LocalBroforcePath.props
+bin/
+obj/
+Release/**/*.dll
+!Release/UMM/Mods/EnemyAIEnhancement/EnemyAIEnhancement.dll
+Release/**/*.pdb
+tests/.build/

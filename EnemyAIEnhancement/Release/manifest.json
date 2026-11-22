@@ -1,0 +1,10 @@
+{
+  "name": "EnemyAIEnhancement",
+  "author": "GJKen",
+  "version_number": "0.19.4",
+  "website_url": "https://github.com/GJKen/Broforce-Mods/tree/main/EnemyAIEnhancement",
+  "description": "增强敌人的目标记忆、追击、战术及载具与首领决策，保留原生武器和伤害流程。",
+  "dependencies": [
+    "UMM-UMM-1.1.0"
+  ]
+}
