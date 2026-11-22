@@ -189,7 +189,7 @@ namespace CustomMapMultiplayer
 
             RefreshWorkshopLobbyDataIfNeeded("late workshop join detected");
             var configuredScene = GetConfiguredWorkshopSceneName();
-            var hostScene = GetRoomInfoString(room, "CurrentSceneName");
+            var hostScene = TrimRoomInfoString(room.CurrentSceneName);
             var lobbyPhase = GetWorkshopLobbyData(WorkshopLobbyPhaseKey);
             var workshopTransitionIsActive = string.Equals(
                 lobbyPhase,
@@ -214,8 +214,8 @@ namespace CustomMapMultiplayer
             }
 
             _lateJoinScene = hostAlreadyLoadedWorkshopScene ? hostScene : configuredScene;
-            _lateJoinCampaign = GetRoomInfoString(room, "campaignName");
-            _lateJoinLevelNumber = GetRoomInfoInt(room, "levelNumber", 0);
+            _lateJoinCampaign = TrimRoomInfoString(room.campaignName);
+            _lateJoinLevelNumber = GetRoomLevelNumber(room, 0);
             _lateJoinDeadlineUtc = DateTime.UtcNow.AddSeconds(LateJoinTimeoutSeconds);
             _lateJoinReadyPollAtUtc = DateTime.MinValue;
             _lateJoinPending = true;

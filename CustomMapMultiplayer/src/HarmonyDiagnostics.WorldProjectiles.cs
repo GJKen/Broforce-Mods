@@ -16,6 +16,9 @@ namespace CustomMapMultiplayer
             internal string Prefab, Type;
             internal int Owner, Player, Seed;
             internal float X, Y, VX, VY, Offset, Life;
+            internal bool WarlockSetup;
+            internal NID Warlock, Portal, Child;
+            internal int TargetColumn, TargetRow, TargetPlayer;
         }
 
         private static readonly Dictionary<NID, WorldSpawn> WorldProjectileSpawns =
@@ -91,6 +94,8 @@ namespace CustomMapMultiplayer
             PatchWorldMethod(AccessTools.Method(typeof(ProjectileController), "SpawnGrenadeOverNetwork", null, null),
                 "WorldNetworkGrenadeSpawnPrefix", null, null, "WorldNetworkGrenadeSpawnFinalizer");
             PatchWorldCarriers();
+            PatchWorldWarlock();
+            PatchWorldDamageContext(AccessTools.Method(typeof(HellLostSoul), "CanHitEnemyInDive", Type.EmptyTypes, null), "WorldLostSoulContactPrefix");
         }
 
         private static void PatchWorldDamageContext(MethodBase method, string prefix)
@@ -186,6 +191,15 @@ namespace CustomMapMultiplayer
             return tracked;
         }
 
+        private static bool WorldLostSoulContactPrefix(HellLostSoul __instance, out WorldDamageContext __state)
+        {
+            __state = new WorldDamageContext { Previous = _worldDamageSource };
+            if (_worldEpoch == 0 || !IsWorldSession() || !IsWorldObject(__instance)) return true;
+            if (_worldApplying != 0 || !__instance.IsMine) return false;
+            _worldDamageSource = __instance;
+            return true;
+        }
+
         private static void WorldProjectileContextFinalizer(WorldDamageContext __state)
         {
             _worldDamageSource = __state.Previous;
@@ -198,6 +212,7 @@ namespace CustomMapMultiplayer
         private static bool WorldProjectileHitPrefix(MonoBehaviour __0, Unit __1, int __2, DamageType __3,
             float __4, float __5, int __6, bool __7, float __8, float __9, MethodBase __originalMethod)
         {
+            if (_worldApplying == 0 && __0 is HellLostSoul && IsWorldReplica((HellLostSoul)__0)) return false;
             if (_worldApplying == 0 && IsWorldRemoteHeroAttack(__0, __1)) return false;
             var source = GetWorldHitSource(__0);
             if (_worldApplying != 0 || source == null || __1 == null || __1.IsMine ||
@@ -237,6 +252,8 @@ namespace CustomMapMultiplayer
             // Mine.Explode already settles through each peer's native collapse.
             if (actor is Mine) return null;
             if (_worldDamageSource != null) return _worldDamageSource;
+            var soul = actor as HellLostSoul;
+            if (soul != null && _worldEpoch != 0 && IsWorldSession() && IsWorldObject(soul) && soul.IsMine) return soul;
             // Hero-owned splash effects can hit on later animation frames, outside
             // Projectile.Update. Route those hits through the same owner settlement.
             var hero = actor as Unit;
@@ -1062,7 +1079,8 @@ namespace CustomMapMultiplayer
             };
             WorldProjectileSpawns.Add(spawn.Id, spawn);
             // Publish identity and initial parameters before Fire can destroy the instance at spawn.
-            SendWorldProjectileSpawn(spawn, PID.TargetOthers);
+            // Warlock supplies its portal/child IDs in Setup immediately after this factory returns.
+            if (!(prefab is WarlockPortalProjectile)) SendWorldProjectileSpawn(spawn, PID.TargetOthers);
             __result = CreateWorldProjectile(spawn, prefab, actor);
             return false;
         }
@@ -1075,6 +1093,10 @@ namespace CustomMapMultiplayer
             Registry.RegisterGameObject(ref id, projectile.gameObject);
             foreach (var component in projectile.GetComponentsInChildren<NetworkObject>(true)) component.SetOwner(new PID(spawn.Owner));
             projectile.SetSeed(spawn.Seed);
+            var warlock = projectile as WarlockPortalProjectile;
+            if (warlock != null && spawn.WarlockSetup)
+                warlock.Setup((Warlock)Registry.GetObject(spawn.Warlock), new GridPoint(spawn.TargetColumn, spawn.TargetRow),
+                    spawn.TargetPlayer, spawn.Portal, spawn.Child);
             projectile.Fire(spawn.X, spawn.Y, spawn.VX, spawn.VY, spawn.Offset, spawn.Player, actor);
             RegisterWorldObject(projectile);
             return projectile;
@@ -1089,7 +1111,13 @@ namespace CustomMapMultiplayer
                 writer.Write(spawn.Prefab); writer.Write(spawn.Type); writer.Write((byte)spawn.Owner);
                 writer.Write(spawn.Player); writer.Write(spawn.Seed); writer.Write(spawn.X); writer.Write(spawn.Y);
                 writer.Write(spawn.VX); writer.Write(spawn.VY);
-                // Protocol 24 ends with the projectile offset or grenade lifetime.
+                writer.Write(spawn.WarlockSetup);
+                if (spawn.WarlockSetup)
+                {
+                    WriteWorldId(writer, spawn.Warlock); WriteWorldId(writer, spawn.Portal); WriteWorldId(writer, spawn.Child);
+                    writer.Write(spawn.TargetColumn); writer.Write(spawn.TargetRow); writer.Write(spawn.TargetPlayer);
+                }
+                // Protocol 25 carries caller configuration before the factory-specific value.
                 writer.Write(factoryValue);
                 global::Networking.Networking.RPC<long, byte[]>(target, receive, _worldEpoch, stream.ToArray(), true);
             }
@@ -1097,10 +1125,17 @@ namespace CustomMapMultiplayer
 
         private static WorldSpawn ReadWorldSpawn(BinaryReader reader)
         {
-            return new WorldSpawn { Id = ReadWorldId(reader), Actor = ReadWorldId(reader),
+            var spawn = new WorldSpawn { Id = ReadWorldId(reader), Actor = ReadWorldId(reader),
                 Prefab = reader.ReadString(), Type = reader.ReadString(), Owner = reader.ReadByte(),
                 Player = reader.ReadInt32(), Seed = reader.ReadInt32(), X = reader.ReadSingle(), Y = reader.ReadSingle(),
                 VX = reader.ReadSingle(), VY = reader.ReadSingle() };
+            spawn.WarlockSetup = reader.ReadBoolean();
+            if (spawn.WarlockSetup)
+            {
+                spawn.Warlock = ReadWorldId(reader); spawn.Portal = ReadWorldId(reader); spawn.Child = ReadWorldId(reader);
+                spawn.TargetColumn = reader.ReadInt32(); spawn.TargetRow = reader.ReadInt32(); spawn.TargetPlayer = reader.ReadInt32();
+            }
+            return spawn;
         }
 
         private static void SendWorldProjectileSpawn(WorldSpawn spawn, PID target)
@@ -1131,6 +1166,8 @@ namespace CustomMapMultiplayer
                 spawn = ReadWorldSpawn(reader); spawn.Offset = reader.ReadSingle();
             }
             if (!IsWorldRpcObject(spawn.Id, spawn.Owner)) return;
+            if (spawn.WarlockSetup && (spawn.Warlock.Sid != Connect.SessionID ||
+                spawn.Portal.Sid != Connect.SessionID || spawn.Child.Sid != Connect.SessionID)) return;
             if (!TryCreateWorldProjectile(spawn) && WorldPendingProjectiles.Count < 256) WorldPendingProjectiles[spawn.Id] = spawn;
         }
 
@@ -1141,6 +1178,7 @@ namespace CustomMapMultiplayer
             if (WorldRemovedObjects.Contains(spawn.Id.BaseID)) return true;
             var actor = Registry.GetObject(spawn.Actor) as BroforceObject;
             if (actor == null) return false;
+            if (spawn.WarlockSetup && !(Registry.GetObject(spawn.Warlock) is Warlock)) return false;
             var key = spawn.Type + "|" + spawn.Prefab;
             Projectile prefab;
             if (!WorldProjectilePrefabs.TryGetValue(key, out prefab) || prefab == null)
@@ -1190,6 +1228,7 @@ namespace CustomMapMultiplayer
             foreach (var pair in WorldPendingProjectiles)
                 if (TryCreateWorldProjectile(pair.Value)) WorldPendingApplied.Add(pair.Key);
             foreach (var id in WorldPendingApplied) WorldPendingProjectiles.Remove(id);
+            UpdateWorldWarlockEvents();
         }
     }
 }

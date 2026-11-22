@@ -1,7 +1,7 @@
 {
   "name": "CustomMapMultiplayer",
   "author": "GJKen",
-  "version_number": "0.5.1",
+  "version_number": "0.5.6",
   "website_url": "https://github.com/GJKen/Broforce-Mods/blob/main/CustomMapMultiplayer",
   "description": "Play Steam Workshop maps online with friends. Includes a map browser, multiplayer synchronization fixes, improved chat, AFK mode, and optional FRP Direct.",
   "dependencies": [

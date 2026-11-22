@@ -14,10 +14,8 @@ namespace CustomMapMultiplayer
     internal static partial class HarmonyDiagnostics
     {
         private static Type _connectTypeCache;
-        private static MethodInfo _connectLayerGetterCache;
         private static MethodInfo _connectIsHostGetterCache;
-        private static Type _connectionLayerTypeCache;
-        private static MethodInfo _connectionLayerRoomGetterCache;
+        private static FieldInfo _playersPlayingFieldCache;
 
         private struct ConnectionOnlineState
         {
@@ -58,16 +56,6 @@ namespace CustomMapMultiplayer
             return _connectTypeCache;
         }
 
-        private static MethodInfo GetConnectLayerGetterCached(Type connectType)
-        {
-            if (_connectLayerGetterCache == null && connectType != null)
-            {
-                _connectLayerGetterCache = AccessTools.PropertyGetter(connectType, "Layer");
-            }
-
-            return _connectLayerGetterCache;
-        }
-
         private static MethodInfo GetConnectIsHostGetterCached(Type connectType)
         {
             if (_connectIsHostGetterCache == null && connectType != null)
@@ -76,26 +64,6 @@ namespace CustomMapMultiplayer
             }
 
             return _connectIsHostGetterCache;
-        }
-
-        private static Type GetConnectionLayerTypeCached()
-        {
-            if (_connectionLayerTypeCache == null)
-            {
-                _connectionLayerTypeCache = AccessTools.TypeByName("ConnectionLayer");
-            }
-
-            return _connectionLayerTypeCache;
-        }
-
-        private static MethodInfo GetConnectionLayerRoomGetterCached(Type connectionType)
-        {
-            if (_connectionLayerRoomGetterCache == null && connectionType != null)
-            {
-                _connectionLayerRoomGetterCache = AccessTools.PropertyGetter(connectionType, "Room");
-            }
-
-            return _connectionLayerRoomGetterCache;
         }
 
                 private static bool TryConvertHeroType(object value, out HeroType heroType)
@@ -151,12 +119,7 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                var connectType = GetConnectTypeCached();
-                var layerGetter = GetConnectLayerGetterCached(connectType);
-                var layer = layerGetter == null ? null : layerGetter.Invoke(null, null);
-                var connectionType = GetConnectionLayerTypeCached();
-                var roomGetter = GetConnectionLayerRoomGetterCached(connectionType);
-                return roomGetter == null ? null : roomGetter.Invoke(layer, null) as RoomInfo;
+                return Connect.Layer.Room;
             }
             catch
             {
@@ -168,9 +131,7 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                var connectType = GetConnectTypeCached();
-                var layerGetter = GetConnectLayerGetterCached(connectType);
-                return layerGetter == null ? null : layerGetter.Invoke(null, null);
+                return Connect.Layer;
             }
             catch
             {
@@ -182,9 +143,14 @@ namespace CustomMapMultiplayer
         {
             try
             {
-                var field = typeof(HeroController).GetField(
-                    "playersPlaying",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                var field = _playersPlayingFieldCache;
+                if (field == null)
+                {
+                    field = typeof(HeroController).GetField(
+                        "playersPlaying",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                    _playersPlayingFieldCache = field;
+                }
                 return field == null ? null : field.GetValue(null) as bool[];
             }
             catch (Exception exception)
@@ -208,47 +174,21 @@ namespace CustomMapMultiplayer
             return instanceProperty == null ? null : instanceProperty.GetValue(null, null);
         }
 
-        private static string GetRoomInfoString(RoomInfo room, string fieldName)
+        private static string TrimRoomInfoString(string value)
         {
-            var field = typeof(RoomInfo).GetField(
-                fieldName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field != null)
-            {
-                var value = field.GetValue(room) as string;
-                return value == null ? string.Empty : value.Trim();
-            }
-
-            var property = typeof(RoomInfo).GetProperty(
-                fieldName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (property != null && property.CanRead)
-            {
-                var value = property.GetValue(room, null) as string;
-                return value == null ? string.Empty : value.Trim();
-            }
-
-            return string.Empty;
+            return value == null ? string.Empty : value.Trim();
         }
 
-        private static int GetRoomInfoInt(RoomInfo room, string fieldName, int fallback)
+        private static int GetRoomLevelNumber(RoomInfo room, int fallback)
         {
-            var field = typeof(RoomInfo).GetField(
-                fieldName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field != null)
+            try
             {
-                try
-                {
-                    return Convert.ToInt32(field.GetValue(room));
-                }
-                catch
-                {
-                    return fallback;
-                }
+                return room.levelNumber;
             }
-
-            return fallback;
+            catch
+            {
+                return fallback;
+            }
         }
 
         private static void SetStaticFieldOrProperty(Type type, string name, object value)

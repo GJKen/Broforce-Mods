@@ -13,6 +13,8 @@ namespace CustomMapMultiplayer
         private static readonly FieldInfo WorldScaredTime = AccessTools.Field(typeof(Mook), "scaredTime");
         private static readonly HashSet<MethodBase> WorldHeroStatusMethods = new HashSet<MethodBase>();
         private static Unit _worldStatusSource;
+        private static readonly FieldInfo WorldMosquitoExploded = AccessTools.Field(typeof(AlienMosquito), "exploded");
+        private static readonly FieldInfo WorldMelterExploded = AccessTools.Field(typeof(AlienMelter), "exploded");
 
         private static void PatchWorldHeroStatusContext(Type type)
         {
@@ -112,9 +114,14 @@ namespace CustomMapMultiplayer
             if (!__instance.IsMine) return false;
             var suicide = __instance as MookSuicide;
             var undead = __instance as MookSuicideUndead;
-            if (suicide != null ? suicide.exploded || suicide.HasBeenCoveredInAcid() : undead.exploded) return true;
+            var mosquito = __instance as AlienMosquito;
+            var melter = __instance as AlienMelter;
+            if (suicide != null ? suicide.exploded || suicide.HasBeenCoveredInAcid() :
+                undead != null ? undead.exploded : mosquito != null ? (bool)WorldMosquitoExploded.GetValue(mosquito) :
+                (bool)WorldMelterExploded.GetValue(melter)) return true;
             var entry = RegisterWorldObject(__instance);
-            entry.Exploded = true; entry.Dirty = true;
+            // Acid-covered Lost Souls gib without an explosion in the native branch.
+            entry.Exploded = !(__instance is HellLostSoul && mosquito.HasBeenCoveredInAcid()); entry.Dirty = true;
             // Reuse target-owner damage routing for the explosion, including remote heroes.
             _worldDamageSource = __instance;
             return true;
@@ -122,6 +129,11 @@ namespace CustomMapMultiplayer
 
         private static void ReplayWorldSuicideEffects(BroforceObject obj, WorldSnapshot state)
         {
+            if (obj is AlienMosquito || obj is AlienMelter)
+            {
+                ReplayWorldAlienExplosion((TestVanDammeAnim)obj, state);
+                return;
+            }
             var suicide = obj as MookSuicide;
             var undead = obj as MookSuicideUndead;
             if (suicide == null && undead == null) return;
@@ -159,6 +171,38 @@ namespace CustomMapMultiplayer
                 EffectsController.CreateSlimeExplosion(x, y, 15f, 15f, 140f, 0f, 0f, 0f, 0f, 0, 20, 120f, 0f, Vector3.up, BloodColor.Red);
             }
             // Damage, burning, terrain changes and Gib are delivered through authoritative state.
+            SortOfFollow.Shake(1f);
+        }
+
+        private static void ReplayWorldAlienExplosion(TestVanDammeAnim unit, WorldSnapshot state)
+        {
+            var mosquito = unit as AlienMosquito;
+            var melter = unit as AlienMelter;
+            var range = mosquito != null ? mosquito.explodeRange : melter.explodeRange;
+            var harm = mosquito != null ? mosquito.broHarmRangeM : melter.broHarmRangeM;
+            if (mosquito != null)
+            {
+                WorldMosquitoExploded.SetValue(mosquito, true);
+                if (mosquito.diveLine != null) mosquito.diveLine.gameObject.SetActive(false);
+                if (mosquito.diveCross != null) mosquito.diveCross.GoAway();
+            }
+            else WorldMelterExploded.SetValue(melter, true);
+            var x = state.X; var y = state.Y;
+            EffectsController.CreateExplosionRangePop(x, y + 6f, -1f, range * harm * 2.4f);
+            if (unit is HellLostSoul)
+            {
+                EffectsController.CreateExplosion(x, y, 0f, 0f, 20f, 0f, 1f, 1f, 0.3f, false);
+                EffectsController.CreateBloodParticlesBig(unit.bloodColor, x, y + 6f, 5, 4f, 4f, 50f, state.VX, state.VY);
+                EffectsController.CreateBloodSprayExplodeEffect(unit.bloodColor, x, y, state.VX, state.VY);
+            }
+            else
+            {
+                EffectsController.CreateSlimeParticlesSpray(unit.bloodColor, x, y + 6f, 1f, 34, 6f, 5f, 300f,
+                    state.VX * 0.6f, state.VY * 0.2f + 150f, 0.6f);
+                EffectsController.CreateSlimeExplosion(x, y, 15f, 15f, 140f, 0f, 0f, 0f, 0f, 0, 20, 120f, 0f, Vector3.up, BloodColor.Green);
+                // Terrain slime is local, like the native explosion. Unit hits are owner-routed separately.
+                EffectsController.CreateSlimeCover(15, x, y + 8f, 60f, false);
+            }
             SortOfFollow.Shake(1f);
         }
     }

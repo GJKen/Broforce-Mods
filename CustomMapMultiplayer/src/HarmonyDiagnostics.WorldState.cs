@@ -14,7 +14,7 @@ namespace CustomMapMultiplayer
     {
         private const float WorldSendInterval = 1f / 12f;
         private const float WorldSpearSyncInterval = 1f / 60f;
-        private const int WorldProtocol = 24;
+        private const int WorldProtocol = 25;
         private const BindingFlags WorldFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Dictionary<NID, WorldEntry> WorldEntries = new Dictionary<NID, WorldEntry>();
         private static readonly Dictionary<NID, WorldSnapshot> WorldPending = new Dictionary<NID, WorldSnapshot>();
@@ -243,7 +243,8 @@ namespace CustomMapMultiplayer
                     else if ((name == "Panic" || name == "Blind" || name == "Terrify" || name == "TearGas" || name == "Stun" || name == "Freeze") && typeof(Unit).IsAssignableFrom(type))
                         PatchWorldMethod(method, "WorldStatusPrefix", "WorldMutationPostfix");
                     else if (name == "MakeEffects" && method.GetParameters().Length == 0 &&
-                        (typeof(MookSuicide).IsAssignableFrom(type) || typeof(MookSuicideUndead).IsAssignableFrom(type)))
+                        (typeof(MookSuicide).IsAssignableFrom(type) || typeof(MookSuicideUndead).IsAssignableFrom(type) ||
+                         type == typeof(HellLostSoul) || type == typeof(AlienMelter) || type == typeof(AlienMosquito)))
                         PatchWorldDamageContext(method, "WorldSuicideEffectsPrefix");
                 }
             }
@@ -1314,6 +1315,7 @@ namespace CustomMapMultiplayer
             ClearWorldPersistentEffects();
             WorldMotionBatch.Clear(); WorldCriticalBatch.Clear();
             WorldRemovedObjects.Clear(); WorldPendingApplied.Clear(); WorldProjectileSpawns.Clear(); WorldPendingProjectiles.Clear();
+            WorldWarlockEvents.Clear();
             WorldProjectileVisualRandomStates.Clear(); _worldProjectileEffectsDepth = 0;
             WorldGrenadeSpawns.Clear(); WorldPendingGrenades.Clear();
             _worldGrenadeEffectsDepth = 0; _worldGrenadeReplicaUpdate = 0; _worldNetworkGrenadeSpawnDepth = 0;

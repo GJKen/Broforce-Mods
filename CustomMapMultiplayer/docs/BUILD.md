@@ -71,5 +71,7 @@ ZIP 导入到 r2modman 后，插件 DLL 位于 `UMM\Mods\CustomMapMultiplayer`�
 
 ## 相关约定
 
+- 当前发行版本为0.5.6、世界协议25；DLL、Info.json及ZIP已核对一致并完成定向双端验证，范围见 [0.5.6版本说明](RELEASE-0.5.6.md)。历史检查数保留各自构建归属，不代表当前构建重跑全部矩阵。
+
 - `LocalBroforcePath.props` 包含机器专用路径，不应提交。
 - 标准构建完成后只做基本结果确认。

@@ -59,7 +59,7 @@ See the [FRP setup guide on GitHub (Chinese)](https://github.com/GJKen/Broforce-
 
 ## Current Status and Limitations
 
-Version **0.5.1** is experimental. Targeted multiplayer checks have been completed, but not every character, skill, form, map mechanism, or long-session scenario has been verified. Compatibility with custom characters is not guaranteed.
+Version **0.5.6** is experimental. Player-slot reads reuse field metadata, and fixed room fields use native access; protocol 25 is unchanged. Targeted multiplayer checks have been completed, but not every character, skill, form, map mechanism, or long-session scenario has been verified. Compatibility with custom characters is not guaranteed.
 
 ## Troubleshooting and Support
 

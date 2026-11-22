@@ -246,9 +246,9 @@ namespace CustomMapMultiplayer
                 .Append(";stateLoadMode=")
                 .Append(FormatOutcomeValue(GetFieldOrPropertyValue(state, "loadMode")))
                 .Append(";roomLevel=")
-                .Append(room == null ? "n/a" : GetRoomInfoInt(room, "levelNumber", -1).ToString())
+                .Append(room == null ? "n/a" : GetRoomLevelNumber(room, -1).ToString())
                 .Append(";roomScene=");
-            var roomScene = room == null ? string.Empty : GetRoomInfoString(room, "CurrentSceneName");
+            var roomScene = room == null ? string.Empty : TrimRoomInfoString(room.CurrentSceneName);
             builder.Append(string.IsNullOrEmpty(roomScene) ? "n/a" : Sanitize(roomScene, 80))
                 .Append(";roomMode=")
                 .Append(FormatOutcomeValue(GetFieldOrPropertyValue(room, "gameMode")));

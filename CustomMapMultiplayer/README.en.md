@@ -6,7 +6,7 @@ Makes it easier to play Workshop maps together in the Steam version of Broforce,
 
 <a id="current-status"></a>
 
-The current version is experimental **0.5.1**. Targeted multiplayer checks have been completed, but coverage of every character, form, and mechanism is incomplete.
+The current version is experimental **0.5.6**, using world protocol **25**. It includes synchronization fixes for selected enemy summons, contact damage, and grenade effects, and reduces repeated field queries. Targeted multiplayer checks have been completed, but coverage of every character, form, and mechanism is incomplete. See the [0.5.6 release notes (Chinese)](docs/RELEASE-0.5.6.md) for changes and verification limits.
 
 Current build identifiers, package details, and verification scope are in the [version review](docs/world-sync-coverage/recheck.md#基线和证据范围).
 
@@ -71,6 +71,8 @@ Fixes supported by recorded samples include:
 - Mines failing to explode, exploding at the wrong location, or having their countdown interrupted.
 - Selected missing grenade and hit effects, and inconsistent damaged scenery appearance or collision state.
 - Selected persistent statuses and surviving skill effects not being restored correctly on late join.
+- Missing Warlock portals and summons, unhandled Lost Soul cross-peer contact damage, and missing Screecher/Baneling terminal effects on replicas.
+- Missing mirrored explosion effects for Mega and other grenades that inherit their effect method.
 - Invisible captives after cage destruction, gun-emplacement driver-ejection differences, and spear endpoint and terminal-effect issues.
 - Desperabro's companions not ending their performance or updating their positions correctly for other players.
 - BroveHeart's skill failing to activate for other players, including when using the last charge.

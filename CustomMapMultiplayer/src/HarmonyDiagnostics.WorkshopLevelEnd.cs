@@ -205,7 +205,7 @@ namespace CustomMapMultiplayer
                 "; stateLevel=" +
                 (state == null ? "n/a" : GetIntFieldOrProperty(state, "levelNumber").ToString()) +
                 "; roomLevel=" +
-                (room == null ? "n/a" : GetRoomInfoInt(room, "levelNumber", -1).ToString()) +
+                (room == null ? "n/a" : GetRoomLevelNumber(room, -1).ToString()) +
                 "; nextScene=" + GetStringFieldOrProperty(controller, "nextScene") + ".");
         }
 
@@ -220,7 +220,7 @@ namespace CustomMapMultiplayer
                 "; stateLevel=" +
                 (state == null ? "n/a" : GetIntFieldOrProperty(state, "levelNumber").ToString()) +
                 "; roomLevel=" +
-                (room == null ? "n/a" : GetRoomInfoInt(room, "levelNumber", -1).ToString()) +
+                (room == null ? "n/a" : GetRoomLevelNumber(room, -1).ToString()) +
                 "; nextScene=" + GetStringFieldOrProperty(controller, "nextScene") + ".");
         }
     }

@@ -38,8 +38,10 @@ namespace CustomMapMultiplayer
             bool __runOriginal, WorldGrenadeEffectContext __state)
         {
             if (!__runOriginal || _worldApplying != 0 || _worldEpoch == 0 || !IsWorldSession() ||
-                !IsWorldObject(__instance) || !__instance.IsMine ||
-                __originalMethod != AccessTools.Method(__instance.GetType(), "MakeEffects", Type.EmptyTypes, null)) return;
+                !IsWorldObject(__instance) || !__instance.IsMine) return;
+            var effectsMethod = AccessTools.Method(__instance.GetType(), "MakeEffects", Type.EmptyTypes, null);
+            if (effectsMethod == null || !__originalMethod.Module.Equals(effectsMethod.Module) ||
+                __originalMethod.MetadataToken != effectsMethod.MetadataToken) return;
             var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream))
             {

@@ -2,7 +2,7 @@
   "Id": "CustomMapMultiplayer",
   "DisplayName": "Custom Map Multiplayer",
   "Author": "GJKen",
-  "Version": "0.5.1",
+  "Version": "0.5.6",
   "Requirements": ["RocketLib"],
   "LoadAfter": ["RocketLib"],
   "AssemblyName": "CustomMapMultiplayer.dll",
